@@ -1,3 +1,4 @@
+
 // ClassroomHQ - Core Application Types
 
 // Enums
@@ -88,7 +89,7 @@ export interface Course {
   teacherId: string | 'unassigned';
   studentIds: string[];
   category?: string;
-  cost?: number; // Optional
+  cost?: number; // Optional, added for teacher dashboard
   prerequisites?: string[]; // Course IDs
 }
 
@@ -209,7 +210,7 @@ export interface AppState {
 // App Actions - Define payload types for each action
 // Example:
 export type LoginUserPayload = { email: string; password?: string /* IRL password check happens backend */ };
-export type RegisterStudentPayload = Omit<User, 'id' | 'role' | 'avatarUrl'>;
+export type RegisterStudentPayload = Omit<User, 'id' | 'role' | 'avatarUrl'> & Partial<Pick<User, 'avatarUrl'>>;
 export type UpdateUserProfilePayload = Partial<Pick<User, 'name' | 'email' | 'avatarUrl'>> & { id: string };
 export type CreateCoursePayload = Omit<Course, 'id' | 'studentIds'>;
 export type CreateLessonPayload = Omit<Lesson, 'id'>;
@@ -241,4 +242,18 @@ export type AppAction =
   | { type: ActionType.GENERATE_QUIZ_QUESTIONS_SUCCESS, payload: { assignmentId: string, questions: QuizQuestion[] } }
   | { type: ActionType.GENERATE_QUIZ_QUESTIONS_ERROR, payload: { error: string } };
 
+// AI Generated Types from Genkit
+export interface GenerateQuizQuestionsInput {
+    lessonContent: string;
+    numberOfQuestions: number;
+}
+
+export interface GenerateQuizQuestionsOutput {
+    questions: Array<{
+        questionText: string;
+        options: string[];
+        correctAnswer: string;
+    }>;
+}
 // This is a simplified version. User should provide their full types.ts content.
+
