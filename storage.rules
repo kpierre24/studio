@@ -1,0 +1,109 @@
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o { // Matches all files in the bucket
+
+    // --- Helper Functions ---
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Function to check the role of the currently authenticated user
+    // This function assumes the user's document exists if they are authenticated
+    // and attempting an operation that requires a role check.
+    // For more robustness, add exists() checks around get() calls in the main rules.
+    function getUserRole() {
+      // Check if user is authenticated and their user document exists in Firestore
+      if (isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid))) {
+        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      }
+      return null;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserRole() == 'SuperAdmin';
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && getUserRole() == 'Teacher';
+    }
+
+    function isStudent() {
+      return isAuthenticated() && getUserRole() == 'Student';
+    }
+
+    // Function to check if the current user is the teacher of a specific course
+    function isTeacherOfCourse(courseId) {
+      // Ensure the course document exists and the teacherId matches
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/courses/$(courseId)) &&
+             get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid;
+    }
+
+    // Function to check if the current user is enrolled in a specific course
+    function isEnrolledInCourse(courseId) {
+      if (!isAuthenticated() || !exists(/databases/$(database)/documents/courses/$(courseId))) {
+        return false;
+      }
+      // Access data after confirming existence
+      let courseData = get(/databases/$(database)/documents/courses/$(courseId)).data;
+      // Check if studentIds field exists, is a list, and contains the user's UID
+      return courseData.studentIds != null &&
+             courseData.studentIds is list &&
+             request.auth.uid in courseData.studentIds;
+    }
+
+    // ---- Rules for different file paths ----
+
+    // User Avatars: users/{userId}/avatar/{fileName}
+    // Example path: users/user-student-1/avatar/profile.jpg
+    match /users/{userId}/avatar/{fileName} {
+      // Allow read by any authenticated user (e.g., for displaying profiles)
+      allow read: if isAuthenticated();
+
+      // Allow write (upload/update/delete) only if the userId in the path matches the authenticated user's ID
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+                       // && request.resource.size < 1 * 1024 * 1024 // Max 1MB
+                       // && request.resource.contentType.matches('image/.*'); // Only images
+    }
+
+    // Lesson Files: courses/{courseId}/lessons/{lessonId}/{fileName}
+    // Example path: courses/course-1/lessons/lesson-1-1/notes.pdf
+    match /courses/{courseId}/lessons/{lessonId}/{fileName} {
+      // Read access: SuperAdmins, Teacher of the course, or Student enrolled in the course
+      allow read: if isAuthenticated() &&
+                     (isSuperAdmin() || isTeacherOfCourse(courseId) || isEnrolledInCourse(courseId));
+
+      // Write access (upload/update/delete lesson files): SuperAdmins or Teacher of the course
+      allow write: if isAuthenticated() && (isSuperAdmin() || isTeacherOfCourse(courseId));
+                        // && request.resource.size < 10 * 1024 * 1024 // Max 10MB
+                        // && (request.resource.contentType.matches('application/pdf') || request.resource.contentType.matches('video/.*'));
+    }
+
+    // Assignment Submission Files: courses/{courseId}/assignments/{assignmentId}/submissions/{studentId}/{fileName}
+    // Example path: courses/course-1/assignments/assign-1-1/submissions/user-student-1/submission.docx
+    match /courses/{courseId}/assignments/{assignmentId}/submissions/{studentId}/{fileName} {
+      // Read access:
+      // 1. The student who submitted it.
+      // 2. The teacher of the course.
+      // 3. SuperAdmins.
+      allow read: if isAuthenticated() &&
+                     (request.auth.uid == studentId || isTeacherOfCourse(courseId) || isSuperAdmin());
+
+      // Write access (uploading/updating own submission):
+      // Only the student whose studentId matches the path, for their own submission.
+      allow write: if isAuthenticated() && request.auth.uid == studentId;
+                        // && request.resource.size < 5 * 1024 * 1024 // Max 5MB
+                        // && request.resource.contentType.matches('application/.*'); // Allow various document types
+
+      // Deleting submissions is tricky. Usually, a student can delete their own BEFORE grading.
+      // Teachers/Admins might delete through a Cloud Function triggered by Firestore record deletion.
+      // For direct delete by student (before grading, logic would need to be more complex or rely on Firestore state):
+      // allow delete: if isAuthenticated() && request.auth.uid == studentId;
+    }
+
+    // Fallback: Deny all other reads/writes by default
+    // This is implicit if no other rule matches.
+  }
+}
