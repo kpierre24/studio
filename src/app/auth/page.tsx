@@ -4,7 +4,7 @@
 import { useState, type FormEvent, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAppContext } from '@/contexts/AppContext';
-import { ActionType, UserRole } from '@/types';
+import { UserRole, type LoginUserPayload, type RegisterStudentPayload } from '@/types'; // Removed ActionType as dispatch is now handled by context async functions
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,7 +14,7 @@ import { APP_NAME } from '@/lib/constants';
 import { Eye, EyeOff } from 'lucide-react';
 
 export default function AuthPage() {
-  const { dispatch, state } = useAppContext();
+  const { state, handleLoginUser, handleRegisterStudent } = useAppContext(); // Use async handlers
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect') || '/';
@@ -26,57 +26,87 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
-  const [formError, setFormError] = useState<string | null>(null);
+  // Use formError from global state if needed, or keep local if preferred for immediate feedback
+  // const [formError, setFormError] = useState<string | null>(null); 
+  // For this example, global error (state.error) will be shown via Toasts
 
-  const handleLogin = async (e: FormEvent) => {
+  const onLoginSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setFormError(null);
+    // setFormError(null); // Clear local error if using local state for form errors
     if (!email || !password) {
-      setFormError("Email and password are required.");
+      // setFormError("Email and password are required."); // Example of local error
+      // Or dispatch a general error for toast if preferred
+      // dispatch({ type: ActionType.SET_ERROR, payload: "Email and password are required." });
+      alert("Email and password are required."); // Simple alert for now
       return;
     }
-    dispatch({ type: ActionType.LOGIN_USER, payload: { email, password } });
+    const payload: LoginUserPayload = { email, password };
+    await handleLoginUser(payload);
   };
 
-  const handleRegister = async (e: FormEvent) => {
+  const onRegisterSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setFormError(null);
+    // setFormError(null);
     if (!name || !email || !password || !confirmPassword) {
-      setFormError("All fields are required for registration.");
+      alert("All fields are required for registration.");
       return;
     }
     if (password !== confirmPassword) {
-      setFormError("Passwords do not match.");
+      alert("Passwords do not match.");
       return;
     }
-    // Basic email validation
     if (!/\S+@\S+\.\S+/.test(email)) {
-        setFormError("Please enter a valid email address.");
+        alert("Please enter a valid email address.");
         return;
     }
-    dispatch({ type: ActionType.REGISTER_STUDENT, payload: { name, email, password } });
+    const payload: RegisterStudentPayload = { name, email, password };
+    await handleRegisterStudent(payload);
   };
   
-  // Redirect if user is already logged in or after successful login/registration
   useEffect(() => {
-    if (state.currentUser) {
+    // currentUser can be User, null, or undefined (initial loading)
+    if (state.currentUser) { // User object exists, meaning logged in
       let targetPath = redirect;
-      if (targetPath === '/auth' || targetPath === '/') { // Avoid redirect loop or staying on auth
+      // Avoid redirect loop or staying on auth, and ensure role-based redirection
+      if (targetPath === '/auth' || targetPath === '/' || targetPath === '/app') { 
           switch (state.currentUser.role) {
               case UserRole.SUPER_ADMIN: targetPath = '/admin/dashboard'; break;
               case UserRole.TEACHER: targetPath = '/teacher/dashboard'; break;
               case UserRole.STUDENT: targetPath = '/student/dashboard'; break;
-              default: targetPath = '/student/dashboard';
+              default: targetPath = '/student/dashboard'; // Fallback
           }
       }
       router.replace(targetPath);
     }
-  }, [state.currentUser, redirect, router]);
+    // No explicit redirect if state.currentUser is null (logged out) or undefined (loading)
+    // The page will render the auth form in those cases.
+  }, [state.currentUser, redirect, router, state.isLoading]);
 
-  if (state.currentUser) {
-    return null; // Render nothing while redirecting
+
+  // Show loading or auth form based on currentUser and isLoading state
+  if (state.currentUser === undefined || (state.isLoading && state.currentUser === undefined)) {
+    // Auth state is still being determined, show a loading indicator or minimal UI
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10 p-4">
+            <Card className="w-full max-w-md shadow-2xl">
+                <CardHeader className="text-center">
+                <CardTitle className="text-3xl font-headline text-primary">{APP_NAME}</CardTitle>
+                <CardDescription>Loading...</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="h-10 bg-muted rounded animate-pulse w-full mb-4"></div>
+                    <div className="h-10 bg-muted rounded animate-pulse w-full"></div>
+                </CardContent>
+            </Card>
+        </div>
+    );
   }
-
+  
+  // If currentUser exists, useEffect above will redirect. If null, show auth form.
+  // This check prevents rendering auth form briefly if already logged in and redirecting.
+  if (state.currentUser) { 
+      return null; // Or a more specific loading/redirecting message
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10 p-4">
@@ -92,7 +122,7 @@ export default function AuthPage() {
               <TabsTrigger value="register">Register (Student)</TabsTrigger>
             </TabsList>
             <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-4 mt-4">
+              <form onSubmit={onLoginSubmit} className="space-y-4 mt-4">
                 <div className="space-y-1">
                   <Label htmlFor="login-email">Email</Label>
                   <Input
@@ -102,6 +132,7 @@ export default function AuthPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
                     required
+                    disabled={state.isLoading}
                   />
                 </div>
                 <div className="space-y-1">
@@ -114,20 +145,21 @@ export default function AuthPage() {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
                       required
+                      disabled={state.isLoading}
                     />
-                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)}>
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)} disabled={state.isLoading}>
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
-                {formError && <p className="text-sm text-destructive">{formError}</p>}
+                {/* Global errors are now shown via toasts */}
                 <Button type="submit" className="w-full" disabled={state.isLoading}>
                   {state.isLoading ? 'Logging in...' : 'Login'}
                 </Button>
               </form>
             </TabsContent>
             <TabsContent value="register">
-              <form onSubmit={handleRegister} className="space-y-4 mt-4">
+              <form onSubmit={onRegisterSubmit} className="space-y-4 mt-4">
                 <div className="space-y-1">
                   <Label htmlFor="register-name">Full Name</Label>
                   <Input
@@ -137,6 +169,7 @@ export default function AuthPage() {
                     onChange={(e) => setName(e.target.value)}
                     placeholder="John Doe"
                     required
+                    disabled={state.isLoading}
                   />
                 </div>
                 <div className="space-y-1">
@@ -148,6 +181,7 @@ export default function AuthPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
                     required
+                    disabled={state.isLoading}
                   />
                 </div>
                 <div className="space-y-1">
@@ -160,8 +194,9 @@ export default function AuthPage() {
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
                       required
+                      disabled={state.isLoading}
                     />
-                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)}>
+                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)} disabled={state.isLoading}>
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
@@ -176,13 +211,14 @@ export default function AuthPage() {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="••••••••"
                       required
+                      disabled={state.isLoading}
                     />
-                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowConfirmPassword(!showConfirmPassword)} disabled={state.isLoading}>
                       {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
                 </div>
-                {formError && <p className="text-sm text-destructive">{formError}</p>}
+                {/* Global errors are now shown via toasts */}
                 <Button type="submit" className="w-full" disabled={state.isLoading}>
                   {state.isLoading ? 'Registering...' : 'Register as Student'}
                 </Button>
@@ -197,4 +233,3 @@ export default function AuthPage() {
     </div>
   );
 }
-

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect } from 'react';
@@ -11,11 +12,12 @@ export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (state.currentUser === undefined) { // Still loading from context
+    // Wait for auth state to be determined
+    if (state.currentUser === undefined || state.isLoading) { 
       return;
     }
 
-    if (state.currentUser) {
+    if (state.currentUser) { // User is logged in
       switch (state.currentUser.role) {
         case UserRole.SUPER_ADMIN:
           router.replace('/admin/dashboard');
@@ -27,13 +29,15 @@ export default function HomePage() {
           router.replace('/student/dashboard');
           break;
         default:
-          router.replace('/auth'); // Fallback, should not happen
+          // Should not happen if role is always set
+          router.replace('/auth?error=invalid_role'); 
       }
-    } else {
+    } else { // No user, redirect to auth
       router.replace('/auth');
     }
-  }, [state.currentUser, router]);
+  }, [state.currentUser, state.isLoading, router]);
 
+  // Show a loading skeleton while waiting for auth state and redirection
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-6 bg-background">
       <div className="w-full max-w-md space-y-4">

@@ -43,9 +43,19 @@ export enum PaymentStatus {
 // Action Types (Simplified for brevity, expand as needed)
 export enum ActionType {
   // Auth & User
-  LOGIN_USER = 'LOGIN_USER',
-  LOGOUT_USER = 'LOGOUT_USER',
-  REGISTER_STUDENT = 'REGISTER_STUDENT',
+  LOGIN_USER_REQUEST = 'LOGIN_USER_REQUEST',
+  LOGIN_USER_SUCCESS = 'LOGIN_USER_SUCCESS',
+  LOGIN_USER_FAILURE = 'LOGIN_USER_FAILURE',
+  REGISTER_STUDENT_REQUEST = 'REGISTER_STUDENT_REQUEST',
+  REGISTER_STUDENT_SUCCESS = 'REGISTER_STUDENT_SUCCESS',
+  REGISTER_STUDENT_FAILURE = 'REGISTER_STUDENT_FAILURE',
+  LOGOUT_USER_REQUEST = 'LOGOUT_USER_REQUEST',
+  LOGOUT_USER_SUCCESS = 'LOGOUT_USER_SUCCESS',
+  LOGOUT_USER_FAILURE = 'LOGOUT_USER_FAILURE',
+  SET_CURRENT_USER = 'SET_CURRENT_USER', // For onAuthStateChanged
+  FETCH_USER_PROFILE_SUCCESS = 'FETCH_USER_PROFILE_SUCCESS',
+  FETCH_USER_PROFILE_FAILURE = 'FETCH_USER_PROFILE_FAILURE',
+
   UPDATE_USER_PROFILE = 'UPDATE_USER_PROFILE',
   CREATE_USER = 'CREATE_USER', // For admin to create any user type
   UPDATE_USER = 'UPDATE_USER', // For admin to update any user type/details
@@ -90,10 +100,9 @@ export enum ActionType {
 
 // Interfaces
 export interface User {
-  id: string;
+  id: string; // Firebase Auth UID
   name: string;
-  email: string;
-  password?: string; // Typically hashed, or not stored if using external auth
+  email: string; // Firebase Auth email
   role: UserRole;
   avatarUrl?: string; // Optional
 }
@@ -222,8 +231,8 @@ export interface Announcement {
 
 // App State
 export interface AppState {
-  currentUser: User | null;
-  users: User[];
+  currentUser: User | null | undefined; // undefined means auth state not yet determined
+  users: User[]; // Still keep this for admin views, etc.
   courses: Course[];
   lessons: Lesson[];
   assignments: Assignment[];
@@ -240,11 +249,11 @@ export interface AppState {
 
 // App Actions - Define payload types for each action
 export type LoginUserPayload = { email: string; password?: string };
-export type RegisterStudentPayload = Omit<User, 'id' | 'role' | 'avatarUrl'> & Partial<Pick<User, 'avatarUrl'>>;
+export type RegisterStudentPayload = { name: string; email: string; password?: string; avatarUrl?: string };
 export type UpdateUserProfilePayload = Partial<Pick<User, 'name' | 'email' | 'avatarUrl'>> & { id: string };
 
-export type CreateUserPayload = Omit<User, 'id' | 'avatarUrl'> & Partial<Pick<User, 'avatarUrl'>>;
-export type UpdateUserPayload = Partial<Omit<User, 'id' | 'email' | 'password'>> & { id: string };
+export type CreateUserPayload = Omit<User, 'id' | 'avatarUrl'> & Partial<Pick<User, 'avatarUrl'>> & { password?: string }; // Admin creates user with password
+export type UpdateUserPayload = Partial<Omit<User, 'id' | 'email'>> & { id: string };
 export type DeleteUserPayload = { id: string };
 
 
@@ -277,9 +286,19 @@ export type UpdatePaymentPayload = Pick<Payment, 'id' | 'status' | 'notes'> & { 
 
 
 export type AppAction =
-  | { type: ActionType.LOGIN_USER; payload: LoginUserPayload }
-  | { type: ActionType.LOGOUT_USER }
-  | { type: ActionType.REGISTER_STUDENT; payload: RegisterStudentPayload }
+  | { type: ActionType.LOGIN_USER_REQUEST }
+  | { type: ActionType.LOGIN_USER_SUCCESS; payload: User }
+  | { type: ActionType.LOGIN_USER_FAILURE; payload: string }
+  | { type: ActionType.REGISTER_STUDENT_REQUEST }
+  | { type: ActionType.REGISTER_STUDENT_SUCCESS; payload: User }
+  | { type: ActionType.REGISTER_STUDENT_FAILURE; payload: string }
+  | { type: ActionType.LOGOUT_USER_REQUEST }
+  | { type: ActionType.LOGOUT_USER_SUCCESS }
+  | { type: ActionType.LOGOUT_USER_FAILURE; payload: string }
+  | { type: ActionType.SET_CURRENT_USER; payload: User | null } // For onAuthStateChanged
+  | { type: ActionType.FETCH_USER_PROFILE_SUCCESS; payload: User }
+  | { type: ActionType.FETCH_USER_PROFILE_FAILURE; payload: string }
+
   | { type: ActionType.UPDATE_USER_PROFILE; payload: UpdateUserProfilePayload }
   | { type: ActionType.CREATE_USER; payload: CreateUserPayload }
   | { type: ActionType.UPDATE_USER; payload: UpdateUserPayload }
@@ -325,3 +344,4 @@ export interface GenerateQuizQuestionsOutput {
         correctAnswer: string;
     }>;
 }
+
