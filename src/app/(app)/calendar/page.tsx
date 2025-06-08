@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useMemo } from 'react';
@@ -90,10 +91,13 @@ export default function CalendarPage() {
                 </time>
                 <div className="mt-6 space-y-1 overflow-y-auto max-h-[80px] sm:max-h-[100px]">
                   {getAssignmentsForDay(day).map(assignment => (
-                    <Link key={assignment.id} href={`/student/courses/${assignment.courseId}?assignment=${assignment.id}`} legacyBehavior>
-                      <a className="block p-1.5 text-xs bg-accent text-accent-foreground rounded-md hover:opacity-80 truncate" title={assignment.title}>
-                        {assignment.title}
-                      </a>
+                    <Link 
+                      key={assignment.id} 
+                      href={`/student/courses/${assignment.courseId}?assignment=${assignment.id}`}
+                      className="block p-1.5 text-xs bg-accent text-accent-foreground rounded-md hover:opacity-80 truncate"
+                      title={assignment.title}
+                    >
+                      {assignment.title}
                     </Link>
                   ))}
                 </div>
@@ -105,3 +109,4 @@ export default function CalendarPage() {
     </div>
   );
 }
+
