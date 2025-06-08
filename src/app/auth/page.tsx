@@ -1,20 +1,20 @@
 
 "use client";
 
-import { useState, type FormEvent, useEffect } from 'react';
+import { useState, type FormEvent, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAppContext } from '@/contexts/AppContext';
-import { UserRole, type LoginUserPayload, type RegisterStudentPayload } from '@/types'; // Removed ActionType as dispatch is now handled by context async functions
+import { UserRole, type LoginUserPayload, type RegisterStudentPayload } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { APP_NAME } from '@/lib/constants';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 
-export default function AuthPage() {
-  const { state, handleLoginUser, handleRegisterStudent } = useAppContext(); // Use async handlers
+function AuthPageContent() {
+  const { state, handleLoginUser, handleRegisterStudent } = useAppContext();
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect') || '/';
@@ -26,18 +26,10 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
-  // Use formError from global state if needed, or keep local if preferred for immediate feedback
-  // const [formError, setFormError] = useState<string | null>(null); 
-  // For this example, global error (state.error) will be shown via Toasts
-
   const onLoginSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    // setFormError(null); // Clear local error if using local state for form errors
     if (!email || !password) {
-      // setFormError("Email and password are required."); // Example of local error
-      // Or dispatch a general error for toast if preferred
-      // dispatch({ type: ActionType.SET_ERROR, payload: "Email and password are required." });
-      alert("Email and password are required."); // Simple alert for now
+      alert("Email and password are required.");
       return;
     }
     const payload: LoginUserPayload = { email, password };
@@ -46,7 +38,6 @@ export default function AuthPage() {
 
   const onRegisterSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    // setFormError(null);
     if (!name || !email || !password || !confirmPassword) {
       alert("All fields are required for registration.");
       return;
@@ -64,34 +55,27 @@ export default function AuthPage() {
   };
   
   useEffect(() => {
-    // currentUser can be User, null, or undefined (initial loading)
-    if (state.currentUser) { // User object exists, meaning logged in
+    if (state.currentUser) {
       let targetPath = redirect;
-      // Avoid redirect loop or staying on auth, and ensure role-based redirection
       if (targetPath === '/auth' || targetPath === '/' || targetPath === '/app') { 
           switch (state.currentUser.role) {
               case UserRole.SUPER_ADMIN: targetPath = '/admin/dashboard'; break;
               case UserRole.TEACHER: targetPath = '/teacher/dashboard'; break;
               case UserRole.STUDENT: targetPath = '/student/dashboard'; break;
-              default: targetPath = '/student/dashboard'; // Fallback
+              default: targetPath = '/student/dashboard';
           }
       }
       router.replace(targetPath);
     }
-    // No explicit redirect if state.currentUser is null (logged out) or undefined (loading)
-    // The page will render the auth form in those cases.
   }, [state.currentUser, redirect, router, state.isLoading]);
 
-
-  // Show loading or auth form based on currentUser and isLoading state
   if (state.currentUser === undefined || (state.isLoading && state.currentUser === undefined)) {
-    // Auth state is still being determined, show a loading indicator or minimal UI
     return (
         <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10 p-4">
             <Card className="w-full max-w-md shadow-2xl">
                 <CardHeader className="text-center">
                 <CardTitle className="text-3xl font-headline text-primary">{APP_NAME}</CardTitle>
-                <CardDescription>Loading...</CardDescription>
+                <CardDescription>Verifying credentials...</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="h-10 bg-muted rounded animate-pulse w-full mb-4"></div>
@@ -102,10 +86,20 @@ export default function AuthPage() {
     );
   }
   
-  // If currentUser exists, useEffect above will redirect. If null, show auth form.
-  // This check prevents rendering auth form briefly if already logged in and redirecting.
   if (state.currentUser) { 
-      return null; // Or a more specific loading/redirecting message
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10 p-4">
+            <Card className="w-full max-w-md shadow-2xl">
+                <CardHeader className="text-center">
+                    <CardTitle className="text-3xl font-headline text-primary">{APP_NAME}</CardTitle>
+                    <CardDescription>Redirecting...</CardDescription>
+                </CardHeader>
+                <CardContent className="flex justify-center items-center py-10">
+                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                </CardContent>
+            </Card>
+        </div>
+      );
   }
 
   return (
@@ -152,9 +146,8 @@ export default function AuthPage() {
                     </Button>
                   </div>
                 </div>
-                {/* Global errors are now shown via toasts */}
                 <Button type="submit" className="w-full" disabled={state.isLoading}>
-                  {state.isLoading ? 'Logging in...' : 'Login'}
+                  {state.isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Logging in...</> : 'Login'}
                 </Button>
               </form>
             </TabsContent>
@@ -218,9 +211,8 @@ export default function AuthPage() {
                     </Button>
                   </div>
                 </div>
-                {/* Global errors are now shown via toasts */}
                 <Button type="submit" className="w-full" disabled={state.isLoading}>
-                  {state.isLoading ? 'Registering...' : 'Register as Student'}
+                  {state.isLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Registering...</> : 'Register as Student'}
                 </Button>
               </form>
             </TabsContent>
@@ -231,5 +223,29 @@ export default function AuthPage() {
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+export default function AuthPage() {
+  // This fallback will be shown while useSearchParams (inside AuthPageContent)
+  // is resolving on the client after initial server render or during client-side navigation.
+  const fallbackContent = (
+    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-primary/10 via-background to-accent/10 p-4">
+      <Card className="w-full max-w-md shadow-2xl">
+          <CardHeader className="text-center">
+          <CardTitle className="text-3xl font-headline text-primary">{APP_NAME}</CardTitle>
+          <CardDescription>Loading Page...</CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center items-center py-10">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          </CardContent>
+      </Card>
+    </div>
+  );
+
+  return (
+    <Suspense fallback={fallbackContent}>
+      <AuthPageContent />
+    </Suspense>
   );
 }
