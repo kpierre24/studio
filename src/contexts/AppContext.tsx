@@ -4,8 +4,8 @@
 
 import type { Dispatch } from 'react';
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord } from '@/types';
-import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload } from '@/types';
+import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 import { 
   SAMPLE_USERS, 
   SAMPLE_COURSES, 
@@ -32,7 +32,7 @@ const initialState: AppState = {
   attendanceRecords: [],
   payments: [],
   notifications: [],
-  announcements: [], // Initialize announcements
+  announcements: [],
   isLoading: false,
   error: null,
   successMessage: null,
@@ -50,11 +50,9 @@ const autoGradeQuizAnswer = (question: QuizQuestion, studentAnswer: string | str
       isCorrect = studentAnswer.toString().toLowerCase() === question.correctAnswer.toString().toLowerCase();
       break;
     case QuestionType.MULTIPLE_CHOICE:
-      // Assuming single correct answer for MCQs
       isCorrect = studentAnswer.toString().toLowerCase() === question.correctAnswer.toString().toLowerCase();
       break;
     case QuestionType.SHORT_ANSWER:
-      // Simple keyword match (case-insensitive)
       const keywords = Array.isArray(question.correctAnswer) ? question.correctAnswer.map(k => k.toLowerCase()) : [question.correctAnswer.toString().toLowerCase()];
       const studentAnswers = Array.isArray(studentAnswer) ? studentAnswer.map(sa => sa.toLowerCase()) : [studentAnswer.toString().toLowerCase()];
       isCorrect = keywords.some(keyword => studentAnswers.includes(keyword));
@@ -106,7 +104,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     }
     case ActionType.LOGIN_USER: {
       const user = state.users.find(
-        (u) => u.email === action.payload.email // && u.password === action.payload.password // Password check is illustrative
+        (u) => u.email === action.payload.email
       );
       if (user) {
         return { ...state, currentUser: user, error: null, successMessage: 'Login successful!' };
@@ -150,7 +148,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       };
     }
 
-    case ActionType.CREATE_USER: { // Admin creates a user
+    case ActionType.CREATE_USER: {
       const payload = action.payload as CreateUserPayload;
       const emailExists = state.users.some(u => u.email === payload.email);
       if (emailExists) {
@@ -160,7 +158,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         name: payload.name,
         email: payload.email,
-        password: payload.password, // Store password directly for simplicity
+        password: payload.password,
         role: payload.role,
         avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png?text=${payload.name.substring(0,2).toUpperCase()}`,
       };
@@ -172,7 +170,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       };
     }
 
-    case ActionType.UPDATE_USER: { // Admin updates a user
+    case ActionType.UPDATE_USER: {
       const payload = action.payload as UpdateUserPayload;
       return {
         ...state,
@@ -183,7 +181,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       };
     }
 
-    case ActionType.DELETE_USER: { // Admin deletes a user
+    case ActionType.DELETE_USER: {
       const payload = action.payload as DeleteUserPayload;
       if (state.currentUser && state.currentUser.id === payload.id) {
         return { ...state, error: "You cannot delete your own account." };
@@ -197,13 +195,11 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     }
     
      case ActionType.CREATE_COURSE: {
-      const newCourse = action.payload as Course; // Payload is the full Course object
-      // Ensure teacherId is set correctly based on who is creating
+      const newCourse = action.payload as Course; 
       let finalTeacherId = newCourse.teacherId;
       if (state.currentUser?.role === UserRole.TEACHER) {
         finalTeacherId = state.currentUser.id;
       } else if (state.currentUser?.role === UserRole.SUPER_ADMIN) {
-        // Admin can set it, or it defaults from form (which could be 'unassigned')
         finalTeacherId = newCourse.teacherId || 'unassigned';
       }
 
@@ -211,7 +207,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         ...newCourse,
         id: newCourse.id || `course-${Date.now()}-${Math.random().toString(36).substring(2,7)}`,
         teacherId: finalTeacherId,
-        studentIds: newCourse.studentIds || [], // New courses start with no students unless specified
+        studentIds: newCourse.studentIds || [],
+        cost: newCourse.cost || 0, // Ensure cost is handled
       };
 
       return {
@@ -226,7 +223,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         courses: state.courses.map(course =>
-          course.id === updatedCourseData.id ? { ...course, ...updatedCourseData } : course
+          course.id === updatedCourseData.id ? { ...course, ...updatedCourseData, cost: updatedCourseData.cost ?? course.cost } : course
         ),
         successMessage: `Course "${updatedCourseData.name || state.courses.find(c=>c.id === updatedCourseData.id)?.name}" updated successfully.`,
       };
@@ -243,7 +240,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         courses: state.courses.filter(course => course.id !== id),
         lessons: state.lessons.filter(lesson => lesson.courseId !== id),
         assignments: state.assignments.filter(assignment => assignment.courseId !== id),
-        // Also consider deleting enrollments, submissions, etc. for this course
         successMessage: `Course "${courseToDelete?.name || id}" deleted successfully.`,
       };
     }
@@ -307,7 +303,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         );
 
         if (existingRecordIndex !== -1) {
-          // Update existing record
           updatedAttendanceRecords[existingRecordIndex] = {
             ...updatedAttendanceRecords[existingRecordIndex],
             status: ss.status,
@@ -315,7 +310,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
           };
           recordsUpdated++;
         } else {
-          // Create new record
           const newRecord: AttendanceRecord = {
             id: `att-${courseId}-${ss.studentId}-${date}-${Math.random().toString(36).substring(2, 7)}`,
             courseId,
@@ -347,6 +341,30 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       };
     }
 
+    case ActionType.RECORD_PAYMENT: {
+      const payload = action.payload as RecordPaymentPayload;
+      const newPayment: Payment = {
+        ...payload,
+        id: `payment-${Date.now()}-${Math.random().toString(36).substring(2,7)}`,
+        paymentDate: payload.paymentDate || new Date().toISOString(),
+      };
+      return {
+        ...state,
+        payments: [...state.payments, newPayment],
+        successMessage: `Payment of $${newPayment.amount} for student ${newPayment.studentId} recorded.`,
+      };
+    }
+
+    case ActionType.UPDATE_PAYMENT: {
+      const payload = action.payload as UpdatePaymentPayload;
+      return {
+        ...state,
+        payments: state.payments.map(p =>
+          p.id === payload.id ? { ...p, ...payload, paymentDate: payload.paymentDate ?? p.paymentDate } : p
+        ),
+        successMessage: `Payment ${payload.id} updated to status ${payload.status}.`,
+      };
+    }
 
     case ActionType.ADD_NOTIFICATION: {
       const newNotification: NotificationMessage = {
@@ -357,7 +375,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       };
       return {
         ...state,
-        notifications: [newNotification, ...state.notifications].slice(0, 20), // Add to start, limit count
+        notifications: [newNotification, ...state.notifications].slice(0, 20),
       };
     }
     case ActionType.MARK_NOTIFICATION_READ: {
@@ -400,7 +418,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const { toast } = useToast();
 
   useEffect(() => {
-    dispatch({ type: ActionType.LOAD_DATA, payload: {} }); // Load initial sample data
+    dispatch({ type: ActionType.LOAD_DATA, payload: {} });
   }, []);
 
   useEffect(() => {
@@ -429,4 +447,3 @@ export const useAppContext = () => {
   }
   return context;
 };
-

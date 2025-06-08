@@ -22,7 +22,6 @@ export default function StudentDashboardPage() {
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
     .slice(0, 3);
 
-  // Ensure announcements is an array before filtering
   const recentAnnouncements = (announcements || [])
     .filter(ann => ann.userId === currentUser.id || (ann.courseId && enrolledCourseIds.includes(ann.courseId)) || (ann.type === 'announcement' && ann.userId === undefined && !ann.courseId))
     .sort((a,b) => b.timestamp - a.timestamp)
@@ -70,7 +69,6 @@ export default function StudentDashboardPage() {
             <GraduationCap className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            {/* Placeholder for grades */}
             <div className="text-2xl font-bold">-</div>
             <Link href="/student/grades" className="text-xs text-primary hover:underline">View all grades</Link>
           </CardContent>

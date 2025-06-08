@@ -34,6 +34,12 @@ export enum AnnouncementAudience {
   COURSE_SPECIFIC = 'course_specific', // Students and teacher of a specific course
 }
 
+export enum PaymentStatus {
+  PENDING = 'Pending',
+  PAID = 'Paid',
+  FAILED = 'Failed',
+}
+
 // Action Types (Simplified for brevity, expand as needed)
 export enum ActionType {
   // Auth & User
@@ -77,6 +83,9 @@ export enum ActionType {
   // AI Quiz Generation
   GENERATE_QUIZ_QUESTIONS_SUCCESS = 'GENERATE_QUIZ_QUESTIONS_SUCCESS',
   GENERATE_QUIZ_QUESTIONS_ERROR = 'GENERATE_QUIZ_QUESTIONS_ERROR',
+  // Payment
+  RECORD_PAYMENT = 'RECORD_PAYMENT', // For admin to record a payment
+  UPDATE_PAYMENT = 'UPDATE_PAYMENT', // For admin to update payment status
 }
 
 // Interfaces
@@ -96,7 +105,7 @@ export interface Course {
   teacherId: string; // Can be a teacher's ID or 'unassigned'
   studentIds: string[];
   category?: string;
-  cost?: number; // Optional, added for teacher dashboard
+  cost: number; // Made mandatory for payment tracking
   prerequisites?: string[]; // Course IDs
 }
 
@@ -182,16 +191,17 @@ export interface Payment {
   studentId: string;
   courseId: string;
   amount: number;
-  status: 'Pending' | 'Paid' | 'Failed';
+  status: PaymentStatus;
   paymentDate?: string; // ISO date string
   transactionId?: string;
+  notes?: string; // Optional notes by admin
 }
 
 export interface NotificationMessage {
   id: string;
   userId?: string; // Target user, undefined for global
   courseId?: string; // Context course
-  type: 'success' | 'error' | 'info' | 'warning' | 'new_assignment' | 'grade_update' | 'announcement';
+  type: 'success' | 'error' | 'info' | 'warning' | 'new_assignment' | 'grade_update' | 'announcement' | 'payment_due' | 'payment_received';
   message: string;
   link?: string; // e.g., to an assignment or course
   read: boolean;
@@ -206,7 +216,6 @@ export interface Announcement {
   courseId?: string; // Optional: For course-specific announcements
   userId?: string;   // Optional: For user-specific announcements (TARGET user for filtering)
   link?: string;     // Optional: A link for more details or navigation
-  // authorId?: string; // Optional: Who created the announcement
 }
 
 
@@ -222,30 +231,29 @@ export interface AppState {
   attendanceRecords: AttendanceRecord[];
   payments: Payment[];
   notifications: NotificationMessage[];
-  announcements: Announcement[]; // Added announcements to state
+  announcements: Announcement[];
   isLoading: boolean;
   error: string | null;
   successMessage: string | null;
 }
 
 // App Actions - Define payload types for each action
-// Example:
-export type LoginUserPayload = { email: string; password?: string /* IRL password check happens backend */ };
+export type LoginUserPayload = { email: string; password?: string };
 export type RegisterStudentPayload = Omit<User, 'id' | 'role' | 'avatarUrl'> & Partial<Pick<User, 'avatarUrl'>>;
 export type UpdateUserProfilePayload = Partial<Pick<User, 'name' | 'email' | 'avatarUrl'>> & { id: string };
 
-export type CreateUserPayload = Omit<User, 'id' | 'avatarUrl'> & Partial<Pick<User, 'avatarUrl'>>; // Admin creates user
-export type UpdateUserPayload = Partial<Omit<User, 'id' | 'email' | 'password'>> & { id: string }; // Admin updates user (role, name)
+export type CreateUserPayload = Omit<User, 'id' | 'avatarUrl'> & Partial<Pick<User, 'avatarUrl'>>;
+export type UpdateUserPayload = Partial<Omit<User, 'id' | 'email' | 'password'>> & { id: string };
 export type DeleteUserPayload = { id: string };
 
 
-export type CreateCoursePayload = Omit<Course, 'id' | 'studentIds'> & { studentIds?: string[] }; // Allow studentIds to be optionally passed if needed for cloning etc.
+export type CreateCoursePayload = Omit<Course, 'id' | 'studentIds'> & { studentIds?: string[] };
 export type UpdateCoursePayload = Partial<Omit<Course, 'id'>> & { id: string };
 export type DeleteCoursePayload = { id: string };
 
 
 export type CreateLessonPayload = Omit<Lesson, 'id'>;
-export type CreateAssignmentPayload = Omit<Assignment, 'id'| 'totalPoints'> & { manualTotalPoints?: number }; // totalPoints calculated
+export type CreateAssignmentPayload = Omit<Assignment, 'id'| 'totalPoints'> & { manualTotalPoints?: number };
 export type SubmitAssignmentPayload = Omit<Submission, 'id' | 'submittedAt' | 'grade' | 'feedback' | 'rubricScores'>;
 export type GradeSubmissionPayload = Pick<Submission, 'id' | 'grade' | 'feedback' | 'rubricScores' | 'quizAnswers'> & { assignmentId: string; studentId: string };
 
@@ -256,6 +264,9 @@ export type TakeAttendancePayload = {
 };
 export type UpdateAttendanceRecordPayload = Partial<Omit<AttendanceRecord, 'id' | 'courseId' | 'studentId' | 'date'>> & { id: string };
 
+export type RecordPaymentPayload = Omit<Payment, 'id'>;
+export type UpdatePaymentPayload = Pick<Payment, 'id' | 'status' | 'notes'> & { amount?: number, paymentDate?: string };
+
 
 export type AppAction =
   | { type: ActionType.LOGIN_USER; payload: LoginUserPayload }
@@ -265,7 +276,7 @@ export type AppAction =
   | { type: ActionType.CREATE_USER; payload: CreateUserPayload }
   | { type: ActionType.UPDATE_USER; payload: UpdateUserPayload }
   | { type: ActionType.DELETE_USER; payload: DeleteUserPayload }
-  | { type: ActionType.CREATE_COURSE; payload: Course } // Payload is the full Course object to be created
+  | { type: ActionType.CREATE_COURSE; payload: Course }
   | { type: ActionType.UPDATE_COURSE; payload: UpdateCoursePayload }
   | { type: ActionType.DELETE_COURSE; payload: DeleteCoursePayload }
   | { type: ActionType.CREATE_LESSON; payload: CreateLessonPayload }
@@ -274,6 +285,8 @@ export type AppAction =
   | { type: ActionType.GRADE_SUBMISSION; payload: GradeSubmissionPayload }
   | { type: ActionType.TAKE_ATTENDANCE; payload: TakeAttendancePayload }
   | { type: ActionType.UPDATE_ATTENDANCE_RECORD; payload: UpdateAttendanceRecordPayload }
+  | { type: ActionType.RECORD_PAYMENT; payload: RecordPaymentPayload }
+  | { type: ActionType.UPDATE_PAYMENT; payload: UpdatePaymentPayload }
   | { type: ActionType.LOAD_DATA; payload: Partial<AppState> }
   | { type: ActionType.SET_LOADING; payload: boolean }
   | { type: ActionType.SET_ERROR; payload: string | null }
@@ -300,5 +313,3 @@ export interface GenerateQuizQuestionsOutput {
         correctAnswer: string;
     }>;
 }
-// This is a simplified version. User should provide their full types.ts content.
-

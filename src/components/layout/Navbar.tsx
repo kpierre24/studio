@@ -52,6 +52,8 @@ export function Navbar() {
       case 'new_assignment': return <Edit3 className="w-4 h-4 text-purple-500" />;
       case 'grade_update': return <BarChart2 className="w-4 h-4 text-teal-500" />;
       case 'announcement': return <BookOpen className="w-4 h-4 text-indigo-500" />;
+      case 'payment_due': return <DollarSign className="w-4 h-4 text-orange-500" />;
+      case 'payment_received': return <DollarSign className="w-4 h-4 text-green-500" />;
       default: return <Bell className="w-4 h-4" />;
     }
   };
@@ -66,7 +68,7 @@ export function Navbar() {
               {APP_NAME}
             </Link>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="hidden md:flex items-center space-x-3">
             {currentUser ? (
               <>
                 {/* Common Links */}
@@ -80,6 +82,7 @@ export function Navbar() {
                     <Link href="/admin/users" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Users</Link>
                     <Link href="/admin/courses" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Courses</Link>
                     <Link href="/admin/attendance" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Attendance</Link>
+                    {/* Admin might have a payments overview page too */}
                   </>
                 )}
                 {currentUser.role === UserRole.TEACHER && (
@@ -100,7 +103,12 @@ export function Navbar() {
                     <Link href="/student/payments" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Payments</Link>
                   </>
                 )}
-                
+              </>
+            ) : null}
+          </div>
+          <div className="flex items-center space-x-2">
+             {currentUser ? (
+                <>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="relative">
@@ -121,18 +129,18 @@ export function Navbar() {
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     {notifications.length === 0 ? (
-                       <DropdownMenuItem disabled className="text-muted-foreground">No new notifications</DropdownMenuItem>
+                       <DropdownMenuItem disabled className="text-muted-foreground text-center py-2">No new notifications</DropdownMenuItem>
                     ) : (
                     <ScrollArea className="h-[300px]">
                       {notifications.slice(0,10).map((notif) => (
                         <DropdownMenuItem
                           key={notif.id}
                           onClick={() => handleNotificationClick(notif)}
-                          className={`flex items-start gap-2 cursor-pointer ${notif.read ? 'opacity-70' : 'font-semibold'}`}
+                          className={`flex items-start gap-3 p-2 cursor-pointer ${notif.read ? 'opacity-70' : 'font-semibold bg-accent/10'}`}
                         >
-                          <span className="mt-1">{getIconForNotification(notif.type)}</span>
+                          <span className="mt-1 shrink-0">{getIconForNotification(notif.type)}</span>
                           <div className="flex-1">
-                            <p className="text-sm leading-tight">{notif.message}</p>
+                            <p className="text-sm leading-tight whitespace-normal">{notif.message}</p>
                             <p className="text-xs text-muted-foreground">{formatDistanceToNowStrict(new Date(notif.timestamp))} ago</p>
                           </div>
                         </DropdownMenuItem>
@@ -140,7 +148,7 @@ export function Navbar() {
                     </ScrollArea>
                     )}
                      <DropdownMenuSeparator />
-                     <DropdownMenuItem onClick={() => dispatch({type: ActionType.CLEAR_ALL_NOTIFICATIONS})} className="text-red-500 focus:text-red-500 focus:bg-red-500/10">
+                     <DropdownMenuItem onClick={() => dispatch({type: ActionType.CLEAR_ALL_NOTIFICATIONS})} className="text-red-500 focus:text-red-500 focus:bg-red-500/10 justify-center">
                         Clear All Notifications
                      </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -148,17 +156,17 @@ export function Navbar() {
 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                       <Avatar className="h-8 w-8">
+                    <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+                       <Avatar className="h-9 w-9">
                         <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} data-ai-hint="profile picture" />
                         <AvatarFallback>{currentUser.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                       </Avatar>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+                  <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuLabel>
-                      <p className="font-medium">{currentUser.name}</p>
-                      <p className="text-xs text-muted-foreground">{currentUser.email}</p>
+                      <p className="font-medium truncate">{currentUser.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{currentUser.email}</p>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={() => router.push('/profile')}>
@@ -170,13 +178,23 @@ export function Navbar() {
                        Settings
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
+                    {/* Mobile specific nav items can be shown here or in a separate mobile menu */}
+                    <div className="md:hidden"> 
+                      <DropdownMenuSeparator />
+                       <DropdownMenuLabel>Navigation</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => router.push('/announcements')}>Announcements</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push('/calendar')}>Calendar</DropdownMenuItem>
+                        {currentUser.role === UserRole.STUDENT && <DropdownMenuItem onClick={() => router.push('/student/payments')}>Payments</DropdownMenuItem>}
+                      {/* Add more role specific mobile nav links here */}
+                      <DropdownMenuSeparator />
+                    </div>
                     <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                       <LogOut className="mr-2 h-4 w-4" />
                       Logout
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </>
+                </>
             ) : (
               <Button onClick={() => router.push('/auth')}>Login / Sign Up</Button>
             )}
