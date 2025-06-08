@@ -253,7 +253,14 @@ export type DeleteCoursePayload = { id: string };
 
 
 export type CreateLessonPayload = Omit<Lesson, 'id'>;
+export type UpdateLessonPayload = Partial<Omit<Lesson, 'id'>> & { id: string };
+export type DeleteLessonPayload = { id: string; courseId: string };
+
+
 export type CreateAssignmentPayload = Omit<Assignment, 'id'| 'totalPoints'> & { manualTotalPoints?: number };
+export type UpdateAssignmentPayload = Partial<Omit<Assignment, 'id'>> & { id: string };
+export type DeleteAssignmentPayload = { id: string; courseId: string };
+
 export type SubmitAssignmentPayload = Omit<Submission, 'id' | 'submittedAt' | 'grade' | 'feedback' | 'rubricScores'>;
 export type GradeSubmissionPayload = Pick<Submission, 'id' | 'grade' | 'feedback' | 'rubricScores' | 'quizAnswers'> & { assignmentId: string; studentId: string };
 
@@ -280,7 +287,11 @@ export type AppAction =
   | { type: ActionType.UPDATE_COURSE; payload: UpdateCoursePayload }
   | { type: ActionType.DELETE_COURSE; payload: DeleteCoursePayload }
   | { type: ActionType.CREATE_LESSON; payload: CreateLessonPayload }
+  | { type: ActionType.UPDATE_LESSON; payload: UpdateLessonPayload }
+  | { type: ActionType.DELETE_LESSON; payload: DeleteLessonPayload }
   | { type: ActionType.CREATE_ASSIGNMENT; payload: CreateAssignmentPayload }
+  | { type: ActionType.UPDATE_ASSIGNMENT; payload: UpdateAssignmentPayload }
+  | { type: ActionType.DELETE_ASSIGNMENT; payload: DeleteAssignmentPayload }
   | { type: ActionType.SUBMIT_ASSIGNMENT; payload: SubmitAssignmentPayload }
   | { type: ActionType.GRADE_SUBMISSION; payload: GradeSubmissionPayload }
   | { type: ActionType.TAKE_ATTENDANCE; payload: TakeAttendancePayload }

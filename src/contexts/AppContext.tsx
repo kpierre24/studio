@@ -4,7 +4,7 @@
 
 import type { Dispatch } from 'react';
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, UpdateAssignmentPayload, DeleteAssignmentPayload } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 import { 
   SAMPLE_USERS, 
@@ -243,6 +243,40 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         successMessage: `Course "${courseToDelete?.name || id}" deleted successfully.`,
       };
     }
+    
+    case ActionType.CREATE_LESSON: {
+      const payload = action.payload as CreateLessonPayload;
+      const newLesson: Lesson = {
+        ...payload,
+        id: `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      };
+      return {
+        ...state,
+        lessons: [...state.lessons, newLesson].sort((a, b) => a.order - b.order),
+        successMessage: `Lesson "${newLesson.title}" created successfully.`,
+      };
+    }
+
+    case ActionType.UPDATE_LESSON: {
+      const payload = action.payload as UpdateLessonPayload;
+      return {
+        ...state,
+        lessons: state.lessons.map(lesson =>
+          lesson.id === payload.id ? { ...lesson, ...payload } : lesson
+        ).sort((a, b) => a.order - b.order),
+        successMessage: `Lesson "${payload.title || state.lessons.find(l=>l.id === payload.id)?.title}" updated.`,
+      };
+    }
+
+    case ActionType.DELETE_LESSON: {
+      const { id, courseId } = action.payload as DeleteLessonPayload;
+      const lessonToDelete = state.lessons.find(l => l.id === id);
+      return {
+        ...state,
+        lessons: state.lessons.filter(lesson => lesson.id !== id),
+        successMessage: `Lesson "${lessonToDelete?.title || id}" deleted successfully.`,
+      };
+    }
 
     case ActionType.CREATE_ASSIGNMENT: {
       const { courseId, title, description, dueDate, type, questions, rubric, manualTotalPoints } = action.payload;
@@ -272,6 +306,36 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         assignments: [...state.assignments, newAssignment],
         successMessage: `Assignment "${title}" created successfully.`,
       };
+    }
+
+    case ActionType.UPDATE_ASSIGNMENT: {
+        const payload = action.payload as UpdateAssignmentPayload;
+        // Recalculate totalPoints if questions/rubric changed
+        let totalPoints = payload.totalPoints;
+        if (payload.type === AssignmentType.QUIZ && payload.questions) {
+            totalPoints = payload.questions.reduce((sum, q) => sum + q.points, 0);
+        } else if (payload.type === AssignmentType.STANDARD && payload.rubric) {
+            totalPoints = payload.rubric.reduce((sum, r) => sum + r.points, 0);
+        }
+
+        return {
+            ...state,
+            assignments: state.assignments.map(assignment =>
+                assignment.id === payload.id ? { ...assignment, ...payload, totalPoints } : assignment
+            ),
+            successMessage: `Assignment "${payload.title || state.assignments.find(a=>a.id === payload.id)?.title}" updated.`,
+        };
+    }
+
+    case ActionType.DELETE_ASSIGNMENT: {
+        const { id } = action.payload as DeleteAssignmentPayload;
+        const assignmentToDelete = state.assignments.find(a => a.id === id);
+        return {
+            ...state,
+            assignments: state.assignments.filter(assignment => assignment.id !== id),
+            submissions: state.submissions.filter(sub => sub.assignmentId !== id), // Also remove related submissions
+            successMessage: `Assignment "${assignmentToDelete?.title || id}" deleted successfully.`,
+        };
     }
     
     case ActionType.GENERATE_QUIZ_QUESTIONS_SUCCESS: {
