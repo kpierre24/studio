@@ -5,7 +5,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { BookOpen, Edit3, CalendarDays, GraduationCap, FileText, DollarSign } from "lucide-react";
+import { BookOpen, Edit3, CalendarDays, GraduationCap, FileText, DollarSign, CalendarCheck } from "lucide-react";
 
 export default function StudentDashboardPage() {
   const { state } = useAppContext();
@@ -33,6 +33,7 @@ export default function StudentDashboardPage() {
     { name: "My Courses", href: "/student/courses", icon: BookOpen },
     { name: "My Assignments", href: "/student/assignments", icon: Edit3 },
     { name: "My Grades", href: "/student/grades", icon: GraduationCap },
+    { name: "My Attendance", href: "/student/attendance", icon: CalendarCheck },
     { name: "My Payments", href: "/student/payments", icon: DollarSign },
     { name: "View Calendar", href: "/calendar", icon: CalendarDays },
   ];

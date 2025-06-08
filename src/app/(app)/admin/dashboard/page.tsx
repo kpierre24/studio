@@ -4,7 +4,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Users, BookOpen, DollarSign, BarChart2, Settings, Activity, UserCheck, UserCog } from "lucide-react";
+import { Users, BookOpen, DollarSign, BarChart2, Settings, Activity, UserCheck, UserCog, CalendarCheck } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { UserRole } from "@/types";
 import { useMemo } from "react";
@@ -23,6 +23,7 @@ export default function AdminDashboardPage() {
   const quickLinks = [
     { name: "Manage Users", href: "/admin/users", icon: Users, description: "View and manage all user accounts." },
     { name: "Manage Courses", href: "/admin/courses", icon: BookOpen, description: "Oversee all courses in the system." },
+    { name: "Attendance Records", href: "/admin/attendance", icon: CalendarCheck, description: "View all attendance data." },
     { name: "Site Settings", href: "/admin/settings", icon: Settings, description: "Configure application-wide settings." },
     { name: "View Reports", href: "/admin/reports", icon: BarChart2, description: "Access system usage and analytics." },
   ];
@@ -78,7 +79,7 @@ export default function AdminDashboardPage() {
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"> {/* Adjusted grid for 5 items */}
           {quickLinks.map((link) => (
             <Button key={link.name} variant="outline" asChild className="justify-start text-left h-auto py-3 hover:bg-accent/50 transition-colors">
               <Link href={link.href}>

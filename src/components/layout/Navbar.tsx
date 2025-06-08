@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -6,7 +7,7 @@ import { useAppContext } from '@/contexts/AppContext';
 import { ActionType, UserRole, type NotificationMessage } from '@/types';
 import { Button } from '@/components/ui/button';
 import { APP_NAME } from '@/lib/constants';
-import { Bell, LogOut, UserCircle, Settings, LayoutDashboard, BookOpen, Edit3, BarChart2, DollarSign, Users, GraduationCap, AnnoyedIcon, CalendarDays } from 'lucide-react';
+import { Bell, LogOut, UserCircle, Settings, LayoutDashboard, BookOpen, Edit3, BarChart2, DollarSign, Users, GraduationCap, AnnoyedIcon, CalendarDays, CalendarCheck } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,14 +77,16 @@ export function Navbar() {
                 {currentUser.role === UserRole.SUPER_ADMIN && (
                   <>
                     <Link href="/admin/dashboard" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Dashboard</Link>
-                    <Link href="/admin/users" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Manage Users</Link>
-                    <Link href="/admin/courses" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Manage Courses</Link>
+                    <Link href="/admin/users" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Users</Link>
+                    <Link href="/admin/courses" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Courses</Link>
+                    <Link href="/admin/attendance" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Attendance</Link>
                   </>
                 )}
                 {currentUser.role === UserRole.TEACHER && (
                   <>
                     <Link href="/teacher/dashboard" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Dashboard</Link>
                     <Link href="/teacher/courses" className="text-sm font-medium text-foreground hover:text-primary transition-colors">My Courses</Link>
+                    <Link href="/teacher/attendance" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Attendance</Link>
                     <Link href="/teacher/reports" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Reports</Link>
                   </>
                 )}
@@ -91,9 +94,10 @@ export function Navbar() {
                   <>
                     <Link href="/student/dashboard" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Dashboard</Link>
                     <Link href="/student/courses" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Courses</Link>
-                    <Link href="/student/assignments" className="text-sm font-medium text-foreground hover:text-primary transition-colors">My Assignments</Link>
-                    <Link href="/student/grades" className="text-sm font-medium text-foreground hover:text-primary transition-colors">My Grades</Link>
-                    <Link href="/student/payments" className="text-sm font-medium text-foreground hover:text-primary transition-colors">My Payments</Link>
+                    <Link href="/student/assignments" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Assignments</Link>
+                    <Link href="/student/grades" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Grades</Link>
+                    <Link href="/student/attendance" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Attendance</Link>
+                    <Link href="/student/payments" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Payments</Link>
                   </>
                 )}
                 

@@ -4,8 +4,8 @@
 
 import type { Dispatch } from 'react';
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload } from '@/types';
-import { ActionType, UserRole, AssignmentType, QuestionType } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord } from '@/types';
+import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus } from '@/types';
 import { 
   SAMPLE_USERS, 
   SAMPLE_COURSES, 
@@ -100,7 +100,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         attendanceRecords: action.payload.attendanceRecords || SAMPLE_ATTENDANCE,
         payments: action.payload.payments || SAMPLE_PAYMENTS,
         notifications: action.payload.notifications || SAMPLE_NOTIFICATIONS,
-        announcements: action.payload.announcements || SAMPLE_ANNOUNCEMENTS, // Load announcements
+        announcements: action.payload.announcements || SAMPLE_ANNOUNCEMENTS,
         isLoading: false,
       };
     }
@@ -294,6 +294,59 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.GENERATE_QUIZ_QUESTIONS_ERROR: {
         return { ...state, error: action.payload.error };
     }
+
+    case ActionType.TAKE_ATTENDANCE: {
+      const { courseId, date, studentStatuses } = action.payload as TakeAttendancePayload;
+      const updatedAttendanceRecords = [...state.attendanceRecords];
+      let recordsAdded = 0;
+      let recordsUpdated = 0;
+
+      studentStatuses.forEach(ss => {
+        const existingRecordIndex = updatedAttendanceRecords.findIndex(
+          ar => ar.courseId === courseId && ar.studentId === ss.studentId && ar.date === date
+        );
+
+        if (existingRecordIndex !== -1) {
+          // Update existing record
+          updatedAttendanceRecords[existingRecordIndex] = {
+            ...updatedAttendanceRecords[existingRecordIndex],
+            status: ss.status,
+            notes: ss.notes,
+          };
+          recordsUpdated++;
+        } else {
+          // Create new record
+          const newRecord: AttendanceRecord = {
+            id: `att-${courseId}-${ss.studentId}-${date}-${Math.random().toString(36).substring(2, 7)}`,
+            courseId,
+            studentId: ss.studentId,
+            date,
+            status: ss.status,
+            notes: ss.notes,
+          };
+          updatedAttendanceRecords.push(newRecord);
+          recordsAdded++;
+        }
+      });
+      
+      return {
+        ...state,
+        attendanceRecords: updatedAttendanceRecords,
+        successMessage: `Attendance for ${date} saved. ${recordsAdded} record(s) added, ${recordsUpdated} record(s) updated.`,
+      };
+    }
+
+    case ActionType.UPDATE_ATTENDANCE_RECORD: {
+      const payload = action.payload as UpdateAttendanceRecordPayload;
+      return {
+        ...state,
+        attendanceRecords: state.attendanceRecords.map(ar =>
+          ar.id === payload.id ? { ...ar, ...payload } : ar
+        ),
+        successMessage: `Attendance record ${payload.id} updated.`,
+      };
+    }
+
 
     case ActionType.ADD_NOTIFICATION: {
       const newNotification: NotificationMessage = {

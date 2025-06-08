@@ -6,10 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { BookOpen, Edit3, Users, CalendarCheck, PlusCircle } from "lucide-react";
+import { useRouter } from 'next/navigation';
+
 
 export default function TeacherDashboardPage() {
   const { state } = useAppContext();
   const { currentUser, courses, assignments, submissions } = state;
+  const router = useRouter();
 
   if (!currentUser) return <p>Loading...</p>; // Or a more sophisticated loading state
 
@@ -20,10 +23,10 @@ export default function TeacherDashboardPage() {
   }).length;
 
   const quickActions = [
-    { name: "Create New Course", href: "/teacher/courses", icon: PlusCircle }, // Link to courses page where modal is
+    { name: "Create New Course", queryParam: "?action=create", href: "/teacher/courses", icon: PlusCircle },
     { name: "View My Courses", href: "/teacher/courses", icon: BookOpen },
     { name: "Grade Submissions", href: "/teacher/grading", icon: Edit3 }, // Assuming a central grading page
-    { name: "Manage Attendance", href: "/teacher/attendance", icon: CalendarCheck }, // Assuming an attendance page
+    { name: "Manage Attendance", href: "/teacher/attendance", icon: CalendarCheck },
   ];
 
   return (
@@ -75,30 +78,14 @@ export default function TeacherDashboardPage() {
             <Button 
               key={action.name} 
               variant="outline" 
-              asChild={action.name !== "Create New Course"} // Create course button on /teacher/courses opens a modal, not a link
-              onClick={action.name === "Create New Course" ? () => router.push('/teacher/courses?action=create') : undefined} // Placeholder for modal trigger if directly on dashboard
+              onClick={() => router.push(action.href + (action.queryParam || ''))}
               className="justify-start text-left h-auto py-3"
             >
-              {action.name !== "Create New Course" ? (
-                <Link href={action.href}>
-                  <action.icon className="mr-3 h-5 w-5 text-primary" />
-                   <span className="flex flex-col">
-                    <span className="font-semibold">{action.name}</span>
-                    <span className="text-xs text-muted-foreground">Quick access</span>
-                  </span>
-                </Link>
-              ) : (
-                // This is for the button that will navigate to courses page to open modal.
-                // If modal was on this page, it would be a DialogTrigger.
-                // For now, this button will also navigate to /teacher/courses, modal logic is there.
-                 <Link href={action.href}> 
-                    <action.icon className="mr-3 h-5 w-5 text-primary" />
-                    <span className="flex flex-col">
-                        <span className="font-semibold">{action.name}</span>
-                        <span className="text-xs text-muted-foreground">Go to courses page</span>
-                    </span>
-                 </Link>
-              )}
+              <action.icon className="mr-3 h-5 w-5 text-primary" />
+              <span className="flex flex-col">
+                <span className="font-semibold">{action.name}</span>
+                <span className="text-xs text-muted-foreground">Quick access</span>
+              </span>
             </Button>
           ))}
         </CardContent>
@@ -129,4 +116,3 @@ export default function TeacherDashboardPage() {
     </div>
   );
 }
-

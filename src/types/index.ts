@@ -59,6 +59,9 @@ export enum ActionType {
   DELETE_ASSIGNMENT = 'DELETE_ASSIGNMENT',
   SUBMIT_ASSIGNMENT = 'SUBMIT_ASSIGNMENT',
   GRADE_SUBMISSION = 'GRADE_SUBMISSION',
+  // Attendance
+  TAKE_ATTENDANCE = 'TAKE_ATTENDANCE', // For a batch of students for a session
+  UPDATE_ATTENDANCE_RECORD = 'UPDATE_ATTENDANCE_RECORD', // To modify a single record
   // UI & Data
   LOAD_DATA = 'LOAD_DATA',
   SET_LOADING = 'SET_LOADING',
@@ -166,11 +169,12 @@ export interface Enrollment {
 }
 
 export interface AttendanceRecord {
-  id: string;
+  id: string; // Unique ID for the record, e.g., `att-${courseId}-${studentId}-${date}`
   studentId: string;
   courseId: string;
-  date: string; // ISO date string (just date part)
+  date: string; // ISO date string (YYYY-MM-DD)
   status: AttendanceStatus;
+  notes?: string; // Optional notes from the teacher
 }
 
 export interface Payment {
@@ -245,6 +249,13 @@ export type CreateAssignmentPayload = Omit<Assignment, 'id'| 'totalPoints'> & { 
 export type SubmitAssignmentPayload = Omit<Submission, 'id' | 'submittedAt' | 'grade' | 'feedback' | 'rubricScores'>;
 export type GradeSubmissionPayload = Pick<Submission, 'id' | 'grade' | 'feedback' | 'rubricScores' | 'quizAnswers'> & { assignmentId: string; studentId: string };
 
+export type TakeAttendancePayload = {
+  courseId: string;
+  date: string; // YYYY-MM-DD
+  studentStatuses: Array<{ studentId: string; status: AttendanceStatus; notes?: string }>;
+};
+export type UpdateAttendanceRecordPayload = Partial<Omit<AttendanceRecord, 'id' | 'courseId' | 'studentId' | 'date'>> & { id: string };
+
 
 export type AppAction =
   | { type: ActionType.LOGIN_USER; payload: LoginUserPayload }
@@ -261,6 +272,8 @@ export type AppAction =
   | { type: ActionType.CREATE_ASSIGNMENT; payload: CreateAssignmentPayload }
   | { type: ActionType.SUBMIT_ASSIGNMENT; payload: SubmitAssignmentPayload }
   | { type: ActionType.GRADE_SUBMISSION; payload: GradeSubmissionPayload }
+  | { type: ActionType.TAKE_ATTENDANCE; payload: TakeAttendancePayload }
+  | { type: ActionType.UPDATE_ATTENDANCE_RECORD; payload: UpdateAttendanceRecordPayload }
   | { type: ActionType.LOAD_DATA; payload: Partial<AppState> }
   | { type: ActionType.SET_LOADING; payload: boolean }
   | { type: ActionType.SET_ERROR; payload: string | null }
@@ -288,3 +301,4 @@ export interface GenerateQuizQuestionsOutput {
     }>;
 }
 // This is a simplified version. User should provide their full types.ts content.
+
