@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAppContext } from '@/contexts/AppContext';
 import { ActionType, UserRole } from '@/types';
@@ -57,17 +58,22 @@ export default function AuthPage() {
   };
   
   // Redirect if user is already logged in or after successful login/registration
-  if (state.currentUser) {
-    let targetPath = redirect;
-    if (targetPath === '/auth' || targetPath === '/') { // Avoid redirect loop or staying on auth
-        switch (state.currentUser.role) {
-            case UserRole.SUPER_ADMIN: targetPath = '/admin/dashboard'; break;
-            case UserRole.TEACHER: targetPath = '/teacher/dashboard'; break;
-            case UserRole.STUDENT: targetPath = '/student/dashboard'; break;
-            default: targetPath = '/student/dashboard';
-        }
+  useEffect(() => {
+    if (state.currentUser) {
+      let targetPath = redirect;
+      if (targetPath === '/auth' || targetPath === '/') { // Avoid redirect loop or staying on auth
+          switch (state.currentUser.role) {
+              case UserRole.SUPER_ADMIN: targetPath = '/admin/dashboard'; break;
+              case UserRole.TEACHER: targetPath = '/teacher/dashboard'; break;
+              case UserRole.STUDENT: targetPath = '/student/dashboard'; break;
+              default: targetPath = '/student/dashboard';
+          }
+      }
+      router.replace(targetPath);
     }
-    router.replace(targetPath);
+  }, [state.currentUser, redirect, router]);
+
+  if (state.currentUser) {
     return null; // Render nothing while redirecting
   }
 
@@ -191,3 +197,4 @@ export default function AuthPage() {
     </div>
   );
 }
+
