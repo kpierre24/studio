@@ -1,0 +1,220 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Get data for a specific user
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
+    // Get the role of the currently authenticated user
+    function getRequestingUserRole() {
+      // Ensure request.auth.uid is not null before using it
+      if (request.auth == null || request.auth.uid == null) {
+        return null; // Or handle as an error/deny access
+      }
+      return getUserData(request.auth.uid).role;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && getRequestingUserRole() == 'SuperAdmin';
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && getRequestingUserRole() == 'Teacher';
+    }
+
+    function isStudent() {
+      return isAuthenticated() && getRequestingUserRole() == 'Student';
+    }
+
+    // Check if the authenticated user is the owner of the document (by userId)
+    function isOwner(docUserId) {
+      return isAuthenticated() && request.auth.uid == docUserId;
+    }
+
+    // Get data for a specific course
+    function getCourseData(courseId) {
+        return get(/databases/$(database)/documents/courses/$(courseId)).data;
+    }
+
+    // Check if the authenticated user is the teacher of the specified course
+    function isTeacherOfCourse(courseId) {
+      // Check if the user is a teacher and if their ID matches the course's teacherId
+      return isTeacher() && getCourseData(courseId).teacherId == request.auth.uid;
+    }
+    
+    // Check if the authenticated student is enrolled in the specified course
+    // Assumes course documents have a 'studentIds' array field.
+    function isEnrolledInCourse(courseId) {
+      return isStudent() && (request.auth.uid in getCourseData(courseId).studentIds);
+    }
+
+    // --- Collection Rules ---
+
+    // Users Collection (/users/{userId})
+    match /users/{userId} {
+      // SuperAdmins can read all user docs.
+      // Users can read their own document.
+      // Teachers can read any user document (e.g., to see student profiles).
+      allow read: if isAuthenticated() && (isSuperAdmin() || isOwner(userId) || isTeacher());
+      
+      // User creation:
+      // - SuperAdmin can create any user.
+      // - Authenticated users can trigger creation of their own 'Student' user doc during registration.
+      allow create: if (isSuperAdmin() && request.resource.data.email != null) || 
+                       (isAuthenticated() && 
+                        request.resource.data.email == request.auth.token.email && 
+                        request.resource.data.id == request.auth.uid &&
+                        request.resource.data.role == 'Student'); // Student self-registration
+
+      // User update:
+      // - SuperAdmins can update any user doc.
+      // - Users can update their own profile, but NOT their role or ID.
+      allow update: if isSuperAdmin() || 
+                       (isOwner(userId) && 
+                        !(request.resource.data.role != resource.data.role) &&
+                        !(request.resource.data.id != resource.data.id) &&
+                        !(request.resource.data.email != resource.data.email) // Prevent changing email if it's tied to auth
+                       );
+      
+      // User deletion: Only SuperAdmins.
+      allow delete: if isSuperAdmin();
+    }
+
+    // Courses Collection (/courses/{courseId})
+    match /courses/{courseId} {
+      // SuperAdmins can read all courses.
+      // Teachers can read courses they teach.
+      // Students can read courses they are enrolled in (if their UID is in studentIds).
+      allow read: if isAuthenticated() && 
+                     (isSuperAdmin() || 
+                      isTeacherOfCourse(courseId) || 
+                      (isStudent() && request.auth.uid in resource.data.studentIds));
+                      
+      // Course creation: SuperAdmins or Teachers.
+      allow create: if isSuperAdmin() || 
+                       (isTeacher() && request.resource.data.teacherId == request.auth.uid);
+                       
+      // Course update: SuperAdmins or the Teacher of the course.
+      allow update: if isSuperAdmin() || isTeacherOfCourse(courseId);
+      
+      // Course deletion: SuperAdmins only (app logic might add more constraints like no enrolled students).
+      allow delete: if isSuperAdmin();
+    }
+
+    // Lessons Collection (/lessons/{lessonId})
+    // Lessons are linked to courses via a 'courseId' field in the lesson document.
+    match /lessons/{lessonId} {
+      // Read: SuperAdmins, Teacher of the course, or Students enrolled in the course.
+      allow read: if isAuthenticated() && 
+                     (isSuperAdmin() || 
+                      isTeacherOfCourse(resource.data.courseId) || 
+                      isEnrolledInCourse(resource.data.courseId));
+                      
+      // Create: SuperAdmins or Teacher of the course the lesson is being added to.
+      allow create: if isSuperAdmin() || isTeacherOfCourse(request.resource.data.courseId);
+      
+      // Update/Delete: SuperAdmins or Teacher of the course.
+      allow update, delete: if isSuperAdmin() || isTeacherOfCourse(resource.data.courseId);
+    }
+
+    // Assignments Collection (/assignments/{assignmentId})
+    // Assignments are linked to courses via a 'courseId' field.
+    match /assignments/{assignmentId} {
+      allow read: if isAuthenticated() &&
+                     (isSuperAdmin() || 
+                      isTeacherOfCourse(resource.data.courseId) || 
+                      isEnrolledInCourse(resource.data.courseId));
+                      
+      allow create: if isSuperAdmin() || isTeacherOfCourse(request.resource.data.courseId);
+      
+      allow update, delete: if isSuperAdmin() || isTeacherOfCourse(resource.data.courseId);
+    }
+
+    // Submissions Collection (/submissions/{submissionId})
+    // Submissions are linked via 'assignmentId', 'studentId', 'courseId'.
+    match /submissions/{submissionId} {
+      function isSubmissionOwner() {
+        return isStudent() && resource.data.studentId == request.auth.uid;
+      }
+      function canTeacherAccessSubmission() {
+        return isTeacherOfCourse(resource.data.courseId); // Teacher of the course this submission belongs to
+      }
+      
+      allow read: if isAuthenticated() && (isSuperAdmin() || canTeacherAccessSubmission() || isSubmissionOwner());
+      
+      // Student creates their own submission if enrolled.
+      allow create: if isSuperAdmin() || 
+                       (isStudent() && 
+                        request.resource.data.studentId == request.auth.uid && 
+                        isEnrolledInCourse(request.resource.data.courseId));
+                        
+      // Update: SuperAdmin, Teacher of course (for grading), or Student if not yet graded.
+      allow update: if isSuperAdmin() || 
+                       canTeacherAccessSubmission() || 
+                       (isSubmissionOwner() && resource.data.grade == null); 
+                       
+      // Delete: SuperAdmin or Teacher of course. Students might be allowed if not graded.
+      allow delete: if isSuperAdmin() || canTeacherAccessSubmission() || (isSubmissionOwner() && resource.data.grade == null);
+    }
+
+    // AttendanceRecords Collection (/attendanceRecords/{recordId})
+    match /attendanceRecords/{recordId} {
+      function isAttendanceOwner() {
+        return isStudent() && resource.data.studentId == request.auth.uid;
+      }
+      function canTeacherAccessAttendance() {
+        return isTeacherOfCourse(resource.data.courseId);
+      }
+
+      allow read: if isAuthenticated() && (isSuperAdmin() || canTeacherAccessAttendance() || isAttendanceOwner());
+      
+      // Create/Update/Delete: SuperAdmin or Teacher of the course.
+      allow create, update, delete: if isSuperAdmin() || isTeacherOfCourse(request.resource.data.courseId); // Use request for create
+      allow update, delete: if isSuperAdmin() || isTeacherOfCourse(resource.data.courseId); // Use resource for update/delete existing
+    }
+
+    // Payments Collection (/payments/{paymentId})
+    match /payments/{paymentId} {
+      function isPaymentOwner() {
+        return isStudent() && resource.data.studentId == request.auth.uid;
+      }
+      
+      allow read: if isAuthenticated() && (isSuperAdmin() || isPaymentOwner());
+      
+      // Payments managed by SuperAdmins.
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // Notifications Collection (/notifications/{notificationId})
+    // Assumes notifications have a 'userId' field.
+    match /notifications/{notificationId} {
+      // Users can read, update (mark as read), delete their own notifications.
+      allow read, update, delete: if isAuthenticated() && 
+                                     (isSuperAdmin() || resource.data.userId == request.auth.uid);
+                                     
+      // Creation: By SuperAdmin or by the user for themselves (app-generated notifications).
+      allow create: if isSuperAdmin() || 
+                       (isAuthenticated() && request.resource.data.userId == request.auth.uid);
+    }
+    
+    // Announcements Collection (/announcements/{announcementId})
+    match /announcements/{announcementId} {
+      // All authenticated users can read announcements.
+      allow read: if isAuthenticated();
+      
+      // Only SuperAdmins can create, update, or delete announcements.
+      allow create, update, delete: if isSuperAdmin();
+    }
+  }
+}
+
+    
