@@ -1,8 +1,9 @@
+
 "use client";
 
 import type { Dispatch } from 'react';
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType } from '@/types';
 import { 
   SAMPLE_USERS, 
@@ -13,7 +14,8 @@ import {
   SAMPLE_PAYMENTS, 
   SAMPLE_ATTENDANCE, 
   INITIAL_ENROLLMENTS,
-  SAMPLE_NOTIFICATIONS
+  SAMPLE_NOTIFICATIONS,
+  APP_NAME
 } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
 
@@ -103,12 +105,12 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         (u) => u.email === action.payload.email // && u.password === action.payload.password // Password check is illustrative
       );
       if (user) {
-        return { ...state, currentUser: user, error: null };
+        return { ...state, currentUser: user, error: null, successMessage: 'Login successful!' };
       }
       return { ...state, error: 'Invalid credentials', currentUser: null };
     }
     case ActionType.LOGOUT_USER:
-      return { ...state, currentUser: null, notifications: [] };
+      return { ...state, currentUser: null, notifications: [], successMessage: 'Logged out successfully.' };
     
     case ActionType.REGISTER_STUDENT: {
       const emailExists = state.users.some(u => u.email === action.payload.email);
@@ -119,16 +121,15 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         id: `user-${Date.now()}`,
         name: action.payload.name,
         email: action.payload.email,
-        password: action.payload.password, // Store password directly for simplicity
+        password: action.payload.password, 
         role: UserRole.STUDENT,
         avatarUrl: action.payload.avatarUrl || `https://placehold.co/100x100.png?text=${action.payload.name.substring(0,2).toUpperCase()}`,
       };
       const newNotification: Omit<NotificationMessage, 'id' | 'read' | 'timestamp'> = {
         userId: newUser.id,
         type: 'success',
-        message: `Welcome to ${process.env.NEXT_PUBLIC_APP_NAME || 'ClassroomHQ'}, ${newUser.name}! Your account has been created.`,
+        message: `Welcome to ${APP_NAME}, ${newUser.name}! Your account has been created.`,
       };
-      // Simulate ADD_NOTIFICATION action effect here or dispatch it
       const addedNotification: NotificationMessage = {
         ...newNotification,
         id: `notif-${Date.now()}`,
@@ -138,10 +139,56 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         users: [...state.users, newUser],
-        currentUser: newUser, // Auto-login after registration
+        currentUser: newUser, 
         error: null,
         successMessage: 'Registration successful!',
         notifications: [addedNotification, ...state.notifications].slice(0, 20),
+      };
+    }
+
+    case ActionType.CREATE_USER: { // Admin creates a user
+      const payload = action.payload as CreateUserPayload;
+      const emailExists = state.users.some(u => u.email === payload.email);
+      if (emailExists) {
+        return { ...state, error: `Email ${payload.email} already exists.` };
+      }
+      const newUser: User = {
+        id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        name: payload.name,
+        email: payload.email,
+        password: payload.password, // Store password directly for simplicity
+        role: payload.role,
+        avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png?text=${payload.name.substring(0,2).toUpperCase()}`,
+      };
+      return {
+        ...state,
+        users: [...state.users, newUser],
+        error: null,
+        successMessage: `User ${newUser.name} (${newUser.role}) created successfully.`,
+      };
+    }
+
+    case ActionType.UPDATE_USER: { // Admin updates a user
+      const payload = action.payload as UpdateUserPayload;
+      return {
+        ...state,
+        users: state.users.map(user =>
+          user.id === payload.id ? { ...user, ...payload } : user
+        ),
+        successMessage: `User ${payload.name || state.users.find(u=>u.id === payload.id)?.name} updated successfully.`,
+      };
+    }
+
+    case ActionType.DELETE_USER: { // Admin deletes a user
+      const payload = action.payload as DeleteUserPayload;
+      if (state.currentUser && state.currentUser.id === payload.id) {
+        return { ...state, error: "You cannot delete your own account." };
+      }
+      const userToDelete = state.users.find(u => u.id === payload.id);
+      return {
+        ...state,
+        users: state.users.filter(user => user.id !== payload.id),
+        successMessage: `User ${userToDelete?.name || payload.id} deleted successfully.`,
       };
     }
     
@@ -156,14 +203,15 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         totalPoints = manualTotalPoints;
       }
 
+      const newAssignmentId = `assign-${Date.now()}`;
       const newAssignment: Assignment = {
-        id: `assign-${Date.now()}`,
+        id: newAssignmentId,
         courseId,
         title,
         description,
         dueDate,
         type,
-        questions: questions?.map(q => ({...q, id: q.id || `q-${Date.now()}-${Math.random()}` , assignmentId: `assign-${Date.now()}`})),
+        questions: questions?.map(q => ({...q, id: q.id || `q-${Date.now()}-${Math.random()}` , assignmentId: newAssignmentId})),
         rubric,
         totalPoints,
       };
@@ -272,3 +320,4 @@ export const useAppContext = () => {
   }
   return context;
 };
+

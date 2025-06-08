@@ -1,4 +1,5 @@
 
+
 // ClassroomHQ - Core Application Types
 
 // Enums
@@ -40,6 +41,9 @@ export enum ActionType {
   LOGOUT_USER = 'LOGOUT_USER',
   REGISTER_STUDENT = 'REGISTER_STUDENT',
   UPDATE_USER_PROFILE = 'UPDATE_USER_PROFILE',
+  CREATE_USER = 'CREATE_USER', // For admin to create any user type
+  UPDATE_USER = 'UPDATE_USER', // For admin to update any user type/details
+  DELETE_USER = 'DELETE_USER', // For admin to delete users
   // Course Management
   CREATE_COURSE = 'CREATE_COURSE',
   UPDATE_COURSE = 'UPDATE_COURSE',
@@ -212,6 +216,12 @@ export interface AppState {
 export type LoginUserPayload = { email: string; password?: string /* IRL password check happens backend */ };
 export type RegisterStudentPayload = Omit<User, 'id' | 'role' | 'avatarUrl'> & Partial<Pick<User, 'avatarUrl'>>;
 export type UpdateUserProfilePayload = Partial<Pick<User, 'name' | 'email' | 'avatarUrl'>> & { id: string };
+
+export type CreateUserPayload = Omit<User, 'id' | 'avatarUrl'> & Partial<Pick<User, 'avatarUrl'>>; // Admin creates user
+export type UpdateUserPayload = Partial<Omit<User, 'id' | 'email' | 'password'>> & { id: string }; // Admin updates user (role, name)
+export type DeleteUserPayload = { id: string };
+
+
 export type CreateCoursePayload = Omit<Course, 'id' | 'studentIds'>;
 export type CreateLessonPayload = Omit<Lesson, 'id'>;
 export type CreateAssignmentPayload = Omit<Assignment, 'id'| 'totalPoints'> & { manualTotalPoints?: number }; // totalPoints calculated
@@ -224,6 +234,9 @@ export type AppAction =
   | { type: ActionType.LOGOUT_USER }
   | { type: ActionType.REGISTER_STUDENT; payload: RegisterStudentPayload }
   | { type: ActionType.UPDATE_USER_PROFILE; payload: UpdateUserProfilePayload }
+  | { type: ActionType.CREATE_USER; payload: CreateUserPayload }
+  | { type: ActionType.UPDATE_USER; payload: UpdateUserPayload }
+  | { type: ActionType.DELETE_USER; payload: DeleteUserPayload }
   | { type: ActionType.CREATE_COURSE; payload: CreateCoursePayload }
   | { type: ActionType.CREATE_LESSON; payload: CreateLessonPayload }
   | { type: ActionType.CREATE_ASSIGNMENT; payload: CreateAssignmentPayload }
@@ -256,4 +269,5 @@ export interface GenerateQuizQuestionsOutput {
     }>;
 }
 // This is a simplified version. User should provide their full types.ts content.
+
 
