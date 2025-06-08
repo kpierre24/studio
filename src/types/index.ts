@@ -194,6 +194,18 @@ export interface NotificationMessage {
   timestamp: number;
 }
 
+export interface Announcement {
+  id: string;
+  message: string; // Main content; title can be derived e.g. message.split('\n')[0]
+  timestamp: number; // Unix timestamp
+  type: string; // Example: 'announcement', 'urgent', 'info'. Used by current filters.
+  courseId?: string; // Optional: For course-specific announcements
+  userId?: string;   // Optional: For user-specific announcements (TARGET user for filtering)
+  link?: string;     // Optional: A link for more details or navigation
+  // authorId?: string; // Optional: Who created the announcement
+}
+
+
 // App State
 export interface AppState {
   currentUser: User | null;
@@ -206,6 +218,7 @@ export interface AppState {
   attendanceRecords: AttendanceRecord[];
   payments: Payment[];
   notifications: NotificationMessage[];
+  announcements: Announcement[]; // Added announcements to state
   isLoading: boolean;
   error: string | null;
   successMessage: string | null;
@@ -269,5 +282,6 @@ export interface GenerateQuizQuestionsOutput {
     }>;
 }
 // This is a simplified version. User should provide their full types.ts content.
+
 
 

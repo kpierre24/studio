@@ -1,4 +1,5 @@
-import type { User, Course, Lesson, Assignment, Submission, Payment, AttendanceRecord, NotificationMessage, Enrollment, QuizQuestion, RubricCriterion } from '@/types';
+
+import type { User, Course, Lesson, Assignment, Submission, Payment, AttendanceRecord, NotificationMessage, Enrollment, QuizQuestion, RubricCriterion, Announcement } from '@/types';
 import { UserRole, AssignmentType, QuestionType, AttendanceStatus } from '@/types';
 
 export const APP_NAME = "ClassroomHQ";
@@ -188,6 +189,39 @@ export const INITIAL_ENROLLMENTS: Enrollment[] = SAMPLE_COURSES.flatMap(course =
     enrollmentDate: new Date().toISOString(),
   }))
 );
+
+export const SAMPLE_ANNOUNCEMENTS: Announcement[] = [
+  {
+    id: 'announce-1',
+    message: "Welcome to the new semester!\nWe're excited to have you all. Please check your course pages for initial assignments and materials.",
+    timestamp: Date.now() - (2 * 24 * 60 * 60 * 1000), // 2 days ago
+    type: 'announcement', // General announcement
+    link: '/student/dashboard'
+  },
+  {
+    id: 'announce-2',
+    message: "Scheduled Maintenance Notice\nThe platform will be down for maintenance on Saturday from 2 AM to 4 AM. We apologize for any inconvenience.",
+    timestamp: Date.now() - (1 * 24 * 60 * 60 * 1000), // 1 day ago
+    type: 'announcement', // General announcement
+  },
+  {
+    id: 'announce-course-1-update',
+    courseId: 'course-1',
+    message: "Intro to Programming: Week 1 materials are now live!\nPlease review Lesson 1 and start working on the first challenge.",
+    timestamp: Date.now() - (12 * 60 * 60 * 1000), // 12 hours ago
+    type: 'course_update', // Course-specific type, or could be 'announcement' with courseId
+    link: '/student/courses/course-1'
+  },
+    {
+    id: 'announce-student-1-specific',
+    userId: 'user-student-1', // Target student
+    message: "Hi Charlie, just a reminder that your payment for Advanced Maths is due next week.",
+    timestamp: Date.now() - (6 * 60 * 60 * 1000), // 6 hours ago
+    type: 'user_specific_reminder', // User-specific type
+    link: '/student/payments'
+  },
+];
+
 
 // This is a simplified version. User should provide their full constants.ts content.
 // For example, more detailed announcements, forum posts, etc.

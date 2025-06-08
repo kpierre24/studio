@@ -1,3 +1,4 @@
+
 "use client";
 import { useAppContext } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,12 +8,13 @@ import { UserRole } from "@/types";
 
 export default function AnnouncementsPage() {
   const { state } = useAppContext();
-  const { currentUser, announcements } = state;
+  const { currentUser, announcements } = state; // announcements should now be initialized
 
   if (!currentUser) return <p>Loading...</p>;
 
   // Filter announcements based on user role and context
-  const relevantAnnouncements = announcements.filter(ann => {
+  // Ensure announcements is an array before filtering
+  const relevantAnnouncements = (announcements || []).filter(ann => {
     if (currentUser.role === UserRole.SUPER_ADMIN) return true;
     if (ann.userId && ann.userId !== currentUser.id) return false; // Targeted specific user
     if (ann.courseId) { // Course specific

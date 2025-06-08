@@ -1,9 +1,10 @@
 
+
 "use client";
 
 import type { Dispatch } from 'react';
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType } from '@/types';
 import { 
   SAMPLE_USERS, 
@@ -15,6 +16,7 @@ import {
   SAMPLE_ATTENDANCE, 
   INITIAL_ENROLLMENTS,
   SAMPLE_NOTIFICATIONS,
+  SAMPLE_ANNOUNCEMENTS,
   APP_NAME
 } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
@@ -30,6 +32,7 @@ const initialState: AppState = {
   attendanceRecords: [],
   payments: [],
   notifications: [],
+  announcements: [], // Initialize announcements
   isLoading: false,
   error: null,
   successMessage: null,
@@ -97,6 +100,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         attendanceRecords: action.payload.attendanceRecords || SAMPLE_ATTENDANCE,
         payments: action.payload.payments || SAMPLE_PAYMENTS,
         notifications: action.payload.notifications || SAMPLE_NOTIFICATIONS,
+        announcements: action.payload.announcements || SAMPLE_ANNOUNCEMENTS, // Load announcements
         isLoading: false,
       };
     }

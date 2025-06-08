@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useAppContext } from "@/contexts/AppContext";
@@ -21,8 +22,9 @@ export default function StudentDashboardPage() {
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
     .slice(0, 3);
 
-  const recentAnnouncements = announcements
-    .filter(ann => ann.userId === currentUser.id || ann.courseId && enrolledCourseIds.includes(ann.courseId) || ann.type === 'announcement' && ann.userId === undefined) // Simplified logic
+  // Ensure announcements is an array before filtering
+  const recentAnnouncements = (announcements || [])
+    .filter(ann => ann.userId === currentUser.id || (ann.courseId && enrolledCourseIds.includes(ann.courseId)) || (ann.type === 'announcement' && ann.userId === undefined && !ann.courseId))
     .sort((a,b) => b.timestamp - a.timestamp)
     .slice(0,3);
 
