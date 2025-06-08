@@ -2,11 +2,11 @@
 "use client";
 
 import type { Dispatch } from 'react';
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
 import { 
-  auth, 
-  db, 
-  // storage // Import if/when storage operations are added to context
+  getFirebaseAuth, 
+  getFirebaseDb, 
+  // getFirebaseStorage // Import if/when storage operations are added to context
 } from '@/lib/firebase'; 
 import { 
   onAuthStateChanged, 
@@ -15,7 +15,7 @@ import {
   signOut,
   type User as FirebaseUser 
 } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs, type Firestore } from 'firebase/firestore';
 
 import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
@@ -488,34 +488,55 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
   }
 };
 
-const AppContext = createContext<{ state: AppState; dispatch: Dispatch<AppAction> } | undefined>(undefined);
+const AppContext = createContext<{ 
+  state: AppState; 
+  dispatch: Dispatch<AppAction>;
+  handleLoginUser: (payload: LoginUserPayload) => Promise<void>;
+  handleRegisterStudent: (payload: RegisterStudentPayload) => Promise<void>;
+  handleLogoutUser: () => Promise<void>;
+} | undefined>(undefined);
+
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load initial non-user-specific data (courses, etc.) from mock data for now
-    // In a real app, this would be fetched from Firestore after auth is resolved or based on public access rules
     dispatch({ type: ActionType.LOAD_DATA, payload: {} });
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+    const authInstance = getFirebaseAuth();
+    if (!authInstance) {
+      console.error("Firebase Auth instance not available in AppContext. Firebase might not be initialized correctly (check .env.local).");
+      dispatch({ type: ActionType.SET_CURRENT_USER, payload: null }); // Critical error, treat as logged out
+      dispatch({ type: ActionType.SET_ERROR, payload: "Firebase initialization failed. App cannot connect to authentication services." });
+      return;
+    }
+    
+    const dbInstance = getFirebaseDb(); // Get db instance here too
+    if (!dbInstance) {
+        console.error("Firebase Firestore instance not available in AppContext.");
+        // Potentially dispatch an error or handle gracefully
+    }
+
+
+    const unsubscribe = onAuthStateChanged(authInstance, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
-        // User is signed in
+        if (!dbInstance) {
+            console.error("Firestore instance not available for fetching user profile.");
+            dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
+            dispatch({ type: ActionType.SET_ERROR, payload: "Database connection error. Cannot fetch user profile." });
+            return;
+        }
         try {
-          const userDocRef = doc(db, "users", firebaseUser.uid);
+          const userDocRef = doc(dbInstance, "users", firebaseUser.uid);
           const userDocSnap = await getDoc(userDocRef);
 
           if (userDocSnap.exists()) {
             const userProfile = { id: userDocSnap.id, ...userDocSnap.data() } as User;
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
-            // Optionally, load user-specific data here (enrollments, submissions, etc.)
-            // For now, LOAD_DATA loads all sample data, which will be filtered by UI components
           } else {
-            // This case should ideally not happen if registration creates the user doc.
-            // Could be a new Firebase Auth user without a Firestore profile.
             console.warn(`No Firestore profile found for user ${firebaseUser.uid}. Logging out.`);
-            await signOut(auth); // Sign out the user as their profile is incomplete
+            await signOut(authInstance); 
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
             dispatch({ type: ActionType.SET_ERROR, payload: "User profile not found. Please contact support." });
           }
@@ -525,13 +546,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           dispatch({ type: ActionType.SET_ERROR, payload: error.message || "Failed to load user profile." });
         }
       } else {
-        // User is signed out
         dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
       }
     });
 
-    return () => unsubscribe(); // Cleanup subscription on unmount
-  }, []);
+    return () => unsubscribe();
+  }, []); // Empty dependency: run once on mount
 
   useEffect(() => {
     if (state.error) {
@@ -545,98 +565,97 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [state.error, state.successMessage, toast]);
 
 
-  // --- Async Action Creators (Thunks) ---
-  // These functions will dispatch multiple actions and interact with Firebase services
-
-  const handleLoginUser = async (payload: LoginUserPayload) => {
+  const handleLoginUser = useCallback(async (payload: LoginUserPayload) => {
     dispatch({ type: ActionType.LOGIN_USER_REQUEST });
+    const authInstance = getFirebaseAuth();
+    if (!authInstance) {
+      dispatch({ type: ActionType.LOGIN_USER_FAILURE, payload: "Firebase Auth not initialized." });
+      return;
+    }
     try {
-      if (!payload.password) { // Ensure password is provided
+      if (!payload.password) {
         throw new Error("Password is required for login.");
       }
-      const userCredential = await signInWithEmailAndPassword(auth, payload.email, payload.password);
-      // onAuthStateChanged will handle fetching profile and dispatching LOGIN_USER_SUCCESS or SET_CURRENT_USER
-      // No explicit success dispatch here as onAuthStateChanged is the source of truth for currentUser
+      await signInWithEmailAndPassword(authInstance, payload.email, payload.password);
+      // onAuthStateChanged handles success
     } catch (error: any) {
       console.error("Login error:", error);
       dispatch({ type: ActionType.LOGIN_USER_FAILURE, payload: error.message || "Failed to login." });
     }
-  };
+  }, []);
 
-  const handleRegisterStudent = async (payload: RegisterStudentPayload) => {
+  const handleRegisterStudent = useCallback(async (payload: RegisterStudentPayload) => {
     dispatch({ type: ActionType.REGISTER_STUDENT_REQUEST });
+    const authInstance = getFirebaseAuth();
+    const dbInstance = getFirebaseDb();
+
+    if (!authInstance || !dbInstance) {
+      dispatch({ type: ActionType.REGISTER_STUDENT_FAILURE, payload: "Firebase services not initialized." });
+      return;
+    }
     try {
-      if (!payload.password) { // Ensure password is provided for registration
+      if (!payload.password) {
         throw new Error("Password is required for registration.");
       }
-      const userCredential = await createUserWithEmailAndPassword(auth, payload.email, payload.password);
+      const userCredential = await createUserWithEmailAndPassword(authInstance, payload.email, payload.password);
       const firebaseUser = userCredential.user;
 
-      // Create user document in Firestore
       const newUserForFirestore: User = {
         id: firebaseUser.uid,
         name: payload.name,
-        email: firebaseUser.email || payload.email, // Use email from FirebaseUser if available
-        role: UserRole.STUDENT, // Default role for self-registration
+        email: firebaseUser.email || payload.email,
+        role: UserRole.STUDENT,
         avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png?text=${payload.name.substring(0,2).toUpperCase()}`,
       };
 
-      await setDoc(doc(db, "users", firebaseUser.uid), newUserForFirestore);
-      // onAuthStateChanged will handle setting currentUser and dispatching success
-      // We can add a specific notification here if needed:
+      await setDoc(doc(dbInstance, "users", firebaseUser.uid), newUserForFirestore);
       dispatch({ type: ActionType.ADD_NOTIFICATION, payload: {
         userId: firebaseUser.uid,
         type: 'success',
         message: `Welcome to ${APP_NAME}, ${newUserForFirestore.name}! Your account has been created.`
       }});
-
+      // onAuthStateChanged handles success
     } catch (error: any) {
       console.error("Registration error:", error);
       dispatch({ type: ActionType.REGISTER_STUDENT_FAILURE, payload: error.message || "Failed to register." });
     }
-  };
+  }, []);
 
-  const handleLogoutUser = async () => {
+  const handleLogoutUser = useCallback(async () => {
     dispatch({ type: ActionType.LOGOUT_USER_REQUEST });
+    const authInstance = getFirebaseAuth();
+    if (!authInstance) {
+      dispatch({ type: ActionType.LOGOUT_USER_FAILURE, payload: "Firebase Auth not initialized." });
+      return;
+    }
     try {
-      await signOut(auth);
-      // onAuthStateChanged will set currentUser to null
-      dispatch({ type: ActionType.LOGOUT_USER_SUCCESS }); // To clear notifications etc.
+      await signOut(authInstance);
+      dispatch({ type: ActionType.LOGOUT_USER_SUCCESS }); 
     } catch (error: any) {
       console.error("Logout error:", error);
       dispatch({ type: ActionType.LOGOUT_USER_FAILURE, payload: error.message || "Failed to logout." });
     }
-  };
+  }, []);
   
-  // Provide both state and the new async action handlers
   const contextValue = {
     state,
-    dispatch, // Keep synchronous dispatch for other actions
+    dispatch,
     handleLoginUser,
     handleRegisterStudent,
     handleLogoutUser,
   };
 
-
   return (
-    <AppContext.Provider value={contextValue as any}> {/* Cast to any for simplicity with new async handlers */}
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );
 };
 
-// Custom hook to use the AppContext
 export const useAppContext = () => {
   const context = useContext(AppContext);
   if (context === undefined) {
     throw new Error('useAppContext must be used within an AppProvider');
   }
-  // This assertion is safe if we ensure AppProvider always provides the async handlers
-  return context as { 
-    state: AppState; 
-    dispatch: Dispatch<AppAction>;
-    handleLoginUser: (payload: LoginUserPayload) => Promise<void>;
-    handleRegisterStudent: (payload: RegisterStudentPayload) => Promise<void>;
-    handleLogoutUser: () => Promise<void>;
-  };
+  return context;
 };

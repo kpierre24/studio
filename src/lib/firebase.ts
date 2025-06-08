@@ -1,42 +1,19 @@
 
-import { initializeApp, getApps, getApp, type FirebaseOptions } from 'firebase/app';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
-import { getStorage, connectStorageEmulator } from 'firebase/storage';
+import { initializeApp, getApps, getApp, type FirebaseOptions, type FirebaseApp } from 'firebase/app';
+import { getAuth, connectAuthEmulator, type Auth } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator, type Firestore } from 'firebase/firestore';
+import { getStorage, connectStorageEmulator, type FirebaseStorage } from 'firebase/storage';
 
-// Enhanced logging for environment variables
+// Log environment variables during development for debugging
 if (process.env.NODE_ENV === 'development') {
-  console.log('--- Firebase Environment Variables Read by Next.js ---');
-  console.log('NEXT_PUBLIC_FIREBASE_API_KEY:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
-  console.log('NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:', process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN);
-  console.log('NEXT_PUBLIC_FIREBASE_PROJECT_ID:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
-  console.log('NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET:', process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET);
-  console.log('NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:', process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID);
-  console.log('NEXT_PUBLIC_FIREBASE_APP_ID:', process.env.NEXT_PUBLIC_FIREBASE_APP_ID);
-  console.log('----------------------------------------------------');
-}
-
-const requiredEnvVars: Array<keyof FirebaseOptions | string> = [
-  'NEXT_PUBLIC_FIREBASE_API_KEY',
-  'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
-  'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
-  'NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET',
-  'NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
-  'NEXT_PUBLIC_FIREBASE_APP_ID',
-];
-
-const missingEnvVars = requiredEnvVars.filter(varName => {
-  const value = process.env[varName as keyof NodeJS.ProcessEnv];
-  return !value || value.trim() === '';
-});
-
-if (missingEnvVars.length > 0 && process.env.NODE_ENV === 'development') {
-  const errorMessage = `FIREBASE_INIT_ERROR: The following Firebase environment variables are missing or undefined: ${missingEnvVars.join(', ')}. 
-Please ensure your .env.local file is in the project root, correctly formatted with NEXT_PUBLIC_ prefixes, and contains valid values for these variables. 
-You MUST RESTART your development server after any changes to .env.local.`;
-  console.error(errorMessage);
-  // It might be useful to throw an error here to prevent the app from partially running with invalid config
-  // throw new Error(errorMessage); 
+  console.log('--- Firebase Environment Variables Read by Next.js (src/lib/firebase.ts) ---');
+  console.log('NEXT_PUBLIC_FIREBASE_API_KEY:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? 'SET' : 'MISSING/EMPTY');
+  console.log('NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:', process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ? 'SET' : 'MISSING/EMPTY');
+  console.log('NEXT_PUBLIC_FIREBASE_PROJECT_ID:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? 'SET' : 'MISSING/EMPTY');
+  console.log('NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET:', process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ? 'SET' : 'MISSING/EMPTY');
+  console.log('NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:', process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ? 'SET' : 'MISSING/EMPTY');
+  console.log('NEXT_PUBLIC_FIREBASE_APP_ID:', process.env.NEXT_PUBLIC_FIREBASE_APP_ID ? 'SET' : 'MISSING/EMPTY');
+  console.log('----------------------------------------------------------------------');
 }
 
 const firebaseConfig: FirebaseOptions = {
@@ -48,53 +25,105 @@ const firebaseConfig: FirebaseOptions = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// For debugging purposes during development
-if (process.env.NODE_ENV === 'development') {
-  console.log('Firebase Config Object being passed to initializeApp:', firebaseConfig);
-  if (!firebaseConfig.apiKey) {
-    // This specific check for apiKey can be redundant if the above loop catches it, but good for emphasis.
-    console.error('FIREBASE_INIT_ERROR: Firebase API Key in the firebaseConfig object is undefined. This confirms an issue with environment variable loading or the variable itself.');
-  }
+// Check for missing environment variables
+const requiredEnvVars: Array<keyof FirebaseOptions> = [
+  'apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId'
+];
+const missingEnvVars = requiredEnvVars.filter(key => !firebaseConfig[key]);
+
+if (missingEnvVars.length > 0 && process.env.NODE_ENV === 'development') {
+  const errorMessage = `FIREBASE_INIT_ERROR: The following Firebase environment variables are missing or undefined in firebaseConfig: ${missingEnvVars.join(', ')}. 
+This means process.env.NEXT_PUBLIC_... variables were not found.
+Please ensure your .env.local file is in the project root, correctly formatted with NEXT_PUBLIC_ prefixes, and contains valid values. 
+You MUST RESTART your development server after any changes to .env.local.`;
+  console.error(errorMessage);
 }
 
-// Initialize Firebase
-let app: ReturnType<typeof initializeApp> | undefined;
-if (!getApps().length) {
-  try {
-    // Only attempt to initialize if all required config values seem present (basic check)
+
+let appSingleton: FirebaseApp | undefined = undefined;
+let authSingleton: Auth | null = null;
+let dbSingleton: Firestore | null = null;
+let storageSingleton: FirebaseStorage | null = null;
+
+function getFirebaseAppInstance(): FirebaseApp | undefined {
+  if (appSingleton) {
+    return appSingleton;
+  }
+
+  if (getApps().length === 0) {
     if (firebaseConfig.apiKey && firebaseConfig.projectId) {
-      app = initializeApp(firebaseConfig);
-    } else if (process.env.NODE_ENV === 'development') {
-      console.warn("FIREBASE_INIT_SKIPPED: Firebase initialization skipped due to missing critical configuration (apiKey or projectId). Check previous logs for missing environment variables.");
+      try {
+        console.log('[Firebase] Initializing new Firebase app...');
+        appSingleton = initializeApp(firebaseConfig);
+        console.log('[Firebase] App initialized successfully.');
+      } catch (error) {
+        console.error('[Firebase] CRITICAL ERROR initializing app:', error);
+        appSingleton = undefined;
+      }
+    } else {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[Firebase] Initialization SKIPPED: API Key or Project ID is missing in config. Ensure .env.local is correct and server restarted.');
+      }
+      appSingleton = undefined;
     }
-  } catch (error: any) {
-    console.error("FIREBASE_INIT_CRITICAL_ERROR: Failed to initialize Firebase app. This is often due to an invalid configuration object. Please check the Firebase config details logged above.", error);
+  } else {
+    console.log('[Firebase] Getting existing Firebase app instance...');
+    appSingleton = getApp();
   }
-} else {
-  app = getApp();
+  return appSingleton;
 }
 
-// Conditionally get services if app was initialized
-const auth = app ? getAuth(app) : null;
-const db = app ? getFirestore(app) : null;
-const storage = app ? getStorage(app) : null;
+const getFirebaseAuth = (): Auth | null => {
+  if (authSingleton) return authSingleton;
+  const app = getFirebaseAppInstance();
+  if (app) {
+    authSingleton = getAuth(app);
+    // Firebase Emulator setup (uncomment if using emulators and ensure this runs client-side only if needed)
+    // if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+    //   try {
+    //     connectAuthEmulator(authSingleton, 'http://localhost:9099', { disableWarnings: true });
+    //     console.log('[Firebase] Auth Emulator connected.');
+    //   } catch (e) { console.warn('[Firebase] Auth Emulator connection failed.', e); }
+    // }
+    return authSingleton;
+  }
+  console.warn('[Firebase] Auth service NOT available because app instance is missing.');
+  return null;
+};
 
-if (process.env.NODE_ENV === 'development' && !app) {
-  console.warn("Firebase app object is not available. Firebase services (Auth, Firestore, Storage) will be null. This usually means initialization failed or was skipped due to configuration issues.");
-}
+const getFirebaseDb = (): Firestore | null => {
+  if (dbSingleton) return dbSingleton;
+  const app = getFirebaseAppInstance();
+  if (app) {
+    dbSingleton = getFirestore(app);
+    // if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+    //   try {
+    //     connectFirestoreEmulator(dbSingleton, 'localhost', 8080);
+    //     console.log('[Firebase] Firestore Emulator connected.');
+    //   } catch (e) { console.warn('[Firebase] Firestore Emulator connection failed.', e); }
+    // }
+    return dbSingleton;
+  }
+  console.warn('[Firebase] Firestore service NOT available because app instance is missing.');
+  return null;
+};
 
-// Firebase Emulator setup (uncomment if using emulators)
-// Ensure services are not null before trying to connect emulators
-// if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-//   console.log('Attempting to connect to Firebase Emulators...');
-//   try {
-//     if (auth) connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true }); else console.warn("Auth service not available for emulator connection.");
-//     if (db) connectFirestoreEmulator(db, 'localhost', 8080); else console.warn("Firestore service not available for emulator connection.");
-//     if (storage) connectStorageEmulator(storage, 'localhost', 9199); else console.warn("Storage service not available for emulator connection.");
-//     console.log('Emulator connection attempt finished.');
-//   } catch (error) {
-//     console.error('Error connecting to Firebase Emulators:', error);
-//   }
-// }
+const getFirebaseStorage = (): FirebaseStorage | null => {
+  if (storageSingleton) return storageSingleton;
+  const app = getFirebaseAppInstance();
+  if (app) {
+    storageSingleton = getStorage(app);
+    // if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+    //   try {
+    //     connectStorageEmulator(storageSingleton, 'localhost', 9199);
+    //     console.log('[Firebase] Storage Emulator connected.');
+    //   } catch (e) { console.warn('[Firebase] Storage Emulator connection failed.', e); }
+    // }
+    return storageSingleton;
+  }
+  console.warn('[Firebase] Storage service NOT available because app instance is missing.');
+  return null;
+};
 
-export { app, auth, db, storage };
+// Exporting the app instance getter might be useful for some advanced scenarios, but typically service getters are sufficient.
+export { getFirebaseAppInstance as app, getFirebaseAuth, getFirebaseDb, getFirebaseStorage };
