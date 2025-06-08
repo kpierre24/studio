@@ -107,7 +107,10 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         (u) => u.email === action.payload.email
       );
       if (user) {
-        return { ...state, currentUser: user, error: null, successMessage: 'Login successful!' };
+        // Simulate password check - In a real app, this would be done by the backend/auth provider
+        if (user.password === action.payload.password) {
+          return { ...state, currentUser: user, error: null, successMessage: 'Login successful!' };
+        }
       }
       return { ...state, error: 'Invalid credentials', currentUser: null };
     }
@@ -208,7 +211,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         id: newCourse.id || `course-${Date.now()}-${Math.random().toString(36).substring(2,7)}`,
         teacherId: finalTeacherId,
         studentIds: newCourse.studentIds || [],
-        cost: newCourse.cost || 0, // Ensure cost is handled
+        cost: newCourse.cost || 0, 
       };
 
       return {
@@ -247,8 +250,14 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.CREATE_LESSON: {
       const payload = action.payload as CreateLessonPayload;
       const newLesson: Lesson = {
-        ...payload,
         id: `lesson-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        courseId: payload.courseId,
+        title: payload.title,
+        contentMarkdown: payload.contentMarkdown,
+        videoUrl: payload.videoUrl,
+        fileUrl: payload.fileUrl,
+        fileName: payload.fileName,
+        order: payload.order,
       };
       return {
         ...state,

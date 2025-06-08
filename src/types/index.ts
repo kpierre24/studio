@@ -115,7 +115,8 @@ export interface Lesson {
   title: string;
   contentMarkdown: string; // Markdown content
   videoUrl?: string;
-  fileUrl?: string; // Mock file URL
+  fileUrl?: string; 
+  fileName?: string;
   order: number;
 }
 

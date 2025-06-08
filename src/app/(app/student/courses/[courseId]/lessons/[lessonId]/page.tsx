@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAppContext } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ArrowRight, FileText, Video } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileText, Video, Download } from "lucide-react";
 import Link from "next/link";
 import { Separator } from "@/components/ui/separator";
 
@@ -68,11 +68,10 @@ export default function StudentLessonPage() {
           {lesson.videoUrl && (
             <div className="mb-6 rounded-lg overflow-hidden shadow-md">
               <div className="aspect-video bg-muted flex items-center justify-center">
-                {/* Basic placeholder for video, ideally use an iframe or video player component */}
                  <iframe 
                     width="100%" 
                     height="100%" 
-                    src={lesson.videoUrl.replace("watch?v=", "embed/")} // Basic YouTube embed conversion
+                    src={lesson.videoUrl.replace("watch?v=", "embed/")} 
                     title={lesson.title}
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
                     allowFullScreen
@@ -86,19 +85,20 @@ export default function StudentLessonPage() {
           )}
           
           <div className="prose prose-lg max-w-none dark:prose-invert">
-            {/* Using <pre> for now as react-markdown is not setup. For rich text, a markdown parser is needed. */}
             <pre className="whitespace-pre-wrap font-body text-base leading-relaxed bg-background p-4 rounded-md border border-input-border">
               {lesson.contentMarkdown}
             </pre>
           </div>
 
           {lesson.fileUrl && (
-            <div className="mt-6">
+            <div className="mt-6 p-4 border rounded-md bg-muted/30">
+              <h4 className="font-semibold mb-2 text-md">Associated File:</h4>
               <Button variant="outline" asChild>
-                <a href={lesson.fileUrl} target="_blank" rel="noopener noreferrer">
-                  <FileText className="mr-2 h-4 w-4" /> Download Associated File
+                <a href={lesson.fileUrl} target="_blank" rel="noopener noreferrer" download={lesson.fileName || true}>
+                  <Download className="mr-2 h-4 w-4" /> Download {lesson.fileName || 'File'}
                 </a>
               </Button>
+              <p className="text-xs text-muted-foreground mt-2">Note: File downloads depend on correct Firebase Storage setup by the administrator.</p>
             </div>
           )}
         </CardContent>

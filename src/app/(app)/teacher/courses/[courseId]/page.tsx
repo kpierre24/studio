@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, ChangeEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppContext } from '@/contexts/AppContext';
 import type { Course, Lesson, Assignment, CreateLessonPayload, UpdateLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, QuizQuestion } from '@/types';
@@ -33,18 +33,30 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare, UploadCloud } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { QuizGenerator } from '@/components/features/QuizGenerator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Image from 'next/image';
 
 // Form data types
-interface LessonFormData extends Omit<CreateLessonPayload, 'courseId' | 'order'> {
+interface LessonFormData extends Omit<CreateLessonPayload, 'courseId' | 'order' | 'fileUrl' | 'fileName'> {
   id?: string;
   order?: number;
+  file?: File | null; // For handling file input
+  fileName?: string;
+  fileUrl?: string;
 }
-const initialLessonFormData: LessonFormData = { title: '', contentMarkdown: '', videoUrl: '' };
+
+const initialLessonFormData: LessonFormData = { 
+  title: '', 
+  contentMarkdown: '', 
+  videoUrl: '', 
+  file: null, 
+  fileName: '', 
+  fileUrl: '' 
+};
+
 
 interface AssignmentFormData extends Omit<CreateAssignmentPayload, 'courseId' | 'rubric'> {
   id?: string;
@@ -100,7 +112,16 @@ export default function TeacherCourseDetailPage() {
   // Lesson Management
   const handleOpenLessonModal = (lesson?: Lesson) => {
     if (lesson) {
-      setLessonFormData({ id: lesson.id, title: lesson.title, contentMarkdown: lesson.contentMarkdown, videoUrl: lesson.videoUrl, order: lesson.order });
+      setLessonFormData({ 
+        id: lesson.id, 
+        title: lesson.title, 
+        contentMarkdown: lesson.contentMarkdown, 
+        videoUrl: lesson.videoUrl, 
+        order: lesson.order,
+        fileName: lesson.fileName,
+        fileUrl: lesson.fileUrl,
+        file: null 
+      });
     } else {
       const nextOrder = courseLessons.length > 0 ? Math.max(...courseLessons.map(l => l.order)) + 1 : 1;
       setLessonFormData({...initialLessonFormData, order: nextOrder });
@@ -113,17 +134,45 @@ export default function TeacherCourseDetailPage() {
     setLessonFormData(prev => ({ ...prev, [name]: name === 'order' ? parseInt(value) || 0 : value }));
   };
 
-  const handleLessonSubmit = () => {
+  const handleLessonFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setLessonFormData(prev => ({ ...prev, file: file, fileName: file.name }));
+    } else {
+      setLessonFormData(prev => ({ ...prev, file: null, fileName: lessonFormData.id ? prev.fileName : '' })); // Keep existing if editing and no new file
+    }
+  };
+
+  const handleLessonSubmit = async () => {
     if (!lessonFormData.title) {
       toast({ title: "Validation Error", description: "Lesson title is required.", variant: "destructive" });
       return;
     }
+
+    let fileUrl = lessonFormData.fileUrl; // Keep existing if not changed
+    let fileName = lessonFormData.fileName;
+
+    if (lessonFormData.file) {
+      // TODO: Implement actual Firebase Storage upload here
+      // For now, we'll use a placeholder URL and the file name
+      // In a real app:
+      // const storageRef = ref(storage, `lessons/${course.id}/${lessonFormData.file.name}`);
+      // await uploadBytes(storageRef, lessonFormData.file);
+      // fileUrl = await getDownloadURL(storageRef);
+      fileName = lessonFormData.file.name;
+      fileUrl = `placeholder/lessons/${course.id}/${fileName}`; // Placeholder
+      toast({ title: "File Selected (Mock)", description: `${fileName} would be uploaded. Actual upload requires Firebase setup.`});
+    }
+
+
     const payload: CreateLessonPayload | UpdateLessonPayload = {
       courseId: course.id,
       title: lessonFormData.title,
       contentMarkdown: lessonFormData.contentMarkdown,
       videoUrl: lessonFormData.videoUrl,
       order: lessonFormData.order || 1,
+      fileUrl: fileUrl,
+      fileName: fileName,
       ...(lessonFormData.id && { id: lessonFormData.id }),
     };
     dispatch({ type: lessonFormData.id ? ActionType.UPDATE_LESSON : ActionType.CREATE_LESSON, payload });
@@ -252,6 +301,7 @@ export default function TeacherCourseDetailPage() {
                       <div>
                         <h4 className="font-medium">{lesson.order}. {lesson.title}</h4>
                         <p className="text-xs text-muted-foreground truncate max-w-md">{lesson.contentMarkdown.substring(0,100)}...</p>
+                        {lesson.fileName && <p className="text-xs text-blue-500"><FileText className="inline h-3 w-3 mr-1"/>{lesson.fileName}</p>}
                       </div>
                       <div className="space-x-2">
                         <Button variant="outline" size="sm" onClick={() => handleOpenLessonModal(lesson)}><Edit className="h-4 w-4" /></Button>
@@ -334,11 +384,22 @@ export default function TeacherCourseDetailPage() {
             </div>
             <div className="space-y-1">
               <Label htmlFor="lesson-content">Content (Markdown)</Label>
-              <Textarea id="lesson-content" name="contentMarkdown" value={lessonFormData.contentMarkdown} onChange={handleLessonFormChange} rows={8} />
+              <Textarea id="lesson-content" name="contentMarkdown" value={lessonFormData.contentMarkdown} onChange={handleLessonFormChange} rows={6} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="lesson-video">Video URL (Optional)</Label>
               <Input id="lesson-video" name="videoUrl" value={lessonFormData.videoUrl || ''} onChange={handleLessonFormChange} />
+            </div>
+            <div className="space-y-1">
+                <Label htmlFor="lesson-file">Associated File (Optional)</Label>
+                <div className="flex items-center gap-2">
+                    <Input id="lesson-file" type="file" onChange={handleLessonFileChange} className="flex-grow" />
+                    {lessonFormData.fileName && <span className="text-sm text-muted-foreground truncate max-w-[150px]" title={lessonFormData.fileName}>{lessonFormData.fileName}</span>}
+                </div>
+                {lessonFormData.id && lessonFormData.fileUrl && !lessonFormData.file && (
+                    <p className="text-xs text-muted-foreground">Current file: <a href={lessonFormData.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{lessonFormData.fileName}</a>. Uploading a new file will replace it.</p>
+                )}
+                <p className="text-xs text-muted-foreground">Actual file upload to cloud storage requires Firebase setup.</p>
             </div>
              <div className="space-y-1">
               <Label htmlFor="lesson-order">Order</Label>
@@ -347,7 +408,7 @@ export default function TeacherCourseDetailPage() {
           </div>
           <DialogFooter>
             <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-            <Button onClick={handleLessonSubmit}>Save Lesson</Button>
+            <Button onClick={handleLessonSubmit}><UploadCloud className="mr-2 h-4 w-4" /> Save Lesson</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
