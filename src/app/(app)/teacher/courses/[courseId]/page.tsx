@@ -33,7 +33,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UsersSquare } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { QuizGenerator } from '@/components/features/QuizGenerator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -231,7 +231,7 @@ export default function TeacherCourseDetailPage() {
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 rounded-none border-b">
               <TabsTrigger value="lessons" className="rounded-none py-3"><FileText className="mr-2" />Lessons ({courseLessons.length})</TabsTrigger>
               <TabsTrigger value="assignments" className="rounded-none py-3"><BookOpen className="mr-2" />Assignments ({courseAssignments.length})</TabsTrigger>
-              <TabsTrigger value="students" className="rounded-none py-3"><UsersSquare className="mr-2" />Students ({course.studentIds.length})</TabsTrigger>
+              <TabsTrigger value="students" className="rounded-none py-3"><UserSquare className="mr-2" />Students ({course.studentIds.length})</TabsTrigger>
               <TabsTrigger value="settings" className="rounded-none py-3">Settings</TabsTrigger>
             </TabsList>
 
