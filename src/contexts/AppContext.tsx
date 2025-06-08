@@ -4,7 +4,7 @@
 
 import type { Dispatch } from 'react';
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType } from '@/types';
 import { 
   SAMPLE_USERS, 
@@ -196,6 +196,58 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       };
     }
     
+     case ActionType.CREATE_COURSE: {
+      const newCourse = action.payload as Course; // Payload is the full Course object
+      // Ensure teacherId is set correctly based on who is creating
+      let finalTeacherId = newCourse.teacherId;
+      if (state.currentUser?.role === UserRole.TEACHER) {
+        finalTeacherId = state.currentUser.id;
+      } else if (state.currentUser?.role === UserRole.SUPER_ADMIN) {
+        // Admin can set it, or it defaults from form (which could be 'unassigned')
+        finalTeacherId = newCourse.teacherId || 'unassigned';
+      }
+
+      const courseToAdd: Course = {
+        ...newCourse,
+        id: newCourse.id || `course-${Date.now()}-${Math.random().toString(36).substring(2,7)}`,
+        teacherId: finalTeacherId,
+        studentIds: newCourse.studentIds || [], // New courses start with no students unless specified
+      };
+
+      return {
+        ...state,
+        courses: [...state.courses, courseToAdd],
+        successMessage: `Course "${courseToAdd.name}" created successfully.`,
+      };
+    }
+
+    case ActionType.UPDATE_COURSE: {
+      const updatedCourseData = action.payload as UpdateCoursePayload;
+      return {
+        ...state,
+        courses: state.courses.map(course =>
+          course.id === updatedCourseData.id ? { ...course, ...updatedCourseData } : course
+        ),
+        successMessage: `Course "${updatedCourseData.name || state.courses.find(c=>c.id === updatedCourseData.id)?.name}" updated successfully.`,
+      };
+    }
+
+    case ActionType.DELETE_COURSE: {
+      const { id } = action.payload as DeleteCoursePayload;
+      const courseToDelete = state.courses.find(c => c.id === id);
+      if (courseToDelete && courseToDelete.studentIds.length > 0 && state.currentUser?.role !== UserRole.SUPER_ADMIN) {
+         return { ...state, error: "Course has enrolled students. Only Super Admin can delete." };
+      }
+      return {
+        ...state,
+        courses: state.courses.filter(course => course.id !== id),
+        lessons: state.lessons.filter(lesson => lesson.courseId !== id),
+        assignments: state.assignments.filter(assignment => assignment.courseId !== id),
+        // Also consider deleting enrollments, submissions, etc. for this course
+        successMessage: `Course "${courseToDelete?.name || id}" deleted successfully.`,
+      };
+    }
+
     case ActionType.CREATE_ASSIGNMENT: {
       const { courseId, title, description, dueDate, type, questions, rubric, manualTotalPoints } = action.payload;
       let totalPoints = 0;

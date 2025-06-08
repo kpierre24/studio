@@ -90,7 +90,7 @@ export interface Course {
   id: string;
   name: string;
   description: string;
-  teacherId: string | 'unassigned';
+  teacherId: string; // Can be a teacher's ID or 'unassigned'
   studentIds: string[];
   category?: string;
   cost?: number; // Optional, added for teacher dashboard
@@ -235,7 +235,11 @@ export type UpdateUserPayload = Partial<Omit<User, 'id' | 'email' | 'password'>>
 export type DeleteUserPayload = { id: string };
 
 
-export type CreateCoursePayload = Omit<Course, 'id' | 'studentIds'>;
+export type CreateCoursePayload = Omit<Course, 'id' | 'studentIds'> & { studentIds?: string[] }; // Allow studentIds to be optionally passed if needed for cloning etc.
+export type UpdateCoursePayload = Partial<Omit<Course, 'id'>> & { id: string };
+export type DeleteCoursePayload = { id: string };
+
+
 export type CreateLessonPayload = Omit<Lesson, 'id'>;
 export type CreateAssignmentPayload = Omit<Assignment, 'id'| 'totalPoints'> & { manualTotalPoints?: number }; // totalPoints calculated
 export type SubmitAssignmentPayload = Omit<Submission, 'id' | 'submittedAt' | 'grade' | 'feedback' | 'rubricScores'>;
@@ -250,7 +254,9 @@ export type AppAction =
   | { type: ActionType.CREATE_USER; payload: CreateUserPayload }
   | { type: ActionType.UPDATE_USER; payload: UpdateUserPayload }
   | { type: ActionType.DELETE_USER; payload: DeleteUserPayload }
-  | { type: ActionType.CREATE_COURSE; payload: CreateCoursePayload }
+  | { type: ActionType.CREATE_COURSE; payload: Course } // Payload is the full Course object to be created
+  | { type: ActionType.UPDATE_COURSE; payload: UpdateCoursePayload }
+  | { type: ActionType.DELETE_COURSE; payload: DeleteCoursePayload }
   | { type: ActionType.CREATE_LESSON; payload: CreateLessonPayload }
   | { type: ActionType.CREATE_ASSIGNMENT; payload: CreateAssignmentPayload }
   | { type: ActionType.SUBMIT_ASSIGNMENT; payload: SubmitAssignmentPayload }
@@ -282,6 +288,3 @@ export interface GenerateQuizQuestionsOutput {
     }>;
 }
 // This is a simplified version. User should provide their full types.ts content.
-
-
-
