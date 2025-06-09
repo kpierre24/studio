@@ -217,36 +217,42 @@ export default function AdminUsersPage() {
         const data = lines[i].split(',').map(d => d.trim());
         const email = data[emailIndex];
         const password = data[passwordIndex];
-        let name: string;
+        let name: string | undefined; // Changed to undefined initially
 
         if (nameIndex !== -1) {
           name = data[nameIndex];
-        } else {
-          // Construct name from firstname and lastname
+        } else if (firstNameIndex !== -1 && lastNameIndex !== -1) {
           const firstName = data[firstNameIndex];
           const lastName = data[lastNameIndex];
           if (!firstName || !lastName) {
-             toast({ title: "Row Error", description: `Row ${i + 1}: Missing firstname or lastname. Skipping.`, variant: "destructive" });
+             toast({ title: "Row Error", description: `Row ${i + 1}: Missing firstname or lastname when 'name' column is absent. Skipping.`, variant: "destructive" });
              continue;
           }
           name = `${firstName} ${lastName}`;
         }
         
-        if (!name || !email || !password) {
-          toast({ title: "Row Error", description: `Row ${i + 1}: Missing name, email, or password. Skipping.`, variant: "destructive" });
+        const missingFields = [];
+        if (!name) missingFields.push("name (or firstname/lastname)");
+        if (!email) missingFields.push("email");
+        if (!password) missingFields.push("password");
+
+        if (missingFields.length > 0) {
+          toast({ title: "Row Error", description: `Row ${i + 1}: Missing required field(s): ${missingFields.join(', ')}. Skipping.`, variant: "destructive" });
           continue;
         }
-        if (!/\S+@\S+\.\S+/.test(email)) {
+        
+        if (!/\S+@\S+\.\S+/.test(email!)) { // Added ! to assert email is defined due to above check
           toast({ title: "Row Error", description: `Row ${i + 1}: Invalid email format for ${email}. Skipping.`, variant: "destructive" });
           continue;
         }
-        studentsToCreate.push({ name, email, password });
+        // Assert name and password are not undefined here because of the check above
+        studentsToCreate.push({ name: name!, email: email!, password: password! });
       }
 
       if (studentsToCreate.length > 0) {
         await handleBulkCreateStudents(studentsToCreate);
       } else {
-        toast({ title: "No Valid Students", description: "No valid student data found in the CSV to process.", variant: "default" });
+        toast({ title: "No Valid Students", description: "No valid student data found in the CSV to process after filtering.", variant: "default" });
       }
       setCsvFile(null); // Reset file input
       const fileInput = document.getElementById('csv-upload-input') as HTMLInputElement;
