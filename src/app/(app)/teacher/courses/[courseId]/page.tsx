@@ -4,7 +4,7 @@
 import { useState, useEffect, useMemo, ChangeEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppContext } from '@/contexts/AppContext';
-import type { Course, Lesson, Assignment, CreateLessonPayload, UpdateLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, QuizQuestion } from '@/types';
+import type { Course, Lesson, Assignment, CreateLessonPayload, UpdateLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, QuizQuestion, Submission } from '@/types';
 import { ActionType, UserRole, AssignmentType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,11 +33,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare, UploadCloud } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare, UploadCloud, Eye, FileArchive, CheckCircle, AlertCircle, Send } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { QuizGenerator } from '@/components/features/QuizGenerator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Image from 'next/image';
+import { format } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
 
 // Form data types
 interface LessonFormData extends Omit<CreateLessonPayload, 'courseId' | 'order' | 'fileUrl' | 'fileName'> {
@@ -64,12 +66,18 @@ interface AssignmentFormData extends Omit<CreateAssignmentPayload, 'courseId' | 
 }
 const initialAssignmentFormData: AssignmentFormData = { title: '', description: '', dueDate: '', type: AssignmentType.STANDARD, questions: [] };
 
+interface GradingFormData {
+  submissionId: string;
+  grade: string; // string for input, convert to number on save
+  feedback: string;
+}
+
 
 export default function TeacherCourseDetailPage() {
   const { courseId } = useParams() as { courseId: string };
   const router = useRouter();
   const { state, dispatch } = useAppContext();
-  const { currentUser, courses, lessons, assignments, users } = state;
+  const { currentUser, courses, lessons, assignments, submissions, users } = state;
   const { toast } = useToast();
 
   const [course, setCourse] = useState<Course | null>(null);
@@ -84,12 +92,18 @@ export default function TeacherCourseDetailPage() {
   const [assignmentToDelete, setAssignmentToDelete] = useState<Assignment | null>(null);
   const [assignmentFormData, setAssignmentFormData] = useState<AssignmentFormData>(initialAssignmentFormData);
 
+  const [isGradingModalOpen, setIsGradingModalOpen] = useState(false);
+  const [selectedAssignmentForGrading, setSelectedAssignmentForGrading] = useState<Assignment | null>(null);
+  const [gradingFormsData, setGradingFormsData] = useState<Record<string, GradingFormData>>({}); // submissionId -> GradingFormData
+
+
   useEffect(() => {
     const foundCourse = courses.find(c => c.id === courseId);
     if (foundCourse) {
       setCourse(foundCourse);
       setCourseLessons(lessons.filter(l => l.courseId === courseId).sort((a, b) => a.order - b.order));
-      setCourseAssignments(assignments.filter(a => a.courseId === courseId).sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()));
+      const relevantAssignments = assignments.filter(a => a.courseId === courseId).sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+      setCourseAssignments(relevantAssignments);
     } else {
       toast({ title: "Error", description: "Course not found.", variant: "destructive" });
       router.push(currentUser?.role === UserRole.SUPER_ADMIN ? '/admin/courses' : '/teacher/courses');
@@ -153,15 +167,10 @@ export default function TeacherCourseDetailPage() {
     let fileName = lessonFormData.fileName;
 
     if (lessonFormData.file) {
-      // TODO: Implement actual Firebase Storage upload here
-      // For now, we'll use a placeholder URL and the file name
-      // In a real app:
-      // const storageRef = ref(storage, `lessons/${course.id}/${lessonFormData.file.name}`);
-      // await uploadBytes(storageRef, lessonFormData.file);
-      // fileUrl = await getDownloadURL(storageRef);
+      // Mock Firebase Storage upload
       fileName = lessonFormData.file.name;
-      fileUrl = `placeholder/lessons/${course.id}/${fileName}`; // Placeholder
-      toast({ title: "File Selected (Mock)", description: `${fileName} would be uploaded. Actual upload requires Firebase setup.`});
+      fileUrl = `simulated-storage/lessons/${course.id}/${fileName}`; // Placeholder
+      toast({ title: "File Selected (Mock)", description: `${fileName} would be 'uploaded'. Actual upload requires Firebase setup.`});
     }
 
 
@@ -249,6 +258,62 @@ export default function TeacherCourseDetailPage() {
     return lessons.filter(l => l.courseId === course.id).map(l => `Lesson: ${l.title}\n${l.contentMarkdown}`).join('\n\n---\n\n');
   };
 
+  // Grading Management
+  const handleOpenGradingModal = (assignment: Assignment) => {
+    setSelectedAssignmentForGrading(assignment);
+    const initialFormsData: Record<string, GradingFormData> = {};
+    submissions
+      .filter(sub => sub.assignmentId === assignment.id)
+      .forEach(sub => {
+        initialFormsData[sub.id] = {
+          submissionId: sub.id,
+          grade: sub.grade?.toString() || '',
+          feedback: sub.feedback || '',
+        };
+      });
+    setGradingFormsData(initialFormsData);
+    setIsGradingModalOpen(true);
+  };
+
+  const handleGradingFormChange = (submissionId: string, field: keyof Omit<GradingFormData, 'submissionId'>, value: string) => {
+    setGradingFormsData(prev => ({
+      ...prev,
+      [submissionId]: {
+        ...prev[submissionId],
+        [field]: value,
+      },
+    }));
+  };
+
+  const handleSaveGrade = (submissionId: string) => {
+    const formData = gradingFormsData[submissionId];
+    if (!formData) return;
+
+    const grade = parseFloat(formData.grade);
+    if (isNaN(grade)) {
+      toast({ title: "Grading Error", description: "Please enter a valid number for the grade.", variant: "destructive" });
+      return;
+    }
+    if (selectedAssignmentForGrading && (grade < 0 || grade > selectedAssignmentForGrading.totalPoints)) {
+        toast({ title: "Grading Error", description: `Grade must be between 0 and ${selectedAssignmentForGrading.totalPoints}.`, variant: "destructive"});
+        return;
+    }
+
+    dispatch({
+      type: ActionType.GRADE_SUBMISSION,
+      payload: {
+        submissionId: submissionId,
+        grade: grade,
+        feedback: formData.feedback,
+      }
+    });
+    // No need to close modal here, teacher might grade multiple submissions
+  };
+
+  const getAssignmentSubmissions = (assignmentId: string) => {
+    return submissions.filter(sub => sub.assignmentId === assignmentId).sort((a,b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+  };
+
 
   return (
     <div className="space-y-6">
@@ -261,8 +326,8 @@ export default function TeacherCourseDetailPage() {
           <Image
             src={`https://placehold.co/1200x400.png?text=${encodeURIComponent(course.name)}`}
             alt={course.name}
-            layout="fill"
-            objectFit="cover"
+            fill
+            style={{objectFit:"cover"}}
             className="bg-muted"
             data-ai-hint="course landscape banner"
           />
@@ -328,12 +393,15 @@ export default function TeacherCourseDetailPage() {
                   {courseAssignments.map(assignment => (
                     <li key={assignment.id} className="p-4 border rounded-md flex justify-between items-center hover:shadow-sm">
                       <div>
-                        <h4 className="font-medium">{assignment.title} ({assignment.type})</h4>
-                        <p className="text-xs text-muted-foreground">Due: {new Date(assignment.dueDate).toLocaleDateString()} - {assignment.totalPoints} pts</p>
+                        <h4 className="font-medium">{assignment.title} <Badge variant="secondary" className="capitalize">{assignment.type}</Badge></h4>
+                        <p className="text-xs text-muted-foreground">Due: {format(new Date(assignment.dueDate), "PPP p")} - {assignment.totalPoints} pts</p>
                       </div>
                       <div className="space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => handleOpenAssignmentModal(assignment)}><Edit className="h-4 w-4" /></Button>
-                        <Button variant="destructive" size="sm" onClick={() => setAssignmentToDelete(assignment)}><Trash2 className="h-4 w-4" /></Button>
+                        <Button variant="outline" size="sm" onClick={() => handleOpenGradingModal(assignment)} title="View Submissions & Grade">
+                            <FileArchive className="h-4 w-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleOpenAssignmentModal(assignment)} title="Edit Assignment"><Edit className="h-4 w-4" /></Button>
+                        <Button variant="destructive" size="sm" onClick={() => setAssignmentToDelete(assignment)} title="Delete Assignment"><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </li>
                   ))}
@@ -450,7 +518,7 @@ export default function TeacherCourseDetailPage() {
                       <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="assign-type" className="text-right">Type</Label>
                           <select id="assign-type" name="type" value={assignmentFormData.type} onChange={handleAssignmentFormChange} className="col-span-3 p-2 border rounded-md bg-input border-input-border">
-                              <option value={AssignmentType.STANDARD}>Standard</option>
+                              <option value={AssignmentType.STANDARD}>Standard (File Upload/Text)</option>
                               <option value={AssignmentType.QUIZ}>Quiz</option>
                           </select>
                       </div>
@@ -505,6 +573,102 @@ export default function TeacherCourseDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Grading Modal */}
+      {selectedAssignmentForGrading && (
+        <Dialog open={isGradingModalOpen} onOpenChange={() => { setIsGradingModalOpen(false); setSelectedAssignmentForGrading(null); }}>
+          <DialogContent className="sm:max-w-[700px] md:max-w-[850px]">
+            <DialogHeader>
+              <DialogTitle>Grade Submissions for: {selectedAssignmentForGrading.title}</DialogTitle>
+              <DialogDescription>Total Points: {selectedAssignmentForGrading.totalPoints}</DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="max-h-[60vh] pr-4">
+              <div className="space-y-6 py-4">
+                {getAssignmentSubmissions(selectedAssignmentForGrading.id).length === 0 ? (
+                  <p className="text-muted-foreground text-center">No submissions yet for this assignment.</p>
+                ) : (
+                  getAssignmentSubmissions(selectedAssignmentForGrading.id).map(submission => {
+                    const student = users.find(u => u.id === submission.studentId);
+                    const formData = gradingFormsData[submission.id] || { submissionId: submission.id, grade: submission.grade?.toString() || '', feedback: submission.feedback || ''};
+                    return (
+                      <Card key={submission.id} className="bg-muted/30">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="text-lg flex justify-between items-center">
+                            <span>Submission by: {student?.name || 'Unknown Student'}</span>
+                            <Badge variant={submission.grade !== undefined ? "default" : "secondary"} className={submission.grade !== undefined ? "bg-green-500" : ""}>
+                              {submission.grade !== undefined ? <CheckCircle className="mr-1 h-4 w-4"/> : <AlertCircle className="mr-1 h-4 w-4"/>}
+                              {submission.grade !== undefined ? `Graded: ${submission.grade}/${selectedAssignmentForGrading.totalPoints}` : 'Pending Grade'}
+                            </Badge>
+                          </CardTitle>
+                          <CardDescription>Submitted on: {format(new Date(submission.submittedAt), "PPP p")}</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                          {submission.content && (
+                            <div>
+                              <Label className="font-semibold">Text Submission:</Label>
+                              <pre className="mt-1 p-2 text-sm bg-background rounded-md whitespace-pre-wrap font-body border max-h-40 overflow-y-auto">{submission.content}</pre>
+                            </div>
+                          )}
+                          {submission.fileUrl && (
+                            <div>
+                              <Label className="font-semibold">Submitted File:</Label>
+                                <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
+                                    <FileText className="h-4 w-4"/> {submission.fileName || 'View File'}
+                                </a>
+                                <p className="text-xs text-muted-foreground">(Note: File URL is mocked. Actual file download not implemented.)</p>
+                            </div>
+                          )}
+                           {selectedAssignmentForGrading.type === AssignmentType.QUIZ && submission.quizAnswers && (
+                             <div>
+                               <Label className="font-semibold">Quiz Answers:</Label>
+                               {/* TODO: Display quiz answers and auto-grades if applicable */}
+                               <p className="text-xs text-muted-foreground">Quiz answer display and detailed grading for quizzes is pending implementation here.</p>
+                             </div>
+                           )}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end pt-2">
+                            <div className="space-y-1">
+                              <Label htmlFor={`grade-${submission.id}`}>Grade ({selectedAssignmentForGrading.totalPoints} pts)</Label>
+                              <Input 
+                                id={`grade-${submission.id}`} 
+                                type="number" 
+                                value={formData.grade}
+                                onChange={(e) => handleGradingFormChange(submission.id, 'grade', e.target.value)}
+                                placeholder={`0-${selectedAssignmentForGrading.totalPoints}`}
+                                max={selectedAssignmentForGrading.totalPoints}
+                                min="0"
+                                className="bg-input border-input-border"
+                              />
+                            </div>
+                            <div className="space-y-1 md:col-span-2">
+                              <Label htmlFor={`feedback-${submission.id}`}>Feedback</Label>
+                              <Textarea 
+                                id={`feedback-${submission.id}`} 
+                                value={formData.feedback}
+                                onChange={(e) => handleGradingFormChange(submission.id, 'feedback', e.target.value)}
+                                placeholder="Provide feedback to the student..."
+                                rows={2}
+                                className="bg-input border-input-border"
+                              />
+                            </div>
+                          </div>
+                        </CardContent>
+                        <CardFooter className="justify-end">
+                          <Button size="sm" onClick={() => handleSaveGrade(submission.id)}>
+                            <Send className="mr-2 h-4 w-4"/> Save Grade & Feedback
+                          </Button>
+                        </CardFooter>
+                      </Card>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
+            <DialogFooter>
+              <DialogClose asChild><Button variant="outline">Close</Button></DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
     </div>
   );

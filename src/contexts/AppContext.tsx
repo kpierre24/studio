@@ -17,7 +17,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs, type Firestore } from 'firebase/firestore';
 
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 import { 
   SAMPLE_USERS, 
@@ -346,6 +346,93 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         };
     }
     
+    case ActionType.SUBMIT_ASSIGNMENT: {
+      const { assignmentId, studentId, submissionContent, submissionFile } = action.payload as SubmitAssignmentPayload;
+      
+      // Check if already submitted by this student for this assignment
+      const existingSubmissionIndex = state.submissions.findIndex(
+        sub => sub.assignmentId === assignmentId && sub.studentId === studentId
+      );
+
+      if (existingSubmissionIndex !== -1) {
+        // Optionally allow re-submission by updating existing, or prevent it
+        return { ...state, error: "You have already submitted this assignment." };
+      }
+
+      const newSubmission: Submission = {
+        id: `sub-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        assignmentId,
+        studentId,
+        submittedAt: new Date().toISOString(),
+        content: submissionContent,
+        fileName: submissionFile?.name,
+        fileUrl: submissionFile ? `simulated-uploads/${submissionFile.name}` : undefined, // Mock URL
+        // quizAnswers, grade, feedback, rubricScores will be undefined initially
+      };
+      
+      const assignment = state.assignments.find(a => a.id === assignmentId);
+      const teacher = state.users.find(u => u.id === assignment?.teacherId);
+      let notifications = state.notifications;
+      if(teacher) {
+        notifications = [
+          {
+            id: `notif-sub-${newSubmission.id}`,
+            userId: teacher.id,
+            type: 'submission_received',
+            message: `New submission for '${assignment?.title}' from student ${state.users.find(u => u.id === studentId)?.name || studentId}.`,
+            link: `/teacher/courses/${assignment?.courseId}?assignment=${assignmentId}`, // Link to grading view
+            read: false,
+            timestamp: Date.now(),
+          },
+          ...state.notifications
+        ];
+      }
+
+
+      // Firestore write would be async
+      return {
+        ...state,
+        submissions: [...state.submissions, newSubmission],
+        notifications: notifications.slice(0,20),
+        successMessage: `Assignment submitted successfully.`,
+      };
+    }
+
+    case ActionType.GRADE_SUBMISSION: {
+      const { submissionId, grade, feedback } = action.payload as GradeSubmissionPayload;
+      const submissionToGrade = state.submissions.find(sub => sub.id === submissionId);
+      if (!submissionToGrade) {
+        return { ...state, error: "Submission not found." };
+      }
+      const assignment = state.assignments.find(a => a.id === submissionToGrade.assignmentId);
+
+
+      let notifications = state.notifications;
+      notifications = [
+        {
+          id: `notif-grade-${submissionId}`,
+          userId: submissionToGrade.studentId,
+          type: 'submission_graded',
+          message: `Your submission for '${assignment?.title}' has been graded. Grade: ${grade}`,
+          link: `/student/courses/${assignment?.courseId}?assignment=${assignment?.id}`, // Link to view submission
+          read: false,
+          timestamp: Date.now(),
+        },
+        ...state.notifications
+      ];
+
+      // Firestore update would be async
+      return {
+        ...state,
+        submissions: state.submissions.map(sub =>
+          sub.id === submissionId ? { ...sub, grade, feedback, submittedAt: sub.submittedAt || new Date().toISOString() } : sub // ensure submittedAt is present
+        ),
+        notifications: notifications.slice(0,20),
+        successMessage: `Submission graded successfully.`,
+      };
+    }
+
+
     case ActionType.GENERATE_QUIZ_QUESTIONS_SUCCESS: {
       const { assignmentId, questions } = action.payload;
       return {

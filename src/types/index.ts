@@ -17,7 +17,7 @@ export enum AttendanceStatus {
 }
 
 export enum AssignmentType {
-  STANDARD = 'standard', // e.g. essay, project with rubric or manual grading
+  STANDARD = 'standard', // e.g. essay, project with rubric or manual grading, file upload
   QUIZ = 'quiz', // multiple choice, true/false, short answer
 }
 
@@ -172,7 +172,8 @@ export interface Submission {
   studentId: string;
   submittedAt: string; // ISO date string
   content?: string; // For standard assignments (e.g., text response)
-  fileUrl?: string; // For standard assignments
+  fileUrl?: string; // URL of the student's submitted file (mocked for now)
+  fileName?: string; // Name of the student's submitted file
   quizAnswers?: QuizAnswer[]; // For quiz assignments
   grade?: number; // Final grade
   feedback?: string; // General feedback from teacher
@@ -211,7 +212,7 @@ export interface NotificationMessage {
   id: string;
   userId?: string; // Target user, undefined for global
   courseId?: string; // Context course
-  type: 'success' | 'error' | 'info' | 'warning' | 'new_assignment' | 'grade_update' | 'announcement' | 'payment_due' | 'payment_received';
+  type: 'success' | 'error' | 'info' | 'warning' | 'new_assignment' | 'grade_update' | 'announcement' | 'payment_due' | 'payment_received' | 'submission_received' | 'submission_graded';
   message: string;
   link?: string; // e.g., to an assignment or course
   read: boolean;
@@ -271,8 +272,17 @@ export type CreateAssignmentPayload = Omit<Assignment, 'id'| 'totalPoints'> & { 
 export type UpdateAssignmentPayload = Partial<Omit<Assignment, 'id'>> & { id: string };
 export type DeleteAssignmentPayload = { id: string; courseId: string };
 
-export type SubmitAssignmentPayload = Omit<Submission, 'id' | 'submittedAt' | 'grade' | 'feedback' | 'rubricScores'>;
-export type GradeSubmissionPayload = Pick<Submission, 'id' | 'grade' | 'feedback' | 'rubricScores' | 'quizAnswers'> & { assignmentId: string; studentId: string };
+export type SubmitAssignmentPayload = {
+  assignmentId: string;
+  studentId: string;
+  submissionContent?: string;
+  submissionFile?: File; // The actual File object from input
+};
+export type GradeSubmissionPayload = {
+  submissionId: string;
+  grade: number;
+  feedback?: string;
+};
 
 export type TakeAttendancePayload = {
   courseId: string;

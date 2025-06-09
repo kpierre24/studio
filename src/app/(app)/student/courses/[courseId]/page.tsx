@@ -1,21 +1,48 @@
 
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect, type ChangeEvent } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAppContext } from "@/contexts/AppContext";
+import type { Assignment, Submission, Course, Lesson } from "@/types";
+import { ActionType, AssignmentType } from "@/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import Link from "next/link";
-import { BookOpen, Edit3, Users, ArrowLeft, FileText, CheckSquare, Clock, ExternalLink } from "lucide-react";
+import { BookOpen, Edit3, Users, ArrowLeft, FileText, CheckSquare, Clock, ExternalLink, ArrowRight, UploadCloud, Paperclip } from "lucide-react";
 import Image from "next/image";
+import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 
 export default function StudentCourseDetailPage() {
   const { courseId } = useParams() as { courseId: string };
   const router = useRouter();
-  const { state } = useAppContext();
-  const { currentUser, courses, lessons, assignments, enrollments, users } = state;
+  const searchParams = useSearchParams();
+  const { state, dispatch } = useAppContext();
+  const { currentUser, courses, lessons, assignments, submissions, users } = state;
+  const { toast } = useToast();
+
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
+  const [submissionContent, setSubmissionContent] = useState('');
+  const [submissionFile, setSubmissionFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    const assignmentIdFromQuery = searchParams.get('assignment');
+    if (assignmentIdFromQuery) {
+      const assignmentToOpen = assignments.find(a => a.id === assignmentIdFromQuery && a.courseId === courseId);
+      if (assignmentToOpen) {
+        handleOpenSubmissionModal(assignmentToOpen);
+      }
+    }
+  }, [searchParams, assignments, courseId]);
+
 
   if (!currentUser) {
     return <p className="text-center text-muted-foreground">Loading user data...</p>;
@@ -45,8 +72,54 @@ export default function StudentCourseDetailPage() {
   }
 
   const courseLessons = lessons.filter(l => l.courseId === courseId).sort((a, b) => a.order - b.order);
-  const courseAssignments = assignments.filter(a => a.courseId === courseId);
+  const courseAssignments = assignments.filter(a => a.courseId === courseId).sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
   const teacher = users.find(u => u.id === course.teacherId);
+
+  const getStudentSubmission = (assignmentId: string): Submission | undefined => {
+    return submissions.find(s => s.assignmentId === assignmentId && s.studentId === currentUser.id);
+  };
+
+  const handleOpenSubmissionModal = (assignment: Assignment) => {
+    setSelectedAssignment(assignment);
+    const existingSubmission = getStudentSubmission(assignment.id);
+    if (existingSubmission) {
+        setSubmissionContent(existingSubmission.content || '');
+        // Cannot pre-fill file input, but can show existing file info
+    } else {
+        setSubmissionContent('');
+        setSubmissionFile(null);
+    }
+    setIsSubmissionModalOpen(true);
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSubmissionFile(e.target.files[0]);
+    } else {
+      setSubmissionFile(null);
+    }
+  };
+
+  const handleSubmitAssignment = () => {
+    if (!selectedAssignment || !currentUser) return;
+
+    if (selectedAssignment.type === AssignmentType.STANDARD && !submissionContent && !submissionFile) {
+        toast({ title: "Submission Error", description: "Please provide content or upload a file for your submission.", variant: "destructive"});
+        return;
+    }
+
+    dispatch({
+      type: ActionType.SUBMIT_ASSIGNMENT,
+      payload: {
+        assignmentId: selectedAssignment.id,
+        studentId: currentUser.id,
+        submissionContent: submissionContent,
+        submissionFile: submissionFile || undefined, // Pass undefined if null
+      }
+    });
+    setIsSubmissionModalOpen(false);
+    setSubmissionFile(null); // Reset file input state
+  };
 
   return (
     <div className="space-y-8">
@@ -59,8 +132,8 @@ export default function StudentCourseDetailPage() {
           <Image
             src={`https://placehold.co/1200x400.png?text=${encodeURIComponent(course.name)}`}
             alt={course.name}
-            layout="fill"
-            objectFit="cover"
+            fill
+            style={{objectFit:"cover"}}
             className="bg-muted"
             data-ai-hint="course landscape banner"
           />
@@ -140,43 +213,124 @@ export default function StudentCourseDetailPage() {
                 <p className="text-muted-foreground text-center py-4">No assignments posted for this course yet.</p>
               ) : (
                 <ul className="space-y-4">
-                  {courseAssignments.map(assignment => (
-                    <li key={assignment.id} className="p-4 border rounded-lg hover:shadow-md transition-shadow">
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-                        <div>
-                          <h3 className="text-lg font-semibold hover:text-primary">
-                            {/* TODO: Link to assignment detail/submission page */}
-                            {/* <Link href={`/student/courses/${courseId}/assignments/${assignment.id}`}> */}
-                              {assignment.title}
-                            {/* </Link> */}
-                          </h3>
-                          <p className="text-sm text-muted-foreground capitalize flex items-center gap-1">
-                            {assignment.type === "quiz" ? <CheckSquare className="h-4 w-4"/> : <Edit3 className="h-4 w-4"/>} 
-                            {assignment.type}
-                          </p>
+                  {courseAssignments.map(assignment => {
+                    const existingSubmission = getStudentSubmission(assignment.id);
+                    const isQuiz = assignment.type === AssignmentType.QUIZ; // TODO: Add quiz handling
+                    return (
+                      <li key={assignment.id} className="p-4 border rounded-lg hover:shadow-md transition-shadow">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                          <div>
+                            <h3 className="text-lg font-semibold hover:text-primary cursor-pointer" onClick={() => handleOpenSubmissionModal(assignment)}>
+                                {assignment.title}
+                            </h3>
+                            <p className="text-sm text-muted-foreground capitalize flex items-center gap-1">
+                              {isQuiz ? <CheckSquare className="h-4 w-4"/> : <Edit3 className="h-4 w-4"/>} 
+                              {assignment.type} ({assignment.totalPoints} pts)
+                            </p>
+                          </div>
+                          <div className="mt-2 sm:mt-0 text-sm text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-4 w-4"/> Due: {format(new Date(assignment.dueDate), "PPP p")}
+                          </div>
                         </div>
-                        <div className="mt-2 sm:mt-0 text-sm text-muted-foreground flex items-center gap-1">
-                          <Clock className="h-4 w-4"/> Due: {new Date(assignment.dueDate).toLocaleDateString()}
-                        </div>
-                      </div>
-                      <p className="mt-2 text-sm text-foreground/80">
-                        {assignment.description.substring(0, 120)}{assignment.description.length > 120 ? "..." : ""}
-                      </p>
-                       <div className="mt-3 text-right">
-                          {/* TODO: Update button based on submission status */}
-                          <Button variant="outline" size="sm" disabled>
-                            {/* Link to assignment detail/submission page */}
-                            View Assignment (Coming Soon)
-                          </Button>
-                       </div>
-                    </li>
-                  ))}
+                        <p className="mt-2 text-sm text-foreground/80">
+                          {assignment.description.substring(0, 120)}{assignment.description.length > 120 ? "..." : ""}
+                        </p>
+                         <div className="mt-3 text-right">
+                            <Button variant="outline" size="sm" onClick={() => handleOpenSubmissionModal(assignment)}>
+                              {existingSubmission ? 'View Submission' : 'Submit Assignment'}
+                            </Button>
+                         </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Submission Dialog */}
+      {selectedAssignment && (
+        <Dialog open={isSubmissionModalOpen} onOpenChange={setIsSubmissionModalOpen}>
+          <DialogContent className="sm:max-w-[600px]">
+            <DialogHeader>
+              <DialogTitle>{selectedAssignment.title}</DialogTitle>
+              <DialogDescription>
+                Due: {format(new Date(selectedAssignment.dueDate), "PPP p")} - {selectedAssignment.totalPoints} points
+              </DialogDescription>
+              <p className="text-sm text-muted-foreground pt-2">{selectedAssignment.description}</p>
+            </DialogHeader>
+            
+            {(() => {
+                const submission = getStudentSubmission(selectedAssignment.id);
+                if (submission) {
+                    return (
+                        <div className="space-y-4 py-4">
+                            <h4 className="font-semibold text-lg">Your Submission:</h4>
+                            {submission.content && (
+                                <div>
+                                    <Label>Text Submission:</Label>
+                                    <pre className="mt-1 p-3 text-sm bg-muted rounded-md whitespace-pre-wrap font-body">{submission.content}</pre>
+                                </div>
+                            )}
+                            {submission.fileUrl && (
+                                <div>
+                                    <Label>Submitted File:</Label>
+                                    <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
+                                       <Paperclip className="h-4 w-4"/> {submission.fileName || 'View File'}
+                                    </a>
+                                    <p className="text-xs text-muted-foreground">(Note: File URL is mocked for now)</p>
+                                </div>
+                            )}
+                            {submission.grade !== undefined ? (
+                                <>
+                                <p className="font-semibold">Grade: <span className="text-primary">{submission.grade} / {selectedAssignment.totalPoints}</span></p>
+                                {submission.feedback && <p><strong>Feedback:</strong> {submission.feedback}</p>}
+                                </>
+                            ) : (
+                                <p className="text-muted-foreground italic">Awaiting grading.</p>
+                            )}
+                        </div>
+                    );
+                } else if (selectedAssignment.type === AssignmentType.STANDARD) {
+                    return (
+                        <form className="space-y-4 py-4" onSubmit={(e) => { e.preventDefault(); handleSubmitAssignment(); }}>
+                            <div>
+                                <Label htmlFor="submissionContent">Your Response (Optional)</Label>
+                                <Textarea 
+                                    id="submissionContent" 
+                                    value={submissionContent} 
+                                    onChange={(e) => setSubmissionContent(e.target.value)}
+                                    placeholder="Type your response here..."
+                                    rows={5}
+                                    className="mt-1"
+                                />
+                            </div>
+                            <div>
+                                <Label htmlFor="submissionFile">Upload File (Optional)</Label>
+                                <Input 
+                                    id="submissionFile" 
+                                    type="file" 
+                                    onChange={handleFileChange}
+                                    className="mt-1"
+                                />
+                                {submissionFile && <p className="text-xs text-muted-foreground mt-1">Selected: {submissionFile.name}</p>}
+                            </div>
+                            <DialogFooter>
+                                <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
+                                <Button type="submit"><UploadCloud className="mr-2 h-4 w-4" /> Submit Assignment</Button>
+                            </DialogFooter>
+                        </form>
+                    );
+                } else if (selectedAssignment.type === AssignmentType.QUIZ) {
+                    return <p className="py-4 text-muted-foreground">Quiz submissions are not yet implemented in this view. Please check the specific quiz interface.</p>;
+                }
+                return null; 
+            })()}
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
