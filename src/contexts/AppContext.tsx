@@ -6,7 +6,7 @@ import React, { createContext, useContext, useReducer, useEffect, useCallback } 
 import { 
   getFirebaseAuth, 
   getFirebaseDb, 
-  // getFirebaseStorage // Import if/when storage operations are added to context
+  getFirebaseStorage
 } from '@/lib/firebase'; 
 import { 
   onAuthStateChanged, 
@@ -16,8 +16,10 @@ import {
   type User as FirebaseUser 
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, getDocs, type Firestore } from 'firebase/firestore';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload } from '@/types';
+
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 import { 
   SAMPLE_USERS, 
@@ -286,7 +288,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     }
 
     case ActionType.CREATE_ASSIGNMENT: {
-      const { courseId, title, description, dueDate, type, questions, rubric, manualTotalPoints } = action.payload;
+      const { courseId, title, description, dueDate, type, questions, rubric, manualTotalPoints, assignmentFileName, assignmentFileUrl } = action.payload;
       let totalPoints = 0;
       if (type === AssignmentType.QUIZ && questions) {
         totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
@@ -307,6 +309,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         questions: questions?.map(q => ({...q, id: q.id || `q-${Date.now()}-${Math.random()}` , assignmentId: newAssignmentId})),
         rubric,
         totalPoints,
+        assignmentFileName,
+        assignmentFileUrl,
       };
       // Firestore write would be async
       return {
@@ -347,15 +351,13 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     }
     
     case ActionType.SUBMIT_ASSIGNMENT: {
-      const { assignmentId, studentId, submissionContent, submissionFile } = action.payload as SubmitAssignmentPayload;
+      const { assignmentId, studentId, submissionContent, fileName, fileUrl } = action.payload as Submission; // Using Submission type directly as payload now includes fileUrl
       
-      // Check if already submitted by this student for this assignment
       const existingSubmissionIndex = state.submissions.findIndex(
         sub => sub.assignmentId === assignmentId && sub.studentId === studentId
       );
 
       if (existingSubmissionIndex !== -1) {
-        // Optionally allow re-submission by updating existing, or prevent it
         return { ...state, error: "You have already submitted this assignment." };
       }
 
@@ -365,9 +367,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         studentId,
         submittedAt: new Date().toISOString(),
         content: submissionContent,
-        fileName: submissionFile?.name,
-        fileUrl: submissionFile ? `simulated-uploads/${submissionFile.name}` : undefined, // Mock URL
-        // quizAnswers, grade, feedback, rubricScores will be undefined initially
+        fileName: fileName,
+        fileUrl: fileUrl, 
       };
       
       const assignment = state.assignments.find(a => a.id === assignmentId);
@@ -380,7 +381,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
             userId: teacher.id,
             type: 'submission_received',
             message: `New submission for '${assignment?.title}' from student ${state.users.find(u => u.id === studentId)?.name || studentId}.`,
-            link: `/teacher/courses/${assignment?.courseId}?assignment=${assignmentId}`, // Link to grading view
+            link: `/teacher/courses/${assignment?.courseId}?assignment=${assignmentId}`, 
             read: false,
             timestamp: Date.now(),
           },
@@ -388,8 +389,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         ];
       }
 
-
-      // Firestore write would be async
       return {
         ...state,
         submissions: [...state.submissions, newSubmission],
@@ -414,18 +413,17 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
           userId: submissionToGrade.studentId,
           type: 'submission_graded',
           message: `Your submission for '${assignment?.title}' has been graded. Grade: ${grade}`,
-          link: `/student/courses/${assignment?.courseId}?assignment=${assignment?.id}`, // Link to view submission
+          link: `/student/courses/${assignment?.courseId}?assignment=${assignment?.id}`, 
           read: false,
           timestamp: Date.now(),
         },
         ...state.notifications
       ];
 
-      // Firestore update would be async
       return {
         ...state,
         submissions: state.submissions.map(sub =>
-          sub.id === submissionId ? { ...sub, grade, feedback, submittedAt: sub.submittedAt || new Date().toISOString() } : sub // ensure submittedAt is present
+          sub.id === submissionId ? { ...sub, grade, feedback, submittedAt: sub.submittedAt || new Date().toISOString() } : sub 
         ),
         notifications: notifications.slice(0,20),
         successMessage: `Submission graded successfully.`,
@@ -581,6 +579,9 @@ const AppContext = createContext<{
   handleLoginUser: (payload: LoginUserPayload) => Promise<void>;
   handleRegisterStudent: (payload: RegisterStudentPayload) => Promise<void>;
   handleLogoutUser: () => Promise<void>;
+  handleLessonFileUpload: (courseId: string, lessonId: string, file: File) => Promise<{ fileUrl: string, fileName: string }>;
+  handleAssignmentAttachmentUpload: (courseId: string, assignmentId: string, file: File) => Promise<{ assignmentFileUrl: string, assignmentFileName: string }>;
+  handleStudentSubmissionUpload: (courseId: string, assignmentId: string, studentId: string, file: File) => Promise<{ fileUrl: string, fileName: string }>;
 } | undefined>(undefined);
 
 
@@ -594,17 +595,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const authInstance = getFirebaseAuth();
     if (!authInstance) {
       console.error("Firebase Auth instance not available in AppContext. Firebase might not be initialized correctly (check .env.local).");
-      dispatch({ type: ActionType.SET_CURRENT_USER, payload: null }); // Critical error, treat as logged out
+      dispatch({ type: ActionType.SET_CURRENT_USER, payload: null }); 
       dispatch({ type: ActionType.SET_ERROR, payload: "Firebase initialization failed. App cannot connect to authentication services." });
       return;
     }
     
-    const dbInstance = getFirebaseDb(); // Get db instance here too
+    const dbInstance = getFirebaseDb(); 
     if (!dbInstance) {
         console.error("Firebase Firestore instance not available in AppContext.");
-        // Potentially dispatch an error or handle gracefully
     }
-
 
     const unsubscribe = onAuthStateChanged(authInstance, async (firebaseUser: FirebaseUser | null) => {
       if (firebaseUser) {
@@ -638,7 +637,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return () => unsubscribe();
-  }, []); // Empty dependency: run once on mount
+  }, []); 
 
   useEffect(() => {
     if (state.error) {
@@ -723,6 +722,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.LOGOUT_USER_FAILURE, payload: error.message || "Failed to logout." });
     }
   }, []);
+
+  const handleFileUpload = useCallback(async (path: string, file: File) => {
+    const storage = getFirebaseStorage();
+    if (!storage) throw new Error("Firebase Storage not initialized.");
+    if (!file) throw new Error("No file provided for upload.");
+
+    const fileRef = storageRef(storage, path);
+    await uploadBytes(fileRef, file);
+    const downloadURL = await getDownloadURL(fileRef);
+    return { downloadURL, fileName: file.name };
+  }, []);
+
+  const handleLessonFileUpload = useCallback(async (courseId: string, lessonId: string, file: File) => {
+    const path = `lessons/${courseId}/${lessonId}/${file.name}`;
+    const { downloadURL, fileName } = await handleFileUpload(path, file);
+    return { fileUrl: downloadURL, fileName };
+  }, [handleFileUpload]);
+
+  const handleAssignmentAttachmentUpload = useCallback(async (courseId: string, assignmentId: string, file: File) => {
+    const path = `assignment_attachments/${courseId}/${assignmentId}/${file.name}`;
+    const { downloadURL, fileName } = await handleFileUpload(path, file);
+    return { assignmentFileUrl: downloadURL, assignmentFileName: fileName };
+  }, [handleFileUpload]);
+  
+  const handleStudentSubmissionUpload = useCallback(async (courseId: string, assignmentId: string, studentId: string, file: File) => {
+    const path = `submissions/${courseId}/${assignmentId}/${studentId}/${file.name}`;
+    const { downloadURL, fileName } = await handleFileUpload(path, file);
+    return { fileUrl: downloadURL, fileName };
+  }, [handleFileUpload]);
+
   
   const contextValue = {
     state,
@@ -730,6 +759,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     handleLoginUser,
     handleRegisterStudent,
     handleLogoutUser,
+    handleLessonFileUpload,
+    handleAssignmentAttachmentUpload,
+    handleStudentSubmissionUpload,
   };
 
   return (

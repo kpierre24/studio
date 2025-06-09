@@ -33,7 +33,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare, UploadCloud, Eye, FileArchive, CheckCircle, AlertCircle, Send } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare, UploadCloud, Eye, FileArchive, CheckCircle, AlertCircle, Send, Paperclip, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { QuizGenerator } from '@/components/features/QuizGenerator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -45,7 +45,7 @@ import { Badge } from '@/components/ui/badge';
 interface LessonFormData extends Omit<CreateLessonPayload, 'courseId' | 'order' | 'fileUrl' | 'fileName'> {
   id?: string;
   order?: number;
-  file?: File | null; // For handling file input
+  file?: File | null; 
   fileName?: string;
   fileUrl?: string;
 }
@@ -60,15 +60,18 @@ const initialLessonFormData: LessonFormData = {
 };
 
 
-interface AssignmentFormData extends Omit<CreateAssignmentPayload, 'courseId' | 'rubric'> {
+interface AssignmentFormData extends Omit<CreateAssignmentPayload, 'courseId' | 'rubric' | 'assignmentFileUrl' | 'assignmentFileName'> {
   id?: string;
-  questions?: QuizQuestion[]; // Ensure questions are part of the form data
+  questions?: QuizQuestion[]; 
+  assignmentFile?: File | null; // For teacher to upload a file for the assignment itself
+  assignmentFileName?: string;
+  assignmentFileUrl?: string;
 }
-const initialAssignmentFormData: AssignmentFormData = { title: '', description: '', dueDate: '', type: AssignmentType.STANDARD, questions: [] };
+const initialAssignmentFormData: AssignmentFormData = { title: '', description: '', dueDate: '', type: AssignmentType.STANDARD, questions: [], assignmentFile: null, assignmentFileName: '', assignmentFileUrl: '' };
 
 interface GradingFormData {
   submissionId: string;
-  grade: string; // string for input, convert to number on save
+  grade: string; 
   feedback: string;
 }
 
@@ -76,13 +79,16 @@ interface GradingFormData {
 export default function TeacherCourseDetailPage() {
   const { courseId } = useParams() as { courseId: string };
   const router = useRouter();
-  const { state, dispatch } = useAppContext();
+  const { state, dispatch, handleLessonFileUpload, handleAssignmentAttachmentUpload } = useAppContext();
   const { currentUser, courses, lessons, assignments, submissions, users } = state;
   const { toast } = useToast();
 
   const [course, setCourse] = useState<Course | null>(null);
   const [courseLessons, setCourseLessons] = useState<Lesson[]>([]);
   const [courseAssignments, setCourseAssignments] = useState<Assignment[]>([]);
+  const [isSavingLesson, setIsSavingLesson] = useState(false);
+  const [isSavingAssignment, setIsSavingAssignment] = useState(false);
+
 
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
   const [lessonToDelete, setLessonToDelete] = useState<Lesson | null>(null);
@@ -94,7 +100,7 @@ export default function TeacherCourseDetailPage() {
 
   const [isGradingModalOpen, setIsGradingModalOpen] = useState(false);
   const [selectedAssignmentForGrading, setSelectedAssignmentForGrading] = useState<Assignment | null>(null);
-  const [gradingFormsData, setGradingFormsData] = useState<Record<string, GradingFormData>>({}); // submissionId -> GradingFormData
+  const [gradingFormsData, setGradingFormsData] = useState<Record<string, GradingFormData>>({}); 
 
 
   useEffect(() => {
@@ -112,13 +118,13 @@ export default function TeacherCourseDetailPage() {
 
   // Authorization check
   if (!currentUser || (currentUser.role !== UserRole.TEACHER && currentUser.role !== UserRole.SUPER_ADMIN)) {
-    return <p className="text-center text-muted-foreground">Access Denied.</p>;
+    return <p className="text-center text-muted-foreground">Access Denied: Required role missing.</p>;
   }
-  if (currentUser.role === UserRole.TEACHER && course?.teacherId !== currentUser.id) {
-    return <p className="text-center text-muted-foreground">You are not authorized to manage this course.</p>;
+  if (!course) { // handles the case where course is still loading or not found after useEffect
+    return <p className="text-center text-muted-foreground">Loading course data or course not found...</p>;
   }
-  if (!course) {
-    return <p className="text-center text-muted-foreground">Loading course data...</p>;
+  if (currentUser.role === UserRole.TEACHER && course.teacherId !== currentUser.id) {
+    return <p className="text-center text-muted-foreground">Access Denied: You are not the teacher for this course.</p>;
   }
   const teacher = users.find(u => u.id === course.teacherId);
 
@@ -130,7 +136,7 @@ export default function TeacherCourseDetailPage() {
         id: lesson.id, 
         title: lesson.title, 
         contentMarkdown: lesson.contentMarkdown, 
-        videoUrl: lesson.videoUrl, 
+        videoUrl: lesson.videoUrl || '', 
         order: lesson.order,
         fileName: lesson.fileName,
         fileUrl: lesson.fileUrl,
@@ -151,9 +157,9 @@ export default function TeacherCourseDetailPage() {
   const handleLessonFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      setLessonFormData(prev => ({ ...prev, file: file, fileName: file.name }));
+      setLessonFormData(prev => ({ ...prev, file: file, fileName: file.name, fileUrl: undefined })); // Clear existing URL if new file selected
     } else {
-      setLessonFormData(prev => ({ ...prev, file: null, fileName: lessonFormData.id ? prev.fileName : '' })); // Keep existing if editing and no new file
+      setLessonFormData(prev => ({ ...prev, file: null })); 
     }
   };
 
@@ -162,15 +168,26 @@ export default function TeacherCourseDetailPage() {
       toast({ title: "Validation Error", description: "Lesson title is required.", variant: "destructive" });
       return;
     }
+    setIsSavingLesson(true);
 
-    let fileUrl = lessonFormData.fileUrl; // Keep existing if not changed
-    let fileName = lessonFormData.fileName;
+    let uploadedFileUrl = lessonFormData.fileUrl;
+    let uploadedFileName = lessonFormData.fileName;
 
     if (lessonFormData.file) {
-      // Mock Firebase Storage upload
-      fileName = lessonFormData.file.name;
-      fileUrl = `simulated-storage/lessons/${course.id}/${fileName}`; // Placeholder
-      toast({ title: "File Selected (Mock)", description: `${fileName} would be 'uploaded'. Actual upload requires Firebase setup.`});
+      try {
+        const { fileUrl: newFileUrl, fileName: newFileName } = await handleLessonFileUpload(course.id, lessonFormData.id || `new-${Date.now()}`, lessonFormData.file);
+        uploadedFileUrl = newFileUrl;
+        uploadedFileName = newFileName;
+        toast({ title: "File Uploaded", description: `${newFileName} uploaded successfully.` });
+      } catch (error: any) {
+        toast({ title: "File Upload Error", description: error.message || "Could not upload file.", variant: "destructive" });
+        setIsSavingLesson(false);
+        return;
+      }
+    } else if (lessonFormData.file === null && lessonFormData.id && !lessonFormData.fileUrl) { // File was removed
+        uploadedFileUrl = undefined;
+        uploadedFileName = undefined;
+         // TODO: Optionally delete from Firebase Storage if fileUrl was previously set and now cleared
     }
 
 
@@ -180,16 +197,18 @@ export default function TeacherCourseDetailPage() {
       contentMarkdown: lessonFormData.contentMarkdown,
       videoUrl: lessonFormData.videoUrl,
       order: lessonFormData.order || 1,
-      fileUrl: fileUrl,
-      fileName: fileName,
+      fileUrl: uploadedFileUrl,
+      fileName: uploadedFileName,
       ...(lessonFormData.id && { id: lessonFormData.id }),
     };
     dispatch({ type: lessonFormData.id ? ActionType.UPDATE_LESSON : ActionType.CREATE_LESSON, payload });
+    setIsSavingLesson(false);
     setIsLessonModalOpen(false);
   };
 
   const handleDeleteLesson = () => {
     if (lessonToDelete) {
+      // TODO: Add logic to delete file from Firebase Storage if lessonToDelete.fileUrl exists
       dispatch({ type: ActionType.DELETE_LESSON, payload: { id: lessonToDelete.id, courseId: course.id } });
       setLessonToDelete(null);
     }
@@ -202,10 +221,13 @@ export default function TeacherCourseDetailPage() {
         id: assignment.id, 
         title: assignment.title, 
         description: assignment.description, 
-        dueDate: assignment.dueDate.split('T')[0], // Format for date input
+        dueDate: assignment.dueDate ? format(new Date(assignment.dueDate), "yyyy-MM-dd") : '',
         type: assignment.type,
         questions: assignment.questions || [],
         manualTotalPoints: assignment.type === AssignmentType.STANDARD ? assignment.totalPoints : undefined,
+        assignmentFileUrl: assignment.assignmentFileUrl,
+        assignmentFileName: assignment.assignmentFileName,
+        assignmentFile: null,
       });
     } else {
       setAssignmentFormData({...initialAssignmentFormData, questions: [] });
@@ -220,6 +242,15 @@ export default function TeacherCourseDetailPage() {
       [name]: name === 'manualTotalPoints' ? (value ? parseFloat(value) : undefined) : value 
     }));
   };
+
+  const handleAssignmentFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+        const file = e.target.files[0];
+        setAssignmentFormData(prev => ({ ...prev, assignmentFile: file, assignmentFileName: file.name, assignmentFileUrl: undefined }));
+    } else {
+        setAssignmentFormData(prev => ({ ...prev, assignmentFile: null }));
+    }
+  };
   
   const handleGeneratedQuestions = (newQuestions: QuizQuestion[]) => {
     setAssignmentFormData(prev => ({
@@ -228,11 +259,32 @@ export default function TeacherCourseDetailPage() {
     }));
   };
 
-  const handleAssignmentSubmit = () => {
+  const handleAssignmentSubmit = async () => {
     if (!assignmentFormData.title || !assignmentFormData.dueDate) {
       toast({ title: "Validation Error", description: "Assignment title and due date are required.", variant: "destructive" });
       return;
     }
+    setIsSavingAssignment(true);
+
+    let uploadedFileUrl = assignmentFormData.assignmentFileUrl;
+    let uploadedFileName = assignmentFormData.assignmentFileName;
+
+    if (assignmentFormData.assignmentFile) {
+        try {
+            const { assignmentFileUrl: newFileUrl, assignmentFileName: newFileName } = await handleAssignmentAttachmentUpload(course.id, assignmentFormData.id || `new-${Date.now()}`, assignmentFormData.assignmentFile);
+            uploadedFileUrl = newFileUrl;
+            uploadedFileName = newFileName;
+            toast({ title: "Assignment File Uploaded", description: `${newFileName} uploaded successfully.`});
+        } catch (error: any) {
+            toast({ title: "File Upload Error", description: error.message || "Could not upload assignment file.", variant: "destructive" });
+            setIsSavingAssignment(false);
+            return;
+        }
+    } else if (assignmentFormData.assignmentFile === null && assignmentFormData.id && !assignmentFormData.assignmentFileUrl) { // File removed
+        uploadedFileUrl = undefined;
+        uploadedFileName = undefined;
+    }
+
     const payload: CreateAssignmentPayload | UpdateAssignmentPayload = {
       courseId: course.id,
       title: assignmentFormData.title,
@@ -241,14 +293,18 @@ export default function TeacherCourseDetailPage() {
       type: assignmentFormData.type,
       questions: assignmentFormData.type === AssignmentType.QUIZ ? assignmentFormData.questions : undefined,
       manualTotalPoints: assignmentFormData.type === AssignmentType.STANDARD ? assignmentFormData.manualTotalPoints : undefined,
+      assignmentFileUrl: uploadedFileUrl,
+      assignmentFileName: uploadedFileName,
       ...(assignmentFormData.id && { id: assignmentFormData.id }),
     };
     dispatch({ type: assignmentFormData.id ? ActionType.UPDATE_ASSIGNMENT : ActionType.CREATE_ASSIGNMENT, payload: payload as any });
+    setIsSavingAssignment(false);
     setIsAssignmentModalOpen(false);
   };
 
   const handleDeleteAssignment = () => {
     if (assignmentToDelete) {
+      // TODO: Add logic to delete assignmentFile from Firebase Storage if it exists
       dispatch({ type: ActionType.DELETE_ASSIGNMENT, payload: { id: assignmentToDelete.id, courseId: course.id } });
       setAssignmentToDelete(null);
     }
@@ -307,7 +363,6 @@ export default function TeacherCourseDetailPage() {
         feedback: formData.feedback,
       }
     });
-    // No need to close modal here, teacher might grade multiple submissions
   };
 
   const getAssignmentSubmissions = (assignmentId: string) => {
@@ -367,6 +422,7 @@ export default function TeacherCourseDetailPage() {
                         <h4 className="font-medium">{lesson.order}. {lesson.title}</h4>
                         <p className="text-xs text-muted-foreground truncate max-w-md">{lesson.contentMarkdown.substring(0,100)}...</p>
                         {lesson.fileName && <p className="text-xs text-blue-500"><FileText className="inline h-3 w-3 mr-1"/>{lesson.fileName}</p>}
+                        {lesson.fileUrl && lesson.fileUrl.startsWith("simulated-storage/") && <Badge variant="outline" className="text-yellow-600 border-yellow-500 ml-2">Mock File</Badge>}
                       </div>
                       <div className="space-x-2">
                         <Button variant="outline" size="sm" onClick={() => handleOpenLessonModal(lesson)}><Edit className="h-4 w-4" /></Button>
@@ -395,6 +451,11 @@ export default function TeacherCourseDetailPage() {
                       <div>
                         <h4 className="font-medium">{assignment.title} <Badge variant="secondary" className="capitalize">{assignment.type}</Badge></h4>
                         <p className="text-xs text-muted-foreground">Due: {format(new Date(assignment.dueDate), "PPP p")} - {assignment.totalPoints} pts</p>
+                         {assignment.assignmentFileName && (
+                           <a href={assignment.assignmentFileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1 mt-1">
+                                <Paperclip className="h-3 w-3"/> {assignment.assignmentFileName}
+                           </a>
+                        )}
                       </div>
                       <div className="space-x-2">
                         <Button variant="outline" size="sm" onClick={() => handleOpenGradingModal(assignment)} title="View Submissions & Grade">
@@ -448,35 +509,48 @@ export default function TeacherCourseDetailPage() {
           <div className="grid gap-4 py-4">
             <div className="space-y-1">
               <Label htmlFor="lesson-title">Title</Label>
-              <Input id="lesson-title" name="title" value={lessonFormData.title} onChange={handleLessonFormChange} />
+              <Input id="lesson-title" name="title" value={lessonFormData.title} onChange={handleLessonFormChange} disabled={isSavingLesson} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="lesson-content">Content (Markdown)</Label>
-              <Textarea id="lesson-content" name="contentMarkdown" value={lessonFormData.contentMarkdown} onChange={handleLessonFormChange} rows={6} />
+              <Textarea id="lesson-content" name="contentMarkdown" value={lessonFormData.contentMarkdown} onChange={handleLessonFormChange} rows={6} disabled={isSavingLesson} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="lesson-video">Video URL (Optional)</Label>
-              <Input id="lesson-video" name="videoUrl" value={lessonFormData.videoUrl || ''} onChange={handleLessonFormChange} />
+              <Input id="lesson-video" name="videoUrl" value={lessonFormData.videoUrl || ''} onChange={handleLessonFormChange} disabled={isSavingLesson}/>
             </div>
             <div className="space-y-1">
                 <Label htmlFor="lesson-file">Associated File (Optional)</Label>
-                <div className="flex items-center gap-2">
-                    <Input id="lesson-file" type="file" onChange={handleLessonFileChange} className="flex-grow" />
-                    {lessonFormData.fileName && <span className="text-sm text-muted-foreground truncate max-w-[150px]" title={lessonFormData.fileName}>{lessonFormData.fileName}</span>}
-                </div>
-                {lessonFormData.id && lessonFormData.fileUrl && !lessonFormData.file && (
-                    <p className="text-xs text-muted-foreground">Current file: <a href={lessonFormData.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{lessonFormData.fileName}</a>. Uploading a new file will replace it.</p>
+                {lessonFormData.id && lessonFormData.fileUrl?.startsWith("simulated-storage/") && (
+                    <div className="p-2 my-1 text-xs bg-yellow-100 border border-yellow-300 text-yellow-700 rounded-md">
+                        This lesson has a mock file: <span className="font-semibold">{lessonFormData.fileName}</span>. Please re-upload the actual file to store it in Firebase. Uploading a new file will replace this mock entry.
+                    </div>
                 )}
-                <p className="text-xs text-muted-foreground">Actual file upload to cloud storage requires Firebase setup.</p>
+                <div className="flex items-center gap-2">
+                    <Input id="lesson-file" type="file" onChange={handleLessonFileChange} className="flex-grow" disabled={isSavingLesson} />
+                </div>
+                 {lessonFormData.fileName && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                        Current file: 
+                        {lessonFormData.fileUrl && !lessonFormData.fileUrl.startsWith("simulated-storage/") ? 
+                        <a href={lessonFormData.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">{lessonFormData.fileName}</a> : 
+                        <span className="ml-1">{lessonFormData.fileName} {lessonFormData.fileUrl?.startsWith("simulated-storage/") ? "(Mock)" : "(New)"}</span>
+                        }
+                        {lessonFormData.id && lessonFormData.fileUrl && <Button variant="link" size="sm" className="p-0 h-auto ml-2 text-xs text-red-500" onClick={() => setLessonFormData(prev => ({...prev, file:null, fileName: undefined, fileUrl: undefined}))} disabled={isSavingLesson}>Remove</Button>}
+                    </p>
+                )}
             </div>
              <div className="space-y-1">
               <Label htmlFor="lesson-order">Order</Label>
-              <Input id="lesson-order" name="order" type="number" value={lessonFormData.order || 1} onChange={handleLessonFormChange} />
+              <Input id="lesson-order" name="order" type="number" value={lessonFormData.order || 1} onChange={handleLessonFormChange} disabled={isSavingLesson}/>
             </div>
           </div>
           <DialogFooter>
-            <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-            <Button onClick={handleLessonSubmit}><UploadCloud className="mr-2 h-4 w-4" /> Save Lesson</Button>
+            <DialogClose asChild><Button variant="outline" disabled={isSavingLesson}>Cancel</Button></DialogClose>
+            <Button onClick={handleLessonSubmit} disabled={isSavingLesson}>
+                {isSavingLesson && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSavingLesson ? (lessonFormData.id ? "Saving..." : "Creating...") : (lessonFormData.id ? "Save Changes" : "Create Lesson") }
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -487,6 +561,7 @@ export default function TeacherCourseDetailPage() {
           <AlertDialogHeader><AlertDialogTitle>Delete Lesson?</AlertDialogTitle></AlertDialogHeader>
           <AlertDialogDescription>
             Are you sure you want to delete the lesson "{lessonToDelete?.title}"? This action cannot be undone.
+            {lessonToDelete?.fileUrl && " The associated file in storage will NOT be automatically deleted by this action."}
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setLessonToDelete(null)}>Cancel</AlertDialogCancel>
@@ -505,23 +580,41 @@ export default function TeacherCourseDetailPage() {
                   <div className="grid gap-6 py-4">
                       <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="assign-title" className="text-right">Title</Label>
-                          <Input id="assign-title" name="title" value={assignmentFormData.title} onChange={handleAssignmentFormChange} className="col-span-3" />
+                          <Input id="assign-title" name="title" value={assignmentFormData.title} onChange={handleAssignmentFormChange} className="col-span-3" disabled={isSavingAssignment} />
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="assign-desc" className="text-right">Description</Label>
-                          <Textarea id="assign-desc" name="description" value={assignmentFormData.description} onChange={handleAssignmentFormChange} className="col-span-3" />
+                          <Textarea id="assign-desc" name="description" value={assignmentFormData.description} onChange={handleAssignmentFormChange} className="col-span-3" disabled={isSavingAssignment}/>
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="assign-due" className="text-right">Due Date</Label>
-                          <Input id="assign-due" name="dueDate" type="date" value={assignmentFormData.dueDate} onChange={handleAssignmentFormChange} className="col-span-3" />
+                          <Input id="assign-due" name="dueDate" type="date" value={assignmentFormData.dueDate} onChange={handleAssignmentFormChange} className="col-span-3" disabled={isSavingAssignment}/>
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="assign-type" className="text-right">Type</Label>
-                          <select id="assign-type" name="type" value={assignmentFormData.type} onChange={handleAssignmentFormChange} className="col-span-3 p-2 border rounded-md bg-input border-input-border">
+                          <select id="assign-type" name="type" value={assignmentFormData.type} onChange={handleAssignmentFormChange} className="col-span-3 p-2 border rounded-md bg-input border-input-border" disabled={isSavingAssignment}>
                               <option value={AssignmentType.STANDARD}>Standard (File Upload/Text)</option>
                               <option value={AssignmentType.QUIZ}>Quiz</option>
                           </select>
                       </div>
+
+                       <div className="grid grid-cols-4 items-start gap-4 pt-2">
+                          <Label htmlFor="assignment-file" className="text-right col-span-1 pt-2">Attach File (Optional)</Label>
+                          <div className="col-span-3 space-y-1">
+                              <Input id="assignment-file" type="file" onChange={handleAssignmentFileChange} className="flex-grow" disabled={isSavingAssignment}/>
+                              {assignmentFormData.assignmentFileName && (
+                                  <p className="text-xs text-muted-foreground mt-1">
+                                      Current file: 
+                                      {assignmentFormData.assignmentFileUrl ? 
+                                      <a href={assignmentFormData.assignmentFileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">{assignmentFormData.assignmentFileName}</a> : 
+                                      <span className="ml-1">{assignmentFormData.assignmentFileName} (New)</span>
+                                      }
+                                      {assignmentFormData.id && assignmentFormData.assignmentFileUrl && <Button variant="link" size="sm" className="p-0 h-auto ml-2 text-xs text-red-500" onClick={() => setAssignmentFormData(prev => ({...prev, assignmentFile:null, assignmentFileName: undefined, assignmentFileUrl: undefined}))} disabled={isSavingAssignment}>Remove</Button>}
+                                  </p>
+                              )}
+                          </div>
+                      </div>
+
 
                       {assignmentFormData.type === AssignmentType.QUIZ && (
                           <div className="col-span-4 mt-4 p-4 border-t border-border">
@@ -548,14 +641,17 @@ export default function TeacherCourseDetailPage() {
                       {assignmentFormData.type === AssignmentType.STANDARD && (
                           <div className="grid grid-cols-4 items-center gap-4">
                               <Label htmlFor="assign-points" className="text-right">Total Points</Label>
-                              <Input id="assign-points" name="manualTotalPoints" type="number" placeholder="e.g., 100" value={assignmentFormData.manualTotalPoints || ''} onChange={handleAssignmentFormChange} className="col-span-3" />
+                              <Input id="assign-points" name="manualTotalPoints" type="number" placeholder="e.g., 100" value={assignmentFormData.manualTotalPoints || ''} onChange={handleAssignmentFormChange} className="col-span-3" disabled={isSavingAssignment}/>
                           </div>
                       )}
                   </div>
                 </ScrollArea>
                 <DialogFooter className="pt-4 border-t">
-                    <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                    <Button type="submit" onClick={handleAssignmentSubmit}>Save Assignment</Button>
+                    <DialogClose asChild><Button variant="outline" disabled={isSavingAssignment}>Cancel</Button></DialogClose>
+                    <Button type="submit" onClick={handleAssignmentSubmit} disabled={isSavingAssignment}>
+                        {isSavingAssignment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {isSavingAssignment ? (assignmentFormData.id ? "Saving..." : "Creating...") : (assignmentFormData.id ? "Save Changes" : "Create Assignment")}
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -565,7 +661,9 @@ export default function TeacherCourseDetailPage() {
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle>Delete Assignment?</AlertDialogTitle></AlertDialogHeader>
           <AlertDialogDescription>
-            Are you sure you want to delete the assignment "{assignmentToDelete?.title}"? This will also delete all student submissions for it. This action cannot be undone.
+            Are you sure you want to delete the assignment "{assignmentToDelete?.title}"? This will also delete all student submissions for it. 
+            {assignmentToDelete?.assignmentFileUrl && "The associated assignment file in storage will NOT be automatically deleted by this action."}
+            This action cannot be undone.
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setAssignmentToDelete(null)}>Cancel</AlertDialogCancel>
@@ -609,13 +707,12 @@ export default function TeacherCourseDetailPage() {
                               <pre className="mt-1 p-2 text-sm bg-background rounded-md whitespace-pre-wrap font-body border max-h-40 overflow-y-auto">{submission.content}</pre>
                             </div>
                           )}
-                          {submission.fileUrl && (
+                          {submission.fileUrl && submission.fileName && (
                             <div>
                               <Label className="font-semibold">Submitted File:</Label>
                                 <a href={submission.fileUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline flex items-center gap-1">
-                                    <FileText className="h-4 w-4"/> {submission.fileName || 'View File'}
+                                    <Paperclip className="h-4 w-4"/> {submission.fileName}
                                 </a>
-                                <p className="text-xs text-muted-foreground">(Note: File URL is mocked. Actual file download not implemented.)</p>
                             </div>
                           )}
                            {selectedAssignmentForGrading.type === AssignmentType.QUIZ && submission.quizAnswers && (

@@ -155,6 +155,8 @@ export interface Assignment {
   totalPoints: number;
   rubric?: RubricCriterion[]; // For standard assignments
   questions?: QuizQuestion[]; // For quiz assignments
+  assignmentFileUrl?: string; // URL of a file attached by the teacher to the assignment itself
+  assignmentFileName?: string; // Name of the file attached by the teacher
 }
 
 export interface QuizAnswer {
@@ -268,8 +270,8 @@ export type UpdateLessonPayload = Partial<Omit<Lesson, 'id'>> & { id: string };
 export type DeleteLessonPayload = { id: string; courseId: string };
 
 
-export type CreateAssignmentPayload = Omit<Assignment, 'id'| 'totalPoints'> & { manualTotalPoints?: number };
-export type UpdateAssignmentPayload = Partial<Omit<Assignment, 'id'>> & { id: string };
+export type CreateAssignmentPayload = Omit<Assignment, 'id'| 'totalPoints' | 'assignmentFileUrl' | 'assignmentFileName'> & { manualTotalPoints?: number; assignmentFile?: File };
+export type UpdateAssignmentPayload = Partial<Omit<Assignment, 'id'>> & { id: string; assignmentFile?: File | null }; // null to remove file
 export type DeleteAssignmentPayload = { id: string; courseId: string };
 
 export type SubmitAssignmentPayload = {
