@@ -19,7 +19,7 @@ import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, query, where, ge
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 import { 
   SAMPLE_USERS, 
@@ -121,6 +121,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.LOGIN_USER_REQUEST:
     case ActionType.REGISTER_STUDENT_REQUEST:
     case ActionType.LOGOUT_USER_REQUEST:
+    case ActionType.BULK_CREATE_STUDENTS_REQUEST:
       return { ...state, isLoading: true, error: null, successMessage: null };
 
     case ActionType.LOGIN_USER_SUCCESS:
@@ -140,23 +141,19 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.LOGOUT_USER_SUCCESS:
       return { ...initialState, users: state.users, courses: state.courses, lessons: state.lessons, assignments: state.assignments, submissions: state.submissions, enrollments: state.enrollments, attendanceRecords: state.attendanceRecords, payments: state.payments, announcements: state.announcements, currentUser: null, isLoading: false, successMessage: 'Logged out successfully.' };
     
-    case ActionType.CREATE_USER: { // Admin action
+    case ActionType.CREATE_USER: { 
       const payload = action.payload as CreateUserPayload;
-      // This action assumes password creation for Firebase Auth is handled elsewhere (e.g. admin SDK or invites)
-      // It only creates the Firestore document.
       const emailExists = state.users.some(u => u.email === payload.email);
       if (emailExists) {
         return { ...state, error: `Email ${payload.email} already exists.` };
       }
-      const newUserDoc: User = { // This is for Firestore document
-        id: `user-admin-created-${Date.now()}`, // Placeholder ID, should be Firebase UID if user is also created in Auth
+      const newUserDoc: User = { 
+        id: `user-admin-created-${Date.now()}`, 
         name: payload.name,
         email: payload.email,
         role: payload.role,
         avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png?text=${payload.name.substring(0,2).toUpperCase()}`,
       };
-      // Actual Firestore write would happen in an async thunk or useEffect calling a service
-      // For now, just updating local state for consistency if not using live DB
       return {
         ...state,
         users: [...state.users, newUserDoc],
@@ -167,7 +164,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case ActionType.UPDATE_USER: {
       const payload = action.payload as UpdateUserPayload;
-      // Actual Firestore update would happen in an async thunk or useEffect
       return {
         ...state,
         users: state.users.map(user =>
@@ -184,20 +180,37 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         return { ...state, error: "You cannot delete your own account." };
       }
       const userToDelete = state.users.find(u => u.id === payload.id);
-      // Actual Firestore delete would happen in an async thunk or useEffect
       return {
         ...state,
         users: state.users.filter(user => user.id !== payload.id),
         successMessage: `User ${userToDelete?.name || payload.id} deleted successfully.`,
       };
     }
+
+    case ActionType.BULK_CREATE_STUDENTS_SUCCESS: {
+      const { users: newUsers, results } = action.payload;
+      // Filter out any new users that might already exist by ID (though unlikely with UUIDs from Firebase)
+      const uniqueNewUsers = newUsers.filter(newUser => !state.users.some(existingUser => existingUser.id === newUser.id));
+      return {
+        ...state,
+        users: [...state.users, ...uniqueNewUsers],
+        isLoading: false,
+        error: null,
+        // Success message handled by toast in the calling function
+      };
+    }
+    case ActionType.BULK_CREATE_STUDENTS_FAILURE: {
+       const { error, results } = action.payload;
+       // Error message handled by toast in the calling function
+      return { ...state, isLoading: false, error: error };
+    }
     
      case ActionType.CREATE_COURSE: {
       const newCourse = action.payload as Course; 
       let finalTeacherId = newCourse.teacherId;
-      if (state.currentUser?.role === UserRole.TEACHER && !finalTeacherId) { // Teacher creating for self
+      if (state.currentUser?.role === UserRole.TEACHER && !finalTeacherId) { 
         finalTeacherId = state.currentUser.id;
-      } else if (state.currentUser?.role === UserRole.SUPER_ADMIN) { // Admin can assign or unassign
+      } else if (state.currentUser?.role === UserRole.SUPER_ADMIN) { 
         finalTeacherId = newCourse.teacherId || 'unassigned';
       }
 
@@ -208,7 +221,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         studentIds: newCourse.studentIds || [],
         cost: newCourse.cost || 0, 
       };
-      // Firestore write would be async
       return {
         ...state,
         courses: [...state.courses, courseToAdd],
@@ -218,7 +230,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case ActionType.UPDATE_COURSE: {
       const updatedCourseData = action.payload as UpdateCoursePayload;
-      // Firestore update would be async
       return {
         ...state,
         courses: state.courses.map(course =>
@@ -234,7 +245,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       if (courseToDelete && courseToDelete.studentIds.length > 0 && state.currentUser?.role !== UserRole.SUPER_ADMIN) {
          return { ...state, error: "Course has enrolled students. Only Super Admin can delete." };
       }
-      // Firestore delete would be async, and cascade deletes for subcollections if needed
       return {
         ...state,
         courses: state.courses.filter(course => course.id !== id),
@@ -256,7 +266,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         fileName: payload.fileName,
         order: payload.order,
       };
-      // Firestore write would be async
       return {
         ...state,
         lessons: [...state.lessons, newLesson].sort((a, b) => a.order - b.order),
@@ -266,7 +275,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case ActionType.UPDATE_LESSON: {
       const payload = action.payload as UpdateLessonPayload;
-      // Firestore update would be async
       return {
         ...state,
         lessons: state.lessons.map(lesson =>
@@ -279,7 +287,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.DELETE_LESSON: {
       const { id, courseId } = action.payload as DeleteLessonPayload;
       const lessonToDelete = state.lessons.find(l => l.id === id);
-      // Firestore delete would be async
       return {
         ...state,
         lessons: state.lessons.filter(lesson => lesson.id !== id),
@@ -288,7 +295,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     }
 
     case ActionType.CREATE_ASSIGNMENT: {
-      const { courseId, title, description, dueDate, type, questions, rubric, manualTotalPoints, assignmentFileName, assignmentFileUrl } = action.payload;
+      const { courseId, title, description, dueDate, type, questions, rubric, manualTotalPoints, assignmentFileName, assignmentFileUrl } = action.payload as CreateAssignmentPayload;
       let totalPoints = 0;
       if (type === AssignmentType.QUIZ && questions) {
         totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
@@ -298,7 +305,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         totalPoints = manualTotalPoints;
       }
 
-      const newAssignmentId = `assign-${Date.now()}`;
+      const newAssignmentId = `assign-${Date.now()}-${Math.random().toString(36).substring(2,7)}`;
       const newAssignment: Assignment = {
         id: newAssignmentId,
         courseId,
@@ -312,7 +319,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         assignmentFileName,
         assignmentFileUrl,
       };
-      // Firestore write would be async
       return {
         ...state,
         assignments: [...state.assignments, newAssignment],
@@ -322,13 +328,15 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case ActionType.UPDATE_ASSIGNMENT: {
         const payload = action.payload as UpdateAssignmentPayload;
-        let totalPoints = payload.totalPoints;
-        if (payload.type === AssignmentType.QUIZ && payload.questions) {
+        let totalPoints = payload.totalPoints; // Use existing if not overridden
+        if (payload.manualTotalPoints !== undefined) {
+            totalPoints = payload.manualTotalPoints;
+        } else if (payload.type === AssignmentType.QUIZ && payload.questions) {
             totalPoints = payload.questions.reduce((sum, q) => sum + q.points, 0);
         } else if (payload.type === AssignmentType.STANDARD && payload.rubric) {
             totalPoints = payload.rubric.reduce((sum, r) => sum + r.points, 0);
         }
-        // Firestore update would be async
+        
         return {
             ...state,
             assignments: state.assignments.map(assignment =>
@@ -341,7 +349,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.DELETE_ASSIGNMENT: {
         const { id } = action.payload as DeleteAssignmentPayload;
         const assignmentToDelete = state.assignments.find(a => a.id === id);
-        // Firestore delete would be async, and cascade deletes for submissions
         return {
             ...state,
             assignments: state.assignments.filter(assignment => assignment.id !== id),
@@ -351,10 +358,10 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     }
     
     case ActionType.SUBMIT_ASSIGNMENT: {
-      const { assignmentId, studentId, submissionContent, fileName, fileUrl } = action.payload as Submission; // Using Submission type directly as payload now includes fileUrl
+      const payload = action.payload as Submission; 
       
       const existingSubmissionIndex = state.submissions.findIndex(
-        sub => sub.assignmentId === assignmentId && sub.studentId === studentId
+        sub => sub.assignmentId === payload.assignmentId && sub.studentId === payload.studentId
       );
 
       if (existingSubmissionIndex !== -1) {
@@ -362,26 +369,22 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       }
 
       const newSubmission: Submission = {
-        id: `sub-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-        assignmentId,
-        studentId,
+        ...payload, // Payload now contains id, studentId, assignmentId, fileUrl, fileName, content from the upload handler
         submittedAt: new Date().toISOString(),
-        content: submissionContent,
-        fileName: fileName,
-        fileUrl: fileUrl, 
       };
       
-      const assignment = state.assignments.find(a => a.id === assignmentId);
-      const teacher = state.users.find(u => u.id === assignment?.teacherId);
+      const assignment = state.assignments.find(a => a.id === payload.assignmentId);
+      const course = state.courses.find(c => c.id === assignment?.courseId);
+      const teacher = state.users.find(u => u.id === course?.teacherId);
       let notifications = state.notifications;
-      if(teacher) {
+      if(teacher && assignment && course) {
         notifications = [
           {
             id: `notif-sub-${newSubmission.id}`,
             userId: teacher.id,
             type: 'submission_received',
-            message: `New submission for '${assignment?.title}' from student ${state.users.find(u => u.id === studentId)?.name || studentId}.`,
-            link: `/teacher/courses/${assignment?.courseId}?assignment=${assignmentId}`, 
+            message: `New submission for '${assignment.title}' in course '${course.name}' from student ${state.users.find(u => u.id === payload.studentId)?.name || payload.studentId}.`,
+            link: `/teacher/courses/${assignment.courseId}?assignment=${assignment.id}`, 
             read: false,
             timestamp: Date.now(),
           },
@@ -479,7 +482,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
           recordsAdded++;
         }
       });
-      // Firestore write would be async
       return {
         ...state,
         attendanceRecords: updatedAttendanceRecords,
@@ -489,7 +491,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case ActionType.UPDATE_ATTENDANCE_RECORD: {
       const payload = action.payload as UpdateAttendanceRecordPayload;
-      // Firestore update would be async
       return {
         ...state,
         attendanceRecords: state.attendanceRecords.map(ar =>
@@ -506,7 +507,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         id: `payment-${Date.now()}-${Math.random().toString(36).substring(2,7)}`,
         paymentDate: payload.paymentDate || new Date().toISOString(),
       };
-      // Firestore write would be async
       return {
         ...state,
         payments: [...state.payments, newPayment],
@@ -516,7 +516,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case ActionType.UPDATE_PAYMENT: {
       const payload = action.payload as UpdatePaymentPayload;
-      // Firestore update would be async
       return {
         ...state,
         payments: state.payments.map(p =>
@@ -567,8 +566,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.CLEAR_SUCCESS_MESSAGE:
       return { ...state, successMessage: null };
     default:
-      // Ensure all action types are handled or explicitly ignored
-      // const _exhaustiveCheck: never = action; // Uncomment for exhaustive checks
       return state;
   }
 };
@@ -582,6 +579,7 @@ const AppContext = createContext<{
   handleLessonFileUpload: (courseId: string, lessonId: string, file: File) => Promise<{ fileUrl: string, fileName: string }>;
   handleAssignmentAttachmentUpload: (courseId: string, assignmentId: string, file: File) => Promise<{ assignmentFileUrl: string, assignmentFileName: string }>;
   handleStudentSubmissionUpload: (courseId: string, assignmentId: string, studentId: string, file: File) => Promise<{ fileUrl: string, fileName: string }>;
+  handleBulkCreateStudents: (studentsToCreate: BulkCreateStudentData[]) => Promise<void>;
 } | undefined>(undefined);
 
 
@@ -648,7 +646,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       toast({ title: "Success", description: state.successMessage });
       dispatch({ type: ActionType.CLEAR_SUCCESS_MESSAGE });
     }
-  }, [state.error, state.successMessage, toast]);
+  }, [state.error, state.successMessage, toast, dispatch]);
 
 
   const handleLoginUser = useCallback(async (payload: LoginUserPayload) => {
@@ -668,7 +666,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error("Login error:", error);
       dispatch({ type: ActionType.LOGIN_USER_FAILURE, payload: error.message || "Failed to login." });
     }
-  }, []);
+  }, [dispatch]);
 
   const handleRegisterStudent = useCallback(async (payload: RegisterStudentPayload) => {
     dispatch({ type: ActionType.REGISTER_STUDENT_REQUEST });
@@ -705,7 +703,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error("Registration error:", error);
       dispatch({ type: ActionType.REGISTER_STUDENT_FAILURE, payload: error.message || "Failed to register." });
     }
-  }, []);
+  }, [dispatch]);
 
   const handleLogoutUser = useCallback(async () => {
     dispatch({ type: ActionType.LOGOUT_USER_REQUEST });
@@ -721,7 +719,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error("Logout error:", error);
       dispatch({ type: ActionType.LOGOUT_USER_FAILURE, payload: error.message || "Failed to logout." });
     }
-  }, []);
+  }, [dispatch]);
 
   const handleFileUpload = useCallback(async (path: string, file: File) => {
     const storage = getFirebaseStorage();
@@ -749,9 +747,83 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleStudentSubmissionUpload = useCallback(async (courseId: string, assignmentId: string, studentId: string, file: File) => {
     const path = `submissions/${courseId}/${assignmentId}/${studentId}/${file.name}`;
     const { downloadURL, fileName } = await handleFileUpload(path, file);
+    dispatch({ 
+        type: ActionType.SUBMIT_ASSIGNMENT, 
+        payload: { 
+            id: `sub-temp-${Date.now()}`, // Temporary ID, real one set by reducer logic for new items
+            assignmentId, 
+            studentId, 
+            fileUrl: downloadURL, 
+            fileName,
+            submittedAt: new Date().toISOString(), // ensure submittedAt is present
+        } as Submission // Cast to Submission if content is optional
+    });
     return { fileUrl: downloadURL, fileName };
-  }, [handleFileUpload]);
+  }, [handleFileUpload, dispatch]);
 
+  const handleBulkCreateStudents = useCallback(async (studentsToCreate: BulkCreateStudentData[]) => {
+    dispatch({ type: ActionType.BULK_CREATE_STUDENTS_REQUEST });
+    const authInstance = getFirebaseAuth();
+    const dbInstance = getFirebaseDb();
+
+    if (!authInstance || !dbInstance) {
+      dispatch({ type: ActionType.BULK_CREATE_STUDENTS_FAILURE, payload: { error: "Firebase services not initialized.", results: [] } });
+      return;
+    }
+
+    const results: BulkCreateStudentsResult = [];
+    const successfullyCreatedUsers: User[] = [];
+
+    for (const studentData of studentsToCreate) {
+      try {
+        const emailExistsLocally = state.users.some(u => u.email === studentData.email);
+        if (emailExistsLocally) {
+          results.push({ success: false, email: studentData.email, error: "Email already exists in local user list." });
+          continue;
+        }
+        
+        if (!studentData.password) {
+          results.push({ success: false, email: studentData.email, error: "Password is required for this user." });
+          continue;
+        }
+
+        const userCredential = await createUserWithEmailAndPassword(authInstance, studentData.email, studentData.password);
+        const firebaseUser = userCredential.user;
+
+        const newUserForFirestore: User = {
+          id: firebaseUser.uid,
+          name: studentData.name,
+          email: firebaseUser.email || studentData.email,
+          role: UserRole.STUDENT,
+          avatarUrl: `https://placehold.co/100x100.png?text=${studentData.name.substring(0, 2).toUpperCase()}`,
+        };
+
+        await setDoc(doc(dbInstance, "users", firebaseUser.uid), newUserForFirestore);
+        successfullyCreatedUsers.push(newUserForFirestore);
+        results.push({ success: true, email: studentData.email, userId: firebaseUser.uid });
+
+        dispatch({ type: ActionType.ADD_NOTIFICATION, payload: {
+          userId: firebaseUser.uid,
+          type: 'success',
+          message: `Welcome to ${APP_NAME}, ${newUserForFirestore.name}! Your account has been created via bulk upload.`
+        }});
+
+      } catch (error: any) {
+        console.error(`Failed to create user ${studentData.email}:`, error);
+        results.push({ success: false, email: studentData.email, error: error.message || "Failed to create user." });
+      }
+    }
+
+    if (successfullyCreatedUsers.length > 0) {
+      dispatch({ type: ActionType.BULK_CREATE_STUDENTS_SUCCESS, payload: { users: successfullyCreatedUsers, results } });
+      toast({ title: "Bulk Creation Complete", description: `${successfullyCreatedUsers.length} student(s) created. ${results.filter(r => !r.success).length} failed.` });
+    } else if (results.length > 0) {
+      dispatch({ type: ActionType.BULK_CREATE_STUDENTS_FAILURE, payload: { error: "Bulk student creation failed for all entries.", results } });
+      toast({ variant: "destructive", title: "Bulk Creation Failed", description: `No students were successfully created. ${results.filter(r => !r.success).length} attempt(s) failed.` });
+    } else {
+        toast({ title: "Bulk Creation", description: "No students were processed (CSV might be empty or invalid after filtering)."})
+    }
+  }, [state.users, toast, dispatch]);
   
   const contextValue = {
     state,
@@ -762,6 +834,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     handleLessonFileUpload,
     handleAssignmentAttachmentUpload,
     handleStudentSubmissionUpload,
+    handleBulkCreateStudents, // Now correctly included
   };
 
   return (
@@ -778,3 +851,5 @@ export const useAppContext = () => {
   }
   return context;
 };
+
+    
