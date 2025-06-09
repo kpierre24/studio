@@ -1,9 +1,9 @@
 
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ChangeEvent } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
-import type { User, CreateUserPayload, UpdateUserPayload } from '@/types';
+import type { User, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, BulkCreateStudentData } from '@/types';
 import { ActionType, UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,7 +44,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PlusCircle, Edit, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PlusCircle, Edit, Trash2, Eye, EyeOff, UploadCloud, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 type UserFormData = Omit<CreateUserPayload, 'avatarUrl'> & { id?: string; confirmPassword?: string };
@@ -59,7 +60,7 @@ const initialUserFormData: UserFormData = {
 };
 
 export default function AdminUsersPage() {
-  const { state, dispatch } = useAppContext();
+  const { state, dispatch, handleBulkCreateStudents } = useAppContext();
   const { users, currentUser } = state;
   const { toast } = useToast();
 
@@ -69,6 +70,10 @@ export default function AdminUsersPage() {
   const [userFormData, setUserFormData] = useState<UserFormData>(initialUserFormData);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [isBulkCreating, setIsBulkCreating] = useState(false);
+
 
   const handleOpenAddUserModal = () => {
     setUserFormData(initialUserFormData);
@@ -81,9 +86,9 @@ export default function AdminUsersPage() {
     setUserFormData({
       id: user.id,
       name: user.name,
-      email: user.email, // Email is typically not editable for existing users or handled differently
+      email: user.email, 
       role: user.role,
-      password: '', // Don't prefill password for editing
+      password: '', 
       confirmPassword: '',
     });
     setIsEditUserModalOpen(true);
@@ -103,7 +108,7 @@ export default function AdminUsersPage() {
       toast({ title: "Validation Error", description: "Name and Email are required.", variant: "destructive" });
       return false;
     }
-    if (!userFormData.id) { // Only for new users
+    if (!userFormData.id) { 
         if (!userFormData.password) {
             toast({ title: "Validation Error", description: "Password is required for new users.", variant: "destructive" });
             return false;
@@ -137,14 +142,13 @@ export default function AdminUsersPage() {
     if (!userFormData.id) return;
     if (!userFormData.name.trim()) {
          toast({ title: "Validation Error", description: "Name cannot be empty.", variant: "destructive" });
-         return false;
+         return; // Changed from false to void
     }
     
     const payload: UpdateUserPayload = {
       id: userFormData.id,
       name: userFormData.name,
       role: userFormData.role,
-      // Email and password changes would typically be separate, more secure flows
     };
     dispatch({ type: ActionType.UPDATE_USER, payload });
     setIsEditUserModalOpen(false);
@@ -157,8 +161,105 @@ export default function AdminUsersPage() {
       return;
     }
     dispatch({ type: ActionType.DELETE_USER, payload: { id: userId } });
-    setUserToDelete(null); // Close confirmation dialog
+    setUserToDelete(null); 
   };
+
+  const handleCsvFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setCsvFile(event.target.files[0]);
+    } else {
+      setCsvFile(null);
+    }
+  };
+
+  const handleProcessCsvUpload = async () => {
+    if (!csvFile) {
+      toast({ title: "No File", description: "Please select a CSV file to upload.", variant: "destructive" });
+      return;
+    }
+    setIsBulkCreating(true);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const text = e.target?.result as string;
+      if (!text) {
+        toast({ title: "File Read Error", description: "Could not read the CSV file.", variant: "destructive" });
+        setIsBulkCreating(false);
+        return;
+      }
+      const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== ''); // Filter out empty lines
+      if (lines.length < 2) {
+        toast({ title: "Invalid CSV", description: "CSV file must have a header and at least one data row.", variant: "destructive" });
+        setIsBulkCreating(false);
+        return;
+      }
+
+      const header = lines[0].split(',').map(h => h.trim().toLowerCase());
+      const emailIndex = header.indexOf('email');
+      const passwordIndex = header.indexOf('password');
+      let nameIndex = header.indexOf('name');
+      let firstNameIndex = header.indexOf('firstname');
+      let lastNameIndex = header.indexOf('lastname');
+
+      if (emailIndex === -1 || passwordIndex === -1) {
+        toast({ title: "Invalid CSV Header", description: "CSV must contain 'email' and 'password' columns.", variant: "destructive" });
+        setIsBulkCreating(false);
+        return;
+      }
+      if (nameIndex === -1 && (firstNameIndex === -1 || lastNameIndex === -1)) {
+        toast({ title: "Invalid CSV Header", description: "CSV must contain either a 'name' column or both 'firstname' and 'lastname' columns.", variant: "destructive" });
+        setIsBulkCreating(false);
+        return;
+      }
+
+
+      const studentsToCreate: BulkCreateStudentData[] = [];
+      for (let i = 1; i < lines.length; i++) {
+        const data = lines[i].split(',').map(d => d.trim());
+        const email = data[emailIndex];
+        const password = data[passwordIndex];
+        let name: string;
+
+        if (nameIndex !== -1) {
+          name = data[nameIndex];
+        } else {
+          // Construct name from firstname and lastname
+          const firstName = data[firstNameIndex];
+          const lastName = data[lastNameIndex];
+          if (!firstName || !lastName) {
+             toast({ title: "Row Error", description: `Row ${i + 1}: Missing firstname or lastname. Skipping.`, variant: "destructive" });
+             continue;
+          }
+          name = `${firstName} ${lastName}`;
+        }
+        
+        if (!name || !email || !password) {
+          toast({ title: "Row Error", description: `Row ${i + 1}: Missing name, email, or password. Skipping.`, variant: "destructive" });
+          continue;
+        }
+        if (!/\S+@\S+\.\S+/.test(email)) {
+          toast({ title: "Row Error", description: `Row ${i + 1}: Invalid email format for ${email}. Skipping.`, variant: "destructive" });
+          continue;
+        }
+        studentsToCreate.push({ name, email, password });
+      }
+
+      if (studentsToCreate.length > 0) {
+        await handleBulkCreateStudents(studentsToCreate);
+      } else {
+        toast({ title: "No Valid Students", description: "No valid student data found in the CSV to process.", variant: "default" });
+      }
+      setCsvFile(null); // Reset file input
+      const fileInput = document.getElementById('csv-upload-input') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+      setIsBulkCreating(false);
+    };
+    reader.onerror = () => {
+        toast({ title: "File Read Error", description: "Error reading the CSV file contents.", variant: "destructive" });
+        setIsBulkCreating(false);
+    }
+    reader.readAsText(csvFile);
+  };
+
 
   return (
     <div className="space-y-6">
@@ -187,7 +288,7 @@ export default function AdminUsersPage() {
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="password_add" className="text-right">Password</Label>
                 <div className="col-span-3 relative">
-                    <Input id="password_add" name="password" type={showPassword ? "text" : "password"} value={userFormData.password} onChange={handleFormChange} />
+                    <Input id="password_add" name="password" type={showPassword ? "text" : "password"} value={userFormData.password || ''} onChange={handleFormChange} />
                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)}>
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
@@ -196,7 +297,7 @@ export default function AdminUsersPage() {
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="confirmPassword_add" className="text-right">Confirm Pwd</Label>
                  <div className="col-span-3 relative">
-                    <Input id="confirmPassword_add" name="confirmPassword" type={showConfirmPassword ? "text" : "password"} value={userFormData.confirmPassword} onChange={handleFormChange} />
+                    <Input id="confirmPassword_add" name="confirmPassword" type={showConfirmPassword ? "text" : "password"} value={userFormData.confirmPassword || ''} onChange={handleFormChange} />
                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
                         {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
@@ -224,6 +325,33 @@ export default function AdminUsersPage() {
         </Dialog>
       </div>
 
+      <Card>
+        <CardHeader>
+            <CardTitle>Bulk Add Students via CSV</CardTitle>
+            <CardDescription>
+                Upload a CSV file with student data. Columns must include a header row with 'email', 'password', and either 'name' or both 'firstname' and 'lastname'. All users will be created with the 'Student' role.
+            </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+            <div>
+                <Label htmlFor="csv-upload-input">CSV File</Label>
+                <Input 
+                    id="csv-upload-input" 
+                    type="file" 
+                    accept=".csv" 
+                    onChange={handleCsvFileChange} 
+                    className="mt-1"
+                    disabled={isBulkCreating}
+                />
+            </div>
+            <Button onClick={handleProcessCsvUpload} disabled={!csvFile || isBulkCreating} className="w-full sm:w-auto">
+                {isBulkCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                {isBulkCreating ? "Processing..." : "Upload & Create Students"}
+            </Button>
+        </CardContent>
+      </Card>
+
+
       <Table>
         <TableHeader>
           <TableRow>
@@ -243,9 +371,9 @@ export default function AdminUsersPage() {
               <TableCell>{user.email}</TableCell>
               <TableCell>
                 <span className={`px-2 py-1 text-xs rounded-full ${
-                  user.role === UserRole.SUPER_ADMIN ? 'bg-red-100 text-red-700' :
-                  user.role === UserRole.TEACHER ? 'bg-blue-100 text-blue-700' :
-                  'bg-green-100 text-green-700'
+                  user.role === UserRole.SUPER_ADMIN ? 'bg-red-100 text-red-700 dark:bg-red-700/30 dark:text-red-200' :
+                  user.role === UserRole.TEACHER ? 'bg-blue-100 text-blue-700 dark:bg-blue-700/30 dark:text-blue-200' :
+                  'bg-green-100 text-green-700 dark:bg-green-700/30 dark:text-green-200'
                 }`}>
                   {user.role}
                 </span>
