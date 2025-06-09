@@ -23,13 +23,13 @@ import { formatDistanceToNowStrict } from 'date-fns';
 
 
 export function Navbar() {
-  const { state, dispatch } = useAppContext();
+  const { state, dispatch, handleLogoutUser: contextHandleLogoutUser } = useAppContext(); // Renamed to avoid conflict in this file
   const { currentUser, notifications } = state;
   const router = useRouter();
 
-  const handleLogout = () => {
-    dispatch({ type: ActionType.LOGOUT_USER });
-    router.push('/auth');
+  const handleLogout = async () => {
+    await contextHandleLogoutUser(); // Use the async logout handler from context
+    router.push('/auth'); // Explicitly redirect to auth page after logout completes
   };
 
   const unreadNotificationsCount = notifications.filter(n => !n.read).length;
@@ -204,3 +204,5 @@ export function Navbar() {
     </nav>
   );
 }
+
+    
