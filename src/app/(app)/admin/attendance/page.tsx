@@ -13,13 +13,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CalendarCheck, Users, BookOpen, Filter, CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { format } from 'date-fns';
 
+const ALL_COURSES_VALUE = "all_courses";
+const ALL_STATUSES_VALUE = "all_statuses";
+
 export default function AdminAttendancePage() {
   const { state } = useAppContext();
   const { attendanceRecords, users, courses } = state;
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCourse, setSelectedCourse] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedCourse, setSelectedCourse] = useState(ALL_COURSES_VALUE);
+  const [selectedStatus, setSelectedStatus] = useState(ALL_STATUSES_VALUE);
 
   const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'Unknown User';
   const getCourseName = (courseId: string) => courses.find(c => c.id === courseId)?.name || 'Unknown Course';
@@ -32,8 +35,8 @@ export default function AdminAttendancePage() {
         const term = searchTerm.toLowerCase();
         
         const matchesSearch = studentName.includes(term) || courseName.includes(term) || ar.date.includes(term);
-        const matchesCourse = selectedCourse ? ar.courseId === selectedCourse : true;
-        const matchesStatus = selectedStatus ? ar.status === selectedStatus : true;
+        const matchesCourse = selectedCourse === ALL_COURSES_VALUE ? true : ar.courseId === selectedCourse;
+        const matchesStatus = selectedStatus === ALL_STATUSES_VALUE ? true : ar.status === selectedStatus;
         
         return matchesSearch && matchesCourse && matchesStatus;
       })
@@ -79,7 +82,7 @@ export default function AdminAttendancePage() {
                 <SelectValue placeholder="Filter by Course" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Courses</SelectItem>
+                <SelectItem value={ALL_COURSES_VALUE}>All Courses</SelectItem>
                 {courses.map(course => (
                   <SelectItem key={course.id} value={course.id}>{course.name}</SelectItem>
                 ))}
@@ -90,7 +93,7 @@ export default function AdminAttendancePage() {
                 <SelectValue placeholder="Filter by Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Statuses</SelectItem>
+                <SelectItem value={ALL_STATUSES_VALUE}>All Statuses</SelectItem>
                 {Object.values(AttendanceStatus).map(status => (
                   <SelectItem key={status} value={status}>{status}</SelectItem>
                 ))}
@@ -135,3 +138,4 @@ export default function AdminAttendancePage() {
     </div>
   );
 }
+
