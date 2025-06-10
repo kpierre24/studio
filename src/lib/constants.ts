@@ -237,5 +237,4 @@ export const SAMPLE_ANNOUNCEMENTS: Announcement[] = [
     link: '/student/payments'
   },
 ];
-
     
