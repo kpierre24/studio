@@ -65,16 +65,16 @@ export const SAMPLE_USERS: User[] = [
   ...SAMPLE_STUDENTS,
 ];
 
-// Get all student IDs for easier enrollment
-const allStudentIds = SAMPLE_STUDENTS.map(student => student.id);
+// Get all student IDs directly from SAMPLE_USERS by filtering for UserRole.STUDENT
+const allStudentUserIds = SAMPLE_USERS.filter(user => user.role === UserRole.STUDENT).map(student => student.id);
 
 export const SAMPLE_COURSES: Course[] = [
   {
     id: 'course-1',
-    name: 'Introduction to Programming (School of Ministry)', // Renamed for clarity
+    name: 'Introduction to Programming (School of Ministry)',
     description: 'Learn the fundamentals of programming using JavaScript. This is the core School of Ministry course.',
     teacherId: 'user-teacher-1',
-    studentIds: allStudentIds, // Enroll all sample students
+    studentIds: allStudentUserIds, // Enroll all users with role STUDENT
     category: 'Computer Science',
     cost: 100,
     prerequisites: [],
@@ -84,7 +84,7 @@ export const SAMPLE_COURSES: Course[] = [
     name: 'Advanced Mathematics',
     description: 'Explore complex mathematical concepts.',
     teacherId: 'user-teacher-2',
-    studentIds: ['user-student-1'], // Kept specific enrollment for this course
+    studentIds: ['user-student-1'], // Specific enrollment for this course can remain if intended
     category: 'Mathematics',
     cost: 150,
     prerequisites: ['course-1'],
@@ -198,7 +198,7 @@ export const SAMPLE_NOTIFICATIONS: NotificationMessage[] = [];
 
 
 export const INITIAL_ENROLLMENTS: Enrollment[] = SAMPLE_COURSES.flatMap(course =>
-  (course.studentIds || []).map(studentId => ({ // Added null check for studentIds defensively
+  (course.studentIds || []).map(studentId => ({
     id: `enroll-${course.id}-${studentId}`,
     studentId,
     courseId: course.id,
@@ -237,3 +237,5 @@ export const SAMPLE_ANNOUNCEMENTS: Announcement[] = [
     link: '/student/payments'
   },
 ];
+
+    
