@@ -94,37 +94,35 @@ const autoGradeQuizAnswer = (question: QuizQuestion, studentAnswer: string | str
 const appReducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
     case ActionType.LOAD_DATA: {
-      const loadedSubmissions = (action.payload.submissions || (state.submissions.length === 0 ? SAMPLE_SUBMISSIONS : state.submissions)).map(submission => {
-        if (submission.assignmentId) {
-          const assignment = (action.payload.assignments || (state.assignments.length === 0 ? SAMPLE_ASSIGNMENTS : state.assignments)).find(a => a.id === submission.assignmentId);
-          if (assignment && assignment.type === AssignmentType.QUIZ && submission.quizAnswers && assignment.questions) {
-            let calculatedGrade = 0;
-            const updatedQuizAnswers = submission.quizAnswers.map(qa => {
-              const question = assignment.questions!.find(q => q.id === qa.questionId);
-              if (question) {
-                const { isCorrect, score } = autoGradeQuizAnswer(question, qa.studentAnswer);
-                calculatedGrade += score;
-                return { ...qa, isCorrect, autoGradeScore: score };
-              }
-              return qa;
-            });
-            return { ...submission, quizAnswers: updatedQuizAnswers, grade: submission.grade ?? calculatedGrade };
-          }
-        }
-        return submission;
-      });
-
       return {
         ...state,
-        courses: action.payload.courses || (state.courses.length === 0 && !state.currentUser ? SAMPLE_COURSES : state.courses),
-        lessons: action.payload.lessons || (state.lessons.length === 0 && !state.currentUser ? SAMPLE_LESSONS : state.lessons),
-        assignments: action.payload.assignments || (state.assignments.length === 0 && !state.currentUser ? SAMPLE_ASSIGNMENTS : state.assignments),
-        submissions: loadedSubmissions,
-        enrollments: action.payload.enrollments || (state.enrollments.length === 0 && !state.currentUser ? INITIAL_ENROLLMENTS : state.enrollments),
-        attendanceRecords: action.payload.attendanceRecords || (state.attendanceRecords.length === 0 && !state.currentUser ? SAMPLE_ATTENDANCE : state.attendanceRecords),
-        payments: action.payload.payments || (state.payments.length === 0 && !state.currentUser ? SAMPLE_PAYMENTS : state.payments),
-        notifications: action.payload.notifications || (state.notifications.length === 0 && !state.currentUser ? SAMPLE_NOTIFICATIONS : state.notifications),
-        announcements: action.payload.announcements || (state.announcements.length === 0 && !state.currentUser ? SAMPLE_ANNOUNCEMENTS : state.announcements),
+        courses: action.payload.courses || (state.courses.length === 0 ? SAMPLE_COURSES : state.courses),
+        lessons: action.payload.lessons || (state.lessons.length === 0 ? SAMPLE_LESSONS : state.lessons),
+        assignments: action.payload.assignments || (state.assignments.length === 0 ? SAMPLE_ASSIGNMENTS : state.assignments),
+        submissions: (action.payload.submissions || (state.submissions.length === 0 ? SAMPLE_SUBMISSIONS : state.submissions)).map(submission => {
+          if (submission.assignmentId) {
+            const assignment = (action.payload.assignments || (state.assignments.length === 0 ? SAMPLE_ASSIGNMENTS : state.assignments)).find(a => a.id === submission.assignmentId);
+            if (assignment && assignment.type === AssignmentType.QUIZ && submission.quizAnswers && assignment.questions) {
+              let calculatedGrade = 0;
+              const updatedQuizAnswers = submission.quizAnswers.map(qa => {
+                const question = assignment.questions!.find(q => q.id === qa.questionId);
+                if (question) {
+                  const { isCorrect, score } = autoGradeQuizAnswer(question, qa.studentAnswer);
+                  calculatedGrade += score;
+                  return { ...qa, isCorrect, autoGradeScore: score };
+                }
+                return qa;
+              });
+              return { ...submission, quizAnswers: updatedQuizAnswers, grade: submission.grade ?? calculatedGrade };
+            }
+          }
+          return submission;
+        }),
+        enrollments: action.payload.enrollments || (state.enrollments.length === 0 ? INITIAL_ENROLLMENTS : state.enrollments),
+        attendanceRecords: action.payload.attendanceRecords || (state.attendanceRecords.length === 0 ? SAMPLE_ATTENDANCE : state.attendanceRecords),
+        payments: action.payload.payments || (state.payments.length === 0 ? SAMPLE_PAYMENTS : state.payments),
+        notifications: action.payload.notifications || (state.notifications.length === 0 ? SAMPLE_NOTIFICATIONS : state.notifications),
+        announcements: action.payload.announcements || (state.announcements.length === 0 ? SAMPLE_ANNOUNCEMENTS : state.announcements),
       };
     }
     
@@ -382,7 +380,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
       return {
         ...state,
-        submissions: [...state.submissions, newSubmission],
+        submissions: [...state.submissions.filter(s => s.id !== newSubmission.id), newSubmission], // Replace if exists, else add
         notifications: notifications.slice(0,20),
         isLoading: false, error: null,
         successMessage: `Assignment submitted successfully.`,
@@ -720,300 +718,89 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         userId: firebaseUser.uid, type: 'success',
         message: `Welcome to ${APP_NAME}, ${newUserForFirestore.name}! Account created.`
       }});
-    } catch (error: any) {
-      dispatch({ type: ActionType.REGISTER_STUDENT_FAILURE, payload: error.message || "Failed to register." });
-    }
-  }, [dispatch]);
+    } catch (error: any)      dispatch({ type: ActionType.CREATE_LESSON_REQUEST });
+      const db = getFirebaseDb();
+      if (!db) {
+        dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: "Firestore not available." });
+        return;
+      }
+      let uploadedFileUrl = payload.fileUrl;
+      let uploadedFileName = payload.fileName;
 
-  const handleLogoutUser = useCallback(async () => {
-    dispatch({ type: ActionType.LOGOUT_USER_REQUEST });
-    const authInstance = getFirebaseAuth();
-    if (!authInstance) {
-      dispatch({ type: ActionType.LOGOUT_USER_FAILURE, payload: "Firebase Auth not initialized." });
-      return;
-    }
-    try {
-      await signOut(authInstance);
-      dispatch({ type: ActionType.LOGOUT_USER_SUCCESS }); 
-    } catch (error: any) {
-      dispatch({ type: ActionType.LOGOUT_USER_FAILURE, payload: error.message || "Failed to logout." });
-    }
-  }, [dispatch]);
-
-  const handleFileUpload = useCallback(async (path: string, file: File) => {
-    const storage = getFirebaseStorage();
-    if (!storage) throw new Error("Firebase Storage not initialized.");
-    if (!file) throw new Error("No file provided for upload.");
-    const fileRef = storageRef(storage, path);
-    await uploadBytes(fileRef, file);
-    const downloadURL = await getDownloadURL(fileRef);
-    return { downloadURL, fileName: file.name };
-  }, []);
-
-  const handleLessonFileUpload = useCallback(async (courseId: string, lessonId: string, file: File) => {
-    const path = `lessons/${courseId}/${lessonId}/${file.name}`;
-    const { downloadURL, fileName } = await handleFileUpload(path, file);
-    return { fileUrl: downloadURL, fileName };
-  }, [handleFileUpload]);
-
-  const handleAssignmentAttachmentUpload = useCallback(async (courseId: string, assignmentId: string, file: File) => {
-    const path = `assignment_attachments/${courseId}/${assignmentId}/${file.name}`;
-    const { downloadURL, fileName } = await handleFileUpload(path, file);
-    return { assignmentFileUrl: downloadURL, assignmentFileName: fileName };
-  }, [handleFileUpload]);
-  
-  const handleStudentSubmissionUpload = useCallback(async (courseId: string, assignmentId: string, studentId: string, file: File) => {
-    const path = `submissions/${courseId}/${assignmentId}/${studentId}/${file.name}`;
-    const { downloadURL, fileName } = await handleFileUpload(path, file);
-    return { fileUrl: downloadURL, fileName };
-  }, [handleFileUpload]);
-
-  const handleBulkCreateStudents = useCallback(async (studentsToCreate: BulkCreateStudentData[]) => {
-    dispatch({ type: ActionType.BULK_CREATE_STUDENTS_REQUEST });
-    const authInstance = getFirebaseAuth();
-    const dbInstance = getFirebaseDb();
-    if (!authInstance || !dbInstance) {
-      dispatch({ type: ActionType.BULK_CREATE_STUDENTS_FAILURE, payload: { error: "Firebase services not initialized.", results: [] } });
-      return;
-    }
-    const results: BulkCreateStudentsResultItem[] = [];
-    const successfullyCreatedUsers: User[] = [];
-    for (const studentData of studentsToCreate) {
+      if (payload.file) {
+        try {
+          const { fileUrl: newFileUrl, fileName: newFileName } = await handleLessonFileUpload(payload.courseId, payload.id || `new-${Date.now()}`, payload.file);
+          uploadedFileUrl = newFileUrl;
+          uploadedFileName = newFileName;
+        } catch (error: any) {
+          dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: error.message || "Failed to upload lesson file." });
+          return;
+        }
+      }
+      
       try {
-        const usersCol = collection(dbInstance, "users");
-        const q = query(usersCol, where("email", "==", studentData.email));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
-          results.push({ success: false, email: studentData.email, error: "Email already exists in database." });
-          continue;
-        }
-
-        if (!studentData.password) {
-          results.push({ success: false, email: studentData.email, error: "Password required." });
-          continue;
-        }
-        const userCredential = await createUserWithEmailAndPassword(authInstance, studentData.email, studentData.password);
-        const firebaseUser = userCredential.user;
-        const newUserForFirestore: User = {
-          id: firebaseUser.uid, name: studentData.name, email: firebaseUser.email || studentData.email,
-          role: UserRole.STUDENT, avatarUrl: `https://placehold.co/100x100.png?text=${studentData.name.substring(0, 2).toUpperCase()}`,
+        const lessonId = payload.id || doc(collection(db, "courses", payload.courseId, "lessons")).id;
+        const newLesson: Lesson = { 
+          id: lessonId,
+          courseId: payload.courseId,
+          title: payload.title,
+          contentMarkdown: payload.contentMarkdown,
+          videoUrl: payload.videoUrl,
+          order: payload.order,
+          fileUrl: uploadedFileUrl,
+          fileName: uploadedFileName,
         };
-        await setDoc(doc(dbInstance, "users", firebaseUser.uid), newUserForFirestore);
-        successfullyCreatedUsers.push(newUserForFirestore);
-        results.push({ success: true, email: studentData.email, userId: firebaseUser.uid });
-        dispatch({ type: ActionType.ADD_NOTIFICATION, payload: {
-          userId: firebaseUser.uid, type: 'success', message: `Welcome ${newUserForFirestore.name}!`
-        }});
+        await setDoc(doc(db, "courses", payload.courseId, "lessons", lessonId), newLesson);
+        dispatch({ type: ActionType.CREATE_LESSON_SUCCESS, payload: newLesson });
       } catch (error: any) {
-        results.push({ success: false, email: studentData.email, error: error.message || "Failed to create user." });
+        dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: error.message || "Failed to create lesson."});
       }
-    }
-    if (successfullyCreatedUsers.length > 0) {
-      dispatch({ type: ActionType.BULK_CREATE_STUDENTS_SUCCESS, payload: { users: successfullyCreatedUsers, results } });
-      toast({ title: "Bulk Creation Complete", description: `${successfullyCreatedUsers.length} student(s) created. ${results.filter(r => !r.success).length} failed.` });
-    } else if (results.length > 0 && results.some(r => !r.success)) {
-      dispatch({ type: ActionType.BULK_CREATE_STUDENTS_FAILURE, payload: { error: "Bulk student creation process encountered errors.", results } });
-      toast({ variant: "destructive", title: "Bulk Creation Processed with Errors", description: `No students successfully created. ${results.filter(r => !r.success).length} attempt(s) failed.` });
-    } else if (results.length === 0 && studentsToCreate.length > 0) {
-        toast({ title: "Bulk Creation", description: "No valid students to process or all emails already existed."})
-         dispatch({ type: ActionType.BULK_CREATE_STUDENTS_FAILURE, payload: { error: "No students processed.", results } });
-    } else {
-         toast({ title: "Bulk Creation", description: "No students to process." });
-         dispatch({ type: ActionType.BULK_CREATE_STUDENTS_FAILURE, payload: { error: "No students to process.", results: [] } });
-    }
-  }, [toast, dispatch]);
+    }, [dispatch, handleLessonFileUpload]);
 
-  const handleAdminCreateUser = useCallback(async (payload: CreateUserPayload) => {
-    dispatch({ type: ActionType.CREATE_USER_REQUEST });
-    const db = getFirebaseDb();
-    if (!db) {
-      dispatch({ type: ActionType.CREATE_USER_FAILURE, payload: "Firestore not available." });
-      return;
-    }
-    try {
-      const usersCol = collection(db, "users");
-      const q = query(usersCol, where("email", "==", payload.email));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        dispatch({ type: ActionType.CREATE_USER_FAILURE, payload: "Email already exists." });
-        return;
-      }
-
-      const newUserId = doc(collection(db, "users")).id; 
-      const newUserDoc: User = {
-        id: newUserId,
-        name: payload.name,
-        email: payload.email,
-        role: payload.role,
-        avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png?text=${payload.name.substring(0,2).toUpperCase()}`,
-      };
-      await setDoc(doc(db, "users", newUserId), newUserDoc);
-      dispatch({ type: ActionType.CREATE_USER_SUCCESS, payload: newUserDoc });
-    } catch (error: any) {
-      dispatch({ type: ActionType.CREATE_USER_FAILURE, payload: error.message || "Failed to create user document."});
-    }
-  }, [dispatch]);
-
-  const handleAdminUpdateUser = useCallback(async (payload: UpdateUserPayload) => {
-    dispatch({ type: ActionType.UPDATE_USER_REQUEST });
-    const db = getFirebaseDb();
-    if (!db) {
-      dispatch({ type: ActionType.UPDATE_USER_FAILURE, payload: "Firestore not available." });
-      return;
-    }
-    try {
-      const userRef = doc(db, "users", payload.id);
-      const updateData: Partial<User> = { name: payload.name, role: payload.role };
-      if (payload.avatarUrl) updateData.avatarUrl = payload.avatarUrl;
-      
-      await updateDoc(userRef, updateData); 
-      dispatch({ type: ActionType.UPDATE_USER_SUCCESS, payload });
-    } catch (error: any) {
-      dispatch({ type: ActionType.UPDATE_USER_FAILURE, payload: error.message || "Failed to update user."});
-    }
-  }, [dispatch]);
-  
-  const handleAdminDeleteUser = useCallback(async (payload: DeleteUserPayload) => {
-    dispatch({ type: ActionType.DELETE_USER_REQUEST });
-    const db = getFirebaseDb();
-    if (!db) {
-      dispatch({ type: ActionType.DELETE_USER_FAILURE, payload: "Firestore not available." });
-      return;
-    }
-    if (state.currentUser?.id === payload.id) {
-      dispatch({ type: ActionType.DELETE_USER_FAILURE, payload: "Cannot delete your own account."});
-      return;
-    }
-    try {
-      await deleteDoc(doc(db, "users", payload.id));
-      dispatch({ type: ActionType.DELETE_USER_SUCCESS, payload });
-    } catch (error: any) {
-      dispatch({ type: ActionType.DELETE_USER_FAILURE, payload: error.message || "Failed to delete user."});
-    }
-  }, [dispatch, state.currentUser?.id]);
-
-  const handleCreateCourse = useCallback(async (payload: CreateCoursePayload) => {
-    dispatch({ type: ActionType.CREATE_COURSE_REQUEST });
-    const db = getFirebaseDb();
-
-    if (!db) {
-      console.error("handleCreateCourse: Firestore DB instance is not available.");
-      dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: "Database service not available. Please try again later." });
-      return;
-    }
-    if (!state.currentUser) {
-      console.error("handleCreateCourse: Current user is not available.");
-      dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: "User authentication issue. Please re-login and try again." });
-      return;
-    }
-
-    try {
-      const courseId = payload.id && typeof payload.id === 'string' && payload.id.trim() !== '' ? payload.id : doc(collection(db, "courses")).id;
-      const teacherId = state.currentUser.role === UserRole.TEACHER 
-        ? state.currentUser.id 
-        : (payload.teacherId || 'unassigned');
-      
-      const courseToAdd: Course = {
-        name: payload.name,
-        description: payload.description,
-        category: payload.category || '',
-        prerequisites: payload.prerequisites || [],
-        id: courseId,
-        teacherId: teacherId,
-        studentIds: payload.studentIds || [],
-        cost: payload.cost || 0,
-      };
-
-      console.log("Attempting to save course to Firestore:", JSON.stringify(courseToAdd, null, 2));
-      await setDoc(doc(db, "courses", courseId), courseToAdd);
-      console.log("Course saved successfully to Firestore with ID:", courseId);
-
-      dispatch({ type: ActionType.CREATE_COURSE_SUCCESS, payload: courseToAdd });
-    } catch (error: any) {
-      console.error("Firestore Error - Failed to create course:", error.code, error.message, error);
-      let errorMessage = "Failed to create course. Please check console for details.";
-      if (error.code === 'permission-denied') {
-        errorMessage = "Permission denied. Please check Firestore security rules to allow course creation.";
-      } else if (error.message) {
-        errorMessage = `Failed to create course: ${error.message}`;
-      }
-      dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: errorMessage });
-    }
-  }, [dispatch, state.currentUser]);
-
-  const handleUpdateCourse = useCallback(async (payload: UpdateCoursePayload) => {
-    dispatch({ type: ActionType.UPDATE_COURSE_REQUEST });
-    const db = getFirebaseDb();
-    if (!db) {
-      dispatch({ type: ActionType.UPDATE_COURSE_FAILURE, payload: "Firestore not available." });
-      return;
-    }
-    try {
-      const courseRef = doc(db, "courses", payload.id);
-      const updateData: Partial<Course> = { ...payload };
-      delete updateData.id; 
-      await updateDoc(courseRef, updateData as any); 
-      dispatch({ type: ActionType.UPDATE_COURSE_SUCCESS, payload });
-    } catch (error: any) {
-      dispatch({ type: ActionType.UPDATE_COURSE_FAILURE, payload: error.message || "Failed to update course."});
-    }
-  }, [dispatch]);
-
-  const handleDeleteCourse = useCallback(async (payload: DeleteCoursePayload) => {
-    dispatch({ type: ActionType.DELETE_COURSE_REQUEST });
-    const db = getFirebaseDb();
-    if (!db) {
-      dispatch({ type: ActionType.DELETE_COURSE_FAILURE, payload: "Firestore not available." });
-      return;
-    }
-    try {
-      const courseDoc = state.courses.find(c => c.id === payload.id);
-      if (courseDoc && courseDoc.studentIds.length > 0 && state.currentUser?.role !== UserRole.SUPER_ADMIN) {
-        dispatch({ type: ActionType.DELETE_COURSE_FAILURE, payload: "Course has students. Only Super Admin can delete." });
-        return;
-      }
-      await deleteDoc(doc(db, "courses", payload.id));
-      dispatch({ type: ActionType.DELETE_COURSE_SUCCESS, payload });
-    } catch (error: any) {
-      dispatch({ type: ActionType.DELETE_COURSE_FAILURE, payload: error.message || "Failed to delete course."});
-    }
-  }, [dispatch, state.courses, state.currentUser?.role]);
-
-  const handleCreateLesson = useCallback(async (payload: CreateLessonPayload) => {
-    dispatch({ type: ActionType.CREATE_LESSON_REQUEST });
-    const db = getFirebaseDb();
-    if (!db) {
-      dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: "Firestore not available." });
-      return;
-    }
-    try {
-      const lessonId = doc(collection(db, "courses", payload.courseId, "lessons")).id;
-      const newLesson: Lesson = { ...payload, id: lessonId };
-      await setDoc(doc(db, "courses", payload.courseId, "lessons", lessonId), newLesson);
-      dispatch({ type: ActionType.CREATE_LESSON_SUCCESS, payload: newLesson });
-    } catch (error: any) {
-      dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: error.message || "Failed to create lesson."});
-    }
-  }, [dispatch]);
-
-  const handleUpdateLesson = useCallback(async (payload: UpdateLessonPayload) => {
+  const handleUpdateLesson = useCallback(async (payload: UpdateLessonPayload & { file?: File | null }) => {
     dispatch({ type: ActionType.UPDATE_LESSON_REQUEST });
     const db = getFirebaseDb();
     if (!db || !payload.courseId) {
       dispatch({ type: ActionType.UPDATE_LESSON_FAILURE, payload: "Firestore or courseId not available." });
       return;
     }
+    
+    let uploadedFileUrl = payload.fileUrl;
+    let uploadedFileName = payload.fileName;
+
+    if (payload.file) { // New file uploaded
+      try {
+        const { fileUrl: newFileUrl, fileName: newFileName } = await handleLessonFileUpload(payload.courseId, payload.id, payload.file);
+        uploadedFileUrl = newFileUrl;
+        uploadedFileName = newFileName;
+      } catch (error: any) {
+        dispatch({ type: ActionType.UPDATE_LESSON_FAILURE, payload: error.message || "Failed to upload new lesson file." });
+        return;
+      }
+    } else if (payload.file === null && payload.fileUrl === undefined) { // File explicitly removed
+        uploadedFileUrl = undefined;
+        uploadedFileName = undefined;
+        // Potentially delete old file from storage here if needed, but requires old file path.
+        // For now, just removes the reference from Firestore.
+    }
+
+
     try {
       const lessonRef = doc(db, "courses", payload.courseId, "lessons", payload.id);
-      const updateData: Partial<Lesson> = { ...payload };
-      delete updateData.id;
-      delete updateData.courseId; 
-      await updateDoc(lessonRef, updateData as any);
-      dispatch({ type: ActionType.UPDATE_LESSON_SUCCESS, payload });
+      const updateData: Partial<Lesson> = { 
+        title: payload.title,
+        contentMarkdown: payload.contentMarkdown,
+        videoUrl: payload.videoUrl,
+        order: payload.order,
+        fileUrl: uploadedFileUrl,
+        fileName: uploadedFileName,
+       };
+      await updateDoc(lessonRef, updateData);
+      dispatch({ type: ActionType.UPDATE_LESSON_SUCCESS, payload: { ...payload, fileUrl: uploadedFileUrl, fileName: uploadedFileName } });
     } catch (error: any) {
       dispatch({ type: ActionType.UPDATE_LESSON_FAILURE, payload: error.message || "Failed to update lesson."});
     }
-  }, [dispatch]);
+  }, [dispatch, handleLessonFileUpload]);
   
   const handleDeleteLesson = useCallback(async (payload: DeleteLessonPayload) => {
     dispatch({ type: ActionType.DELETE_LESSON_REQUEST });
@@ -1023,6 +810,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
+      // Optionally: Delete file from Firebase Storage if fileUrl exists
+      // const lessonDoc = state.lessons.find(l => l.id === payload.id && l.courseId === payload.courseId);
+      // if (lessonDoc && lessonDoc.fileUrl) {
+      //   const fileStorageRef = storageRef(getFirebaseStorage()!, lessonDoc.fileUrl);
+      //   try { await deleteObject(fileStorageRef); } catch (e) { console.warn("Could not delete lesson file from storage", e); }
+      // }
       await deleteDoc(doc(db, "courses", payload.courseId, "lessons", payload.id));
       dispatch({ type: ActionType.DELETE_LESSON_SUCCESS, payload });
     } catch (error: any) {
@@ -1037,14 +830,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.CREATE_ASSIGNMENT_FAILURE, payload: "Firestore not available." });
       return;
     }
+
+    let uploadedFileUrl = payload.assignmentFileUrl;
+    let uploadedFileName = payload.assignmentFileName;
+
+    if (payload.assignmentFile) {
+        try {
+            const { assignmentFileUrl: newFileUrl, assignmentFileName: newFileName } = await handleAssignmentAttachmentUpload(payload.courseId, payload.id || `new-${Date.now()}`, payload.assignmentFile);
+            uploadedFileUrl = newFileUrl;
+            uploadedFileName = newFileName;
+        } catch (error: any) {
+            dispatch({ type: ActionType.CREATE_ASSIGNMENT_FAILURE, payload: error.message || "Failed to upload assignment attachment."});
+            return;
+        }
+    }
+    
     try {
-      const assignmentId = doc(collection(db, "courses", payload.courseId, "assignments")).id;
+      const assignmentId = payload.id || doc(collection(db, "courses", payload.courseId, "assignments")).id;
       let totalPoints = 0;
       if (payload.type === AssignmentType.QUIZ && payload.questions) {
         totalPoints = payload.questions.reduce((sum, q) => sum + q.points, 0);
       } else if (payload.type === AssignmentType.STANDARD && payload.rubric) {
         totalPoints = payload.rubric.reduce((sum, r) => sum + r.points, 0);
-      } else if (payload.manualTotalPoints) {
+      } else if (payload.manualTotalPoints !== undefined) {
         totalPoints = payload.manualTotalPoints;
       }
       const newAssignment: Assignment = {
@@ -1052,6 +860,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: assignmentId,
         totalPoints,
         questions: payload.questions?.map(q => ({...q, id: q.id || doc(collection(db, "temp")).id , assignmentId: assignmentId})),
+        assignmentFileUrl: uploadedFileUrl,
+        assignmentFileName: uploadedFileName,
       };
       delete (newAssignment as any).assignmentFile; 
       delete (newAssignment as any).manualTotalPoints;
@@ -1061,7 +871,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error: any) {
       dispatch({ type: ActionType.CREATE_ASSIGNMENT_FAILURE, payload: error.message || "Failed to create assignment."});
     }
-  }, [dispatch]);
+  }, [dispatch, handleAssignmentAttachmentUpload]);
 
   const handleUpdateAssignment = useCallback(async (payload: UpdateAssignmentPayload) => {
     dispatch({ type: ActionType.UPDATE_ASSIGNMENT_REQUEST });
@@ -1070,6 +880,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.UPDATE_ASSIGNMENT_FAILURE, payload: "Firestore or courseId not available." });
       return;
     }
+
+    let uploadedFileUrl = payload.assignmentFileUrl;
+    let uploadedFileName = payload.assignmentFileName;
+    
+    if (payload.assignmentFile) {
+        try {
+            const { assignmentFileUrl: newFileUrl, assignmentFileName: newFileName } = await handleAssignmentAttachmentUpload(payload.courseId, payload.id, payload.assignmentFile);
+            uploadedFileUrl = newFileUrl;
+            uploadedFileName = newFileName;
+        } catch (error: any) {
+            dispatch({ type: ActionType.UPDATE_ASSIGNMENT_FAILURE, payload: error.message || "Failed to upload new assignment attachment." });
+            return;
+        }
+    } else if (payload.assignmentFile === null && payload.assignmentFileUrl === undefined) { 
+        uploadedFileUrl = undefined;
+        uploadedFileName = undefined;
+    }
+
     try {
       const assignmentRef = doc(db, "courses", payload.courseId, "assignments", payload.id);
       let totalPoints = payload.totalPoints; 
@@ -1080,18 +908,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else if (payload.type === AssignmentType.STANDARD && payload.rubric) {
           totalPoints = payload.rubric.reduce((sum, r) => sum + r.points, 0);
       }
-      const updateData: Partial<Assignment> = { ...payload, totalPoints };
+      const updateData: Partial<Assignment> = { 
+        ...payload, 
+        totalPoints,
+        assignmentFileUrl: uploadedFileUrl,
+        assignmentFileName: uploadedFileName,
+       };
       delete updateData.id;
       delete updateData.courseId;
       delete (updateData as any).assignmentFile;
       delete (updateData as any).manualTotalPoints;
 
       await updateDoc(assignmentRef, updateData as any);
-      dispatch({ type: ActionType.UPDATE_ASSIGNMENT_SUCCESS, payload });
+      dispatch({ type: ActionType.UPDATE_ASSIGNMENT_SUCCESS, payload: { ...payload, assignmentFileUrl: uploadedFileUrl, assignmentFileName: uploadedFileName, totalPoints: totalPoints } });
     } catch (error: any) {
       dispatch({ type: ActionType.UPDATE_ASSIGNMENT_FAILURE, payload: error.message || "Failed to update assignment."});
     }
-  }, [dispatch]);
+  }, [dispatch, handleAssignmentAttachmentUpload]);
 
   const handleDeleteAssignment = useCallback(async (payload: DeleteAssignmentPayload) => {
     dispatch({ type: ActionType.DELETE_ASSIGNMENT_REQUEST });
@@ -1102,6 +935,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       await deleteDoc(doc(db, "courses", payload.courseId, "assignments", payload.id));
+      // Potentially delete associated submissions and files from storage
       dispatch({ type: ActionType.DELETE_ASSIGNMENT_SUCCESS, payload });
     } catch (error: any) {
       dispatch({ type: ActionType.DELETE_ASSIGNMENT_FAILURE, payload: error.message || "Failed to delete assignment."});
@@ -1117,7 +951,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       const assignment = state.assignments.find(a => a.id === payload.assignmentId);
-      if (!assignment) throw new Error("Assignment not found for submission.");
+      if (!assignment || !assignment.courseId) {
+        dispatch({ type: ActionType.SUBMIT_ASSIGNMENT_FAILURE, payload: "Assignment or course context not found for submission." });
+        return;
+      }
 
       const submissionId = payload.id || doc(collection(db, "courses", assignment.courseId, "assignments", payload.assignmentId, "submissions")).id;
       const finalSubmission: Submission = {
@@ -1125,6 +962,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: submissionId,
         submittedAt: payload.submittedAt || new Date().toISOString(),
       };
+      delete (finalSubmission as any).file; // Remove transient file object
 
       await setDoc(doc(db, "courses", assignment.courseId, "assignments", payload.assignmentId, "submissions", submissionId), finalSubmission);
       dispatch({ type: ActionType.SUBMIT_ASSIGNMENT_SUCCESS, payload: finalSubmission });
@@ -1142,9 +980,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       const submission = state.submissions.find(s => s.id === payload.submissionId);
-      if (!submission) throw new Error("Submission not found.");
+      if (!submission) {
+        dispatch({ type: ActionType.GRADE_SUBMISSION_FAILURE, payload: "Submission not found." });
+        return;
+      }
       const assignment = state.assignments.find(a => a.id === submission.assignmentId);
-      if (!assignment) throw new Error("Assignment not found for submission.");
+      if (!assignment || !assignment.courseId) {
+         dispatch({ type: ActionType.GRADE_SUBMISSION_FAILURE, payload: "Assignment or course context not found for submission." });
+        return;
+      }
 
       const submissionRef = doc(db, "courses", assignment.courseId, "assignments", submission.assignmentId, "submissions", payload.submissionId);
       await updateDoc(submissionRef, { grade: payload.grade, feedback: payload.feedback });
@@ -1194,4 +1038,3 @@ export const useAppContext = () => {
   }
   return context;
 };
-

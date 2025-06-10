@@ -112,6 +112,7 @@ const getFirebaseStorage = (): FirebaseStorage | null => {
   if (storageSingleton) return storageSingleton;
   const app = getFirebaseAppInstance();
   if (app) {
+    console.log('[Firebase Lib] Configured Storage Bucket from firebaseConfig:', firebaseConfig.storageBucket);
     storageSingleton = getStorage(app);
     // if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
     //   try {
