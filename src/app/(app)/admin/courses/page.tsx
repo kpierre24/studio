@@ -48,6 +48,7 @@ import {
 import { PlusCircle, Edit, Trash2, BookOpen, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { Card, CardContent } from '@/components/ui/card';
 
 interface AdminCourseFormData {
   id?: string;
@@ -109,6 +110,10 @@ export default function AdminCoursesPage() {
     if (!courseFormData.name.trim() || !courseFormData.description.trim()) {
       toast({ title: "Validation Error", description: "Course Name and Description are required.", variant: "destructive" });
       return false;
+    }
+    if (courseFormData.teacherId === 'unassigned') {
+        toast({ title: "Info", description: "Please assign a teacher to this course or acknowledge it's unassigned.", variant: "default"});
+        // Allow unassigned if intended, or make it an error
     }
     return true;
   };
@@ -218,73 +223,79 @@ export default function AdminCoursesPage() {
         </Dialog>
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Teacher</TableHead>
-            <TableHead>Category</TableHead>
-            <TableHead>Students</TableHead>
-            <TableHead>Cost</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {courses.map((course) => (
-            <TableRow key={course.id}>
-              <TableCell className="font-medium">
-                <Link href={`/teacher/courses/${course.id}`} className="hover:underline text-primary">
-                    {course.name}
-                </Link>
-              </TableCell>
-              <TableCell>{getTeacherName(course.teacherId)}</TableCell>
-              <TableCell>{course.category || 'N/A'}</TableCell>
-              <TableCell>{course.studentIds.length}</TableCell>
-              <TableCell>${course.cost || 0}</TableCell>
-              <TableCell className="text-right space-x-2">
-                <Button variant="outline" size="sm" onClick={() => handleOpenCourseModal(course)} disabled={isLoading}>
-                  <Edit className="mr-1 h-4 w-4" /> Edit
-                </Button>
-                <AlertDialog open={!!courseToDelete && courseToDelete.id === course.id} onOpenChange={(isOpen) => !isOpen && setCourseToDelete(null)}>
-                    <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" onClick={() => setCourseToDelete(course)} disabled={isLoading}>
-                            <Trash2 className="mr-1 h-4 w-4" /> Delete
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the course: {courseToDelete?.name}. 
-                            {courseToDelete && courseToDelete.studentIds.length > 0 && <strong className="block mt-2 text-destructive-foreground bg-destructive p-2 rounded-md">Warning: This course has {courseToDelete.studentIds.length} student(s) enrolled. Deletion is blocked. Unenroll students first.</strong>}
-                            Associated lessons and assignments will also be removed. Submissions will remain in the database unless manually cleaned up.
-                        </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setCourseToDelete(null)}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction 
-                            onClick={confirmDeleteCourse}
-                            disabled={(courseToDelete && courseToDelete.studentIds.length > 0) || isLoading}
-                        >
-                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                            Yes, delete course
-                        </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {courses.length === 0 && (
+      {isLoading && courses.length === 0 ? (
+        <p className="text-muted-foreground text-center py-10">Loading courses...</p>
+      ) : courses.length === 0 ? (
         <Card>
             <CardContent className="pt-6 text-center">
                 <BookOpen className="mx-auto h-12 w-12 text-muted-foreground" />
                 <p className="mt-4 text-lg font-medium">No courses found in the system.</p>
-                <p className="text-muted-foreground">Start by adding a new course.</p>
+                <p className="text-muted-foreground">Start by adding your first course using the 'Add New Course' button.</p>
+                 <Button onClick={() => handleOpenCourseModal()} className="mt-4" disabled={isLoading}>
+                    <PlusCircle className="mr-2 h-5 w-5" /> Add First Course
+                </Button>
             </CardContent>
         </Card>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Teacher</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Students</TableHead>
+              <TableHead>Cost</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {courses.map((course) => (
+              <TableRow key={course.id}>
+                <TableCell className="font-medium">
+                  <Link href={`/teacher/courses/${course.id}`} className="hover:underline text-primary">
+                      {course.name}
+                  </Link>
+                </TableCell>
+                <TableCell>{getTeacherName(course.teacherId)}</TableCell>
+                <TableCell>{course.category || 'N/A'}</TableCell>
+                <TableCell>{course.studentIds.length}</TableCell>
+                <TableCell>${course.cost || 0}</TableCell>
+                <TableCell className="text-right space-x-2">
+                  <Button variant="outline" size="sm" onClick={() => handleOpenCourseModal(course)} disabled={isLoading}>
+                    <Edit className="mr-1 h-4 w-4" /> Edit
+                  </Button>
+                  <AlertDialog open={!!courseToDelete && courseToDelete.id === course.id} onOpenChange={(isOpen) => !isOpen && setCourseToDelete(null)}>
+                      <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="sm" onClick={() => setCourseToDelete(course)} disabled={isLoading}>
+                              <Trash2 className="mr-1 h-4 w-4" /> Delete
+                          </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                          <AlertDialogHeader>
+                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                              This action cannot be undone. This will permanently delete the course: <span className="font-semibold">{courseToDelete?.name}</span>.
+                              {courseToDelete && courseToDelete.studentIds.length > 0 && <strong className="block mt-2 text-destructive-foreground bg-destructive p-2 rounded-md">Warning: This course has {courseToDelete.studentIds.length} student(s) enrolled. Deletion is blocked. Unenroll students first.</strong>}
+                              Associated lessons and assignments will also be removed from local state. Submissions and files in storage will need manual cleanup.
+                          </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                          <AlertDialogCancel onClick={() => setCourseToDelete(null)} disabled={isLoading}>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                              onClick={confirmDeleteCourse}
+                              disabled={(courseToDelete && courseToDelete.studentIds.length > 0) || isLoading}
+                          >
+                              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                              Yes, delete course
+                          </AlertDialogAction>
+                          </AlertDialogFooter>
+                      </AlertDialogContent>
+                  </AlertDialog>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

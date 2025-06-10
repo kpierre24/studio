@@ -53,7 +53,7 @@ const initialLessonFormData: LessonFormData = { title: '', contentMarkdown: '', 
 interface AssignmentFormData extends Omit<CreateAssignmentPayload, 'courseId' | 'rubric' | 'assignmentFileUrl' | 'assignmentFileName'> {
   id?: string;
   questions?: QuizQuestion[]; 
-  manualTotalPoints?: number; // Changed from initialAssignmentFormData
+  manualTotalPoints?: number; 
   assignmentFile?: File | null; 
   assignmentFileName?: string;
   assignmentFileUrl?: string;
@@ -73,7 +73,6 @@ export default function TeacherCourseDetailPage() {
   const router = useRouter();
   const { 
     state, 
-    dispatch, // Keep direct dispatch for non-DB actions if any
     handleLessonFileUpload, 
     handleAssignmentAttachmentUpload,
     handleCreateLesson,
@@ -88,7 +87,6 @@ export default function TeacherCourseDetailPage() {
   const { toast } = useToast();
 
   const [course, setCourse] = useState<Course | null>(null);
-  // Local state for lessons and assignments derived from global state, updated on global state change
   const courseLessons = useMemo(() => lessons.filter(l => l.courseId === courseId).sort((a, b) => a.order - b.order), [lessons, courseId]);
   const courseAssignments = useMemo(() => assignments.filter(a => a.courseId === courseId).sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [assignments, courseId]);
   
@@ -109,23 +107,23 @@ export default function TeacherCourseDetailPage() {
     const foundCourse = courses.find(c => c.id === courseId);
     if (foundCourse) {
       setCourse(foundCourse);
-    } else if (!isLoading) { // Only redirect if not loading and course not found
+    } else if (!isLoading) { 
       toast({ title: "Error", description: "Course not found.", variant: "destructive" });
       router.push(currentUser?.role === UserRole.SUPER_ADMIN ? '/admin/courses' : '/teacher/courses');
     }
   }, [courseId, courses, router, toast, currentUser?.role, isLoading]);
 
   if (isLoading && !course) {
-    return <p className="text-center text-muted-foreground">Loading course data...</p>;
+    return <p className="text-center text-muted-foreground py-10">Loading course data...</p>;
   }
   if (!currentUser || (currentUser.role !== UserRole.TEACHER && currentUser.role !== UserRole.SUPER_ADMIN)) {
-    return <p className="text-center text-muted-foreground">Access Denied: Required role missing.</p>;
+    return <p className="text-center text-muted-foreground py-10">Access Denied: Required role missing.</p>;
   }
   if (!course) { 
-    return <p className="text-center text-muted-foreground">Course not found or still loading.</p>;
+    return <p className="text-center text-muted-foreground py-10">Course not found or still loading.</p>;
   }
   if (currentUser.role === UserRole.TEACHER && course.teacherId !== currentUser.id) {
-    return <p className="text-center text-muted-foreground">Access Denied: You are not the teacher for this course.</p>;
+    return <p className="text-center text-muted-foreground py-10">Access Denied: You are not the teacher for this course.</p>;
   }
   const teacher = users.find(u => u.id === course.teacherId);
 
@@ -163,34 +161,17 @@ export default function TeacherCourseDetailPage() {
       return;
     }
     
-    let uploadedFileUrl = lessonFormData.fileUrl;
-    let uploadedFileName = lessonFormData.fileName;
-
-    if (lessonFormData.file) {
-      try {
-        const { fileUrl: newFileUrl, fileName: newFileName } = await handleLessonFileUpload(course.id, lessonFormData.id || `new-${Date.now()}`, lessonFormData.file);
-        uploadedFileUrl = newFileUrl;
-        uploadedFileName = newFileName;
-      } catch (error: any) {
-        // Error already toasted by handleLessonFileUpload via AppContext
-        return;
-      }
-    } else if (lessonFormData.file === null && lessonFormData.id && !lessonFormData.fileUrl) { 
-        uploadedFileUrl = undefined;
-        uploadedFileName = undefined;
-    }
-
     const payload: CreateLessonPayload | UpdateLessonPayload = {
       courseId: course.id, title: lessonFormData.title, contentMarkdown: lessonFormData.contentMarkdown,
       videoUrl: lessonFormData.videoUrl, order: lessonFormData.order || 1,
-      fileUrl: uploadedFileUrl, fileName: uploadedFileName,
+      fileUrl: lessonFormData.fileUrl, fileName: lessonFormData.fileName,
       ...(lessonFormData.id && { id: lessonFormData.id }),
     };
 
     if (lessonFormData.id) {
-      await handleUpdateLesson(payload as UpdateLessonPayload);
+      await handleUpdateLesson({ ...payload as UpdateLessonPayload, file: lessonFormData.file });
     } else {
-      await handleCreateLesson(payload as CreateLessonPayload);
+      await handleCreateLesson({ ...payload as CreateLessonPayload, file: lessonFormData.file });
     }
     
     if (!state.error) setIsLessonModalOpen(false);
@@ -249,46 +230,19 @@ export default function TeacherCourseDetailPage() {
       toast({ title: "Validation Error", description: "Assignment title and due date are required.", variant: "destructive" });
       return;
     }
-
-    let uploadedFileUrl = assignmentFormData.assignmentFileUrl;
-    let uploadedFileName = assignmentFormData.assignmentFileName;
-
-    if (assignmentFormData.assignmentFile) {
-        try {
-            const { assignmentFileUrl: newFileUrl, assignmentFileName: newFileName } = await handleAssignmentAttachmentUpload(course.id, assignmentFormData.id || `new-${Date.now()}`, assignmentFormData.assignmentFile);
-            uploadedFileUrl = newFileUrl;
-            uploadedFileName = newFileName;
-        } catch (error: any) {
-            // Error already toasted by handler
-            return;
-        }
-    } else if (assignmentFormData.assignmentFile === null && assignmentFormData.id && !assignmentFormData.assignmentFileUrl) {
-        uploadedFileUrl = undefined;
-        uploadedFileName = undefined;
-    }
     
-    let totalPoints = 0;
-    if (assignmentFormData.type === AssignmentType.QUIZ && assignmentFormData.questions) {
-        totalPoints = assignmentFormData.questions.reduce((sum, q) => sum + q.points, 0);
-    } else if (assignmentFormData.manualTotalPoints !== undefined) {
-        totalPoints = assignmentFormData.manualTotalPoints;
-    }
-
-
-    const payload: CreateAssignmentPayload | UpdateAssignmentPayload = {
+    const payloadBase = {
       courseId: course.id, title: assignmentFormData.title, description: assignmentFormData.description,
       dueDate: new Date(assignmentFormData.dueDate).toISOString(), type: assignmentFormData.type,
       questions: assignmentFormData.type === AssignmentType.QUIZ ? assignmentFormData.questions : undefined,
       manualTotalPoints: assignmentFormData.type === AssignmentType.STANDARD ? assignmentFormData.manualTotalPoints : undefined,
-      // totalPoints will be calculated in AppContext before saving to DB or assigned from manualTotalPoints
-      assignmentFileUrl: uploadedFileUrl, assignmentFileName: uploadedFileName,
-      ...(assignmentFormData.id && { id: assignmentFormData.id }),
+      assignmentFileUrl: assignmentFormData.assignmentFileUrl, assignmentFileName: assignmentFormData.assignmentFileName,
     };
     
     if (assignmentFormData.id) {
-        await handleUpdateAssignment(payload as UpdateAssignmentPayload);
+        await handleUpdateAssignment({ ...payloadBase, id: assignmentFormData.id, assignmentFile: assignmentFormData.assignmentFile });
     } else {
-        await handleCreateAssignment(payload as CreateAssignmentPayload);
+        await handleCreateAssignment({ ...payloadBase, assignmentFile: assignmentFormData.assignmentFile });
     }
 
     if(!state.error) setIsAssignmentModalOpen(false);
@@ -348,7 +302,6 @@ export default function TeacherCourseDetailPage() {
 
     const payload: GradeSubmissionPayload = { submissionId, grade, feedback: formData.feedback };
     await handleTeacherGradeSubmission(payload);
-    // Modal closure or success message handling can be refined based on global state.error
   };
 
   const getAssignmentSubmissions = (assignmentId: string) => {
@@ -397,8 +350,9 @@ export default function TeacherCourseDetailPage() {
                   <PlusCircle className="mr-2 h-5 w-5" /> Add Lesson
                 </Button>
               </div>
-              {courseLessons.length === 0 ? (
-                <p className="text-muted-foreground">No lessons yet. Add your first lesson!</p>
+              {isLoading && courseLessons.length === 0 && <p className="text-muted-foreground text-center py-4">Loading lessons...</p>}
+              {!isLoading && courseLessons.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No lessons created for this course yet. Click 'Add Lesson' to get started.</p>
               ) : (
                 <ul className="space-y-3">
                   {courseLessons.map(lesson => (
@@ -426,8 +380,9 @@ export default function TeacherCourseDetailPage() {
                   <PlusCircle className="mr-2 h-5 w-5" /> Add Assignment
                 </Button>
               </div>
-               {courseAssignments.length === 0 ? (
-                <p className="text-muted-foreground">No assignments yet. Add your first assignment!</p>
+               {isLoading && courseAssignments.length === 0 && <p className="text-muted-foreground text-center py-4">Loading assignments...</p>}
+               {!isLoading && courseAssignments.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No assignments created for this course yet. Click 'Add Assignment' to get started.</p>
               ) : (
                 <ul className="space-y-3">
                   {courseAssignments.map(assignment => (
@@ -456,8 +411,9 @@ export default function TeacherCourseDetailPage() {
             
             <TabsContent value="students" className="p-6">
                 <h3 className="text-xl font-semibold mb-4">Enrolled Students</h3>
-                {course.studentIds.length === 0 ? (
-                    <p className="text-muted-foreground">No students are currently enrolled in this course.</p>
+                 {isLoading && course.studentIds.length === 0 && !users.some(u => course.studentIds.includes(u.id)) && <p className="text-muted-foreground text-center py-4">Loading student information...</p>}
+                {!isLoading && course.studentIds.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">No students are currently enrolled in this course.</p>
                 ) : (
                     <ul className="space-y-2">
                     {course.studentIds.map(studentId => {
@@ -470,7 +426,7 @@ export default function TeacherCourseDetailPage() {
                                 <p className="text-sm text-muted-foreground">{student.email}</p>
                             </div>
                         </li>
-                        ) : null;
+                        ) : <li key={studentId} className="p-3 border rounded-md text-muted-foreground">Loading student data for ID: {studentId}...</li>;
                     })}
                     </ul>
                 )}
@@ -543,7 +499,7 @@ export default function TeacherCourseDetailPage() {
           <AlertDialogHeader><AlertDialogTitle>Delete Lesson?</AlertDialogTitle></AlertDialogHeader>
           <AlertDialogDescription>
             Are you sure you want to delete the lesson "{lessonToDelete?.title}"? This action cannot be undone.
-            Associated file in storage will need manual deletion.
+            <br/><strong className="text-destructive">Note:</strong> If this lesson has an associated file in Firebase Storage, it will not be automatically deleted and will need manual cleanup.
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setLessonToDelete(null)} disabled={isLoading}>Cancel</AlertDialogCancel>
@@ -644,7 +600,7 @@ export default function TeacherCourseDetailPage() {
           <AlertDialogHeader><AlertDialogTitle>Delete Assignment?</AlertDialogTitle></AlertDialogHeader>
           <AlertDialogDescription>
             Are you sure you want to delete the assignment "{assignmentToDelete?.title}"? This will also delete all student submissions for it from local state. 
-            The associated assignment file and submissions in storage will need manual deletion. This action cannot be undone.
+            <br/><strong className="text-destructive">Note:</strong> The associated assignment file and any submitted files in Firebase Storage will not be automatically deleted and will need manual cleanup. This action cannot be undone.
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setAssignmentToDelete(null)} disabled={isLoading}>Cancel</AlertDialogCancel>

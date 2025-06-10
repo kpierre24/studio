@@ -10,10 +10,14 @@ import Image from "next/image";
 
 export default function StudentCoursesPage() {
   const { state } = useAppContext();
-  const { currentUser, courses, enrollments, users } = state;
+  const { currentUser, courses, enrollments, users, isLoading } = state;
 
+  if (isLoading && !currentUser) {
+    return <p className="text-center text-muted-foreground py-10">Loading user data...</p>;
+  }
   if (!currentUser) {
-    return <p className="text-center text-muted-foreground">Loading user data...</p>;
+     // This case might be handled by ProtectedLayout, but as a fallback
+    return <p className="text-center text-muted-foreground py-10">Please log in to view your courses.</p>;
   }
 
   const studentEnrollments = enrollments.filter(e => e.studentId === currentUser.id);
@@ -29,19 +33,23 @@ export default function StudentCoursesPage() {
     <div className="space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
         <h1 className="text-3xl font-headline font-bold">My Courses</h1>
-        <p className="text-muted-foreground mt-1 md:mt-0">
-          You are enrolled in {enrolledCourses.length} course{enrolledCourses.length === 1 ? "" : "s"}.
-        </p>
+        {!isLoading && (
+            <p className="text-muted-foreground mt-1 md:mt-0">
+            You are enrolled in {enrolledCourses.length} course{enrolledCourses.length === 1 ? "" : "s"}.
+            </p>
+        )}
       </div>
-
-      {enrolledCourses.length === 0 ? (
+      
+      {isLoading && enrolledCourses.length === 0 ? (
+        <p className="text-muted-foreground text-center py-10">Loading your enrolled courses...</p>
+      ) : !isLoading && enrolledCourses.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-center">
             <BookOpen className="mx-auto h-12 w-12 text-muted-foreground" />
-            <p className="mt-4 text-lg font-medium">No courses found.</p>
-            <p className="text-muted-foreground">You are not currently enrolled in any courses.</p>
-            {/* Optional: Add a link to a course catalog if one exists */}
-            {/* <Button asChild className="mt-4"><Link href="/courses/catalog">Browse Courses</Link></Button> */}
+            <p className="mt-4 text-lg font-medium">No Courses Yet!</p>
+            <p className="text-muted-foreground">You are not currently enrolled in any courses. Explore the course catalog or contact an administrator for enrollment.</p>
+            {/* Optional: Add a link to a course catalog if one exists in the future */}
+            {/* <Button asChild className="mt-4"><Link href="/courses/catalog">Browse All Courses</Link></Button> */}
           </CardContent>
         </Card>
       ) : (
@@ -68,7 +76,7 @@ export default function StudentCoursesPage() {
                 <p className="text-sm text-muted-foreground">Category: {course.category || "N/A"}</p>
               </CardContent>
               <CardFooter>
-                <Button asChild variant="outline" className="w-full">
+                <Button asChild variant="outline" className="w-full" disabled={isLoading}>
                   <Link href={`/student/courses/${course.id}`}>
                     View Course <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>

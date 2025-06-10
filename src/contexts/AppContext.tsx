@@ -93,6 +93,10 @@ const autoGradeQuizAnswer = (question: QuizQuestion, studentAnswer: string | str
 const appReducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
     case ActionType.LOAD_DATA: {
+      // TODO: Replace SAMPLE_DATA loading with Firestore fetching for all entities.
+      // This action currently loads sample data if the corresponding state array is empty
+      // AFTER initial auth checks. For a fully persistent app, each entity
+      // (courses, lessons, etc.) should be fetched from Firestore similar to how users are fetched.
       return {
         ...state,
         courses: action.payload.courses || (state.courses.length === 0 ? SAMPLE_COURSES : state.courses),
@@ -190,7 +194,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return { 
         ...initialState, 
         users: [], 
-        courses: state.courses, 
+        // Preserve some data if needed across logout, or clear them too
+        courses: state.courses, // For now, keeping these. TODO: Re-evaluate if these should be cleared or re-fetched.
         lessons: state.lessons,
         assignments: state.assignments,
         submissions: state.submissions,
@@ -587,6 +592,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const { toast } = useToast();
 
   useEffect(() => {
+    // TODO: Implement Firestore fetching for all primary data entities (courses, lessons, etc.)
+    // For now, LOAD_DATA will use sample data if state arrays are empty after auth checks.
     dispatch({ type: ActionType.LOAD_DATA, payload: {} }); 
   }, [dispatch]);
 
@@ -641,6 +648,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
             if (userProfile) { 
                 await fetchAllUsers(); 
+                // TODO: Add calls to fetch other core data here, e.g., fetchAllCourses(), etc.
+                // These fetches should ideally happen based on user role or initial app needs.
             } else {
                 dispatch({ type: ActionType.SET_LOADING, payload: false }); 
             }
@@ -660,6 +669,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } else { 
         dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
         dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
+        // TODO: Consider clearing other data arrays (courses, lessons, etc.) on logout,
+        // or ensure they are re-fetched correctly on next login.
         dispatch({ type: ActionType.SET_LOADING, payload: false });
       }
     });
@@ -714,8 +725,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png?text=${payload.name.substring(0,2).toUpperCase()}`,
       };
       await setDoc(doc(dbInstance, "users", firebaseUser.uid), newUserForFirestore);
-      // onAuthStateChanged will handle setting currentUser and fetching all users
-      // We can dispatch a specific success for registration if needed for immediate UI update before auth state syncs
       dispatch({ type: ActionType.REGISTER_STUDENT_SUCCESS, payload: newUserForFirestore });
       dispatch({ type: ActionType.ADD_NOTIFICATION, payload: {
         userId: firebaseUser.uid, type: 'success',
@@ -744,20 +753,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleLessonFileUpload = useCallback(async (courseId: string, lessonId: string, file: File) => {
     const storage = getFirebaseStorage();
     if (!storage) {
+      console.error("Firebase Storage service not available for lesson file upload.");
       throw new Error("Firebase Storage not available.");
     }
-    console.log(`Firebase Storage Upload: User authenticated - ${!!getFirebaseAuth()?.currentUser?.uid}`);
+    console.log(`[Storage Upload] User authenticated: ${!!getFirebaseAuth()?.currentUser?.uid}`);
     const filePath = `lessons/${courseId}/${lessonId}/${file.name}`;
-    console.log(`Firebase Storage Upload: Attempting to upload to path: ${filePath}`);
+    console.log(`[Storage Upload] Attempting to upload to path: ${filePath}`);
     const fileStorageRef = storageRef(storage, filePath);
     await uploadBytes(fileStorageRef, file);
     const fileUrl = await getDownloadURL(fileStorageRef);
+    console.log(`[Storage Upload] File uploaded successfully: ${fileUrl}`);
     return { fileUrl, fileName: file.name };
   }, []);
 
   const handleAssignmentAttachmentUpload = useCallback(async (courseId: string, assignmentId: string, file: File) => {
     const storage = getFirebaseStorage();
     if (!storage) {
+      console.error("Firebase Storage service not available for assignment attachment upload.");
       throw new Error("Firebase Storage not available.");
     }
     const filePath = `assignment_attachments/${courseId}/${assignmentId}/${file.name}`;
@@ -770,6 +782,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleStudentSubmissionUpload = useCallback(async (courseId: string, assignmentId: string, studentId: string, file: File) => {
     const storage = getFirebaseStorage();
     if (!storage) {
+      console.error("Firebase Storage service not available for student submission upload.");
       throw new Error("Firebase Storage not available.");
     }
     const filePath = `submissions/${courseId}/${assignmentId}/${studentId}/${file.name}`;
@@ -799,7 +812,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             continue;
         }
         
-        const userCredential = await createUserWithEmailAndPassword(auth, studentData.email, studentData.password || "defaultPassword123"); // Consider stronger default or enforce in CSV
+        const userCredential = await createUserWithEmailAndPassword(auth, studentData.email, studentData.password || "defaultPassword123");
         const firebaseUser = userCredential.user;
         const newUserDoc: User = {
           id: firebaseUser.uid,
@@ -822,10 +835,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     if (createdUsers.length > 0) {
       dispatch({ type: ActionType.BULK_CREATE_STUDENTS_SUCCESS, payload: { users: createdUsers, results } });
-    } else if (results.some(r => !r.success && r.error !== "Email already exists in local state.")) { // Only dispatch failure if actual errors occurred beyond local skips
+    } else if (results.some(r => !r.success && r.error !== "Email already exists in local state.")) { 
       dispatch({ type: ActionType.BULK_CREATE_STUDENTS_FAILURE, payload: { error: "Some students could not be created. Check details.", results } });
     } else {
-       dispatch({ type: ActionType.BULK_CREATE_STUDENTS_SUCCESS, payload: { users: [], results } }); // No new users, but no critical errors
+       dispatch({ type: ActionType.BULK_CREATE_STUDENTS_SUCCESS, payload: { users: [], results } }); 
     }
 
   }, [dispatch, state.users]);
@@ -838,10 +851,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
-      // For Admin user creation, we typically DO NOT create Firebase Auth user here
-      // as it would sign the admin out. This creates only the Firestore document.
-      // The admin should instruct the user how to log in or a separate flow for auth creation is needed.
-      const userId = doc(collection(db, "users")).id; // Generate a new ID for Firestore
+      const userId = doc(collection(db, "users")).id; 
       const newUserDoc: User = {
         id: userId,
         name: payload.name,
@@ -851,7 +861,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       await setDoc(doc(db, "users", userId), newUserDoc);
       dispatch({ type: ActionType.CREATE_USER_SUCCESS, payload: newUserDoc });
-      // Potentially send an email or notification if user management system supports it
     } catch (error: any) {
       dispatch({ type: ActionType.CREATE_USER_FAILURE, payload: error.message || "Failed to create user document." });
     }
@@ -881,8 +890,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
-      // Deleting Firebase Auth user is complex from client-side admin and usually done via Admin SDK.
-      // This will only delete the Firestore document.
       await deleteDoc(doc(db, "users", payload.id));
       dispatch({ type: ActionType.DELETE_USER_SUCCESS, payload });
     } catch (error: any) {
@@ -904,6 +911,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: "User not authenticated to create course." });
         return;
     }
+    console.log("handleCreateCourse: User is authenticated. Proceeding...");
 
     try {
         const courseId = payload.id || doc(collection(db, "courses")).id;
@@ -911,7 +919,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             id: courseId,
             name: payload.name,
             description: payload.description,
-            teacherId: payload.teacherId || state.currentUser.id, // Default to current user if teacher
+            teacherId: payload.teacherId || state.currentUser.id, 
             studentIds: payload.studentIds || [],
             category: payload.category || '',
             cost: payload.cost || 0,
@@ -959,7 +967,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       await deleteDoc(doc(db, "courses", payload.id));
-      // In a real app, you'd also want to delete subcollections (lessons, assignments) using a Cloud Function.
       dispatch({ type: ActionType.DELETE_COURSE_SUCCESS, payload });
     } catch (error: any) {
       dispatch({ type: ActionType.DELETE_COURSE_FAILURE, payload: error.message || "Failed to delete course."});
@@ -1017,7 +1024,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let uploadedFileUrl = payload.fileUrl;
     let uploadedFileName = payload.fileName;
 
-    if (payload.file) { // New file uploaded
+    if (payload.file) { 
       try {
         const { fileUrl: newFileUrl, fileName: newFileName } = await handleLessonFileUpload(payload.courseId, payload.id, payload.file);
         uploadedFileUrl = newFileUrl;
@@ -1026,7 +1033,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dispatch({ type: ActionType.UPDATE_LESSON_FAILURE, payload: error.message || "Failed to upload new lesson file." });
         return;
       }
-    } else if (payload.file === null && payload.fileUrl === undefined) { // File explicitly removed
+    } else if (payload.file === null && payload.fileUrl === undefined) { 
         uploadedFileUrl = undefined;
         uploadedFileName = undefined;
     }
@@ -1056,6 +1063,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
+      // TODO: Consider deleting associated file from Firebase Storage via a Cloud Function.
       await deleteDoc(doc(db, "courses", payload.courseId, "lessons", payload.id));
       dispatch({ type: ActionType.DELETE_LESSON_SUCCESS, payload });
     } catch (error: any) {
@@ -1174,6 +1182,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
+      // TODO: Consider deleting associated file and all submissions from Firebase Storage/Firestore via a Cloud Function.
       await deleteDoc(doc(db, "courses", payload.courseId, "assignments", payload.id));
       dispatch({ type: ActionType.DELETE_ASSIGNMENT_SUCCESS, payload });
     } catch (error: any) {

@@ -8,7 +8,7 @@ import { ActionType, AssignmentType } from '@/types';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { PlusCircle, Edit, BookOpen, Trash2, Users, BotMessageSquare } from 'lucide-react'; // Changed Bot to BotMessageSquare
+import { PlusCircle, Edit, BookOpen, Trash2, Users, BotMessageSquare, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { QuizGenerator } from '@/components/features/QuizGenerator';
 import { useToast } from '@/hooks/use-toast';
-import { useSearchParams, useRouter } from 'next/navigation'; // For query params
+import { useSearchParams, useRouter } from 'next/navigation'; 
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface CourseFormData {
@@ -47,8 +47,8 @@ interface AssignmentFormData {
 
 
 export default function TeacherCoursesPage() {
-  const { state, dispatch } = useAppContext();
-  const { currentUser, courses, lessons } = state; // Added lessons for QuizGenerator context
+  const { state, dispatch, handleCreateCourse, handleUpdateCourse, handleDeleteCourse, handleCreateAssignment } = useAppContext();
+  const { currentUser, courses, lessons, isLoading } = state; 
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
   const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
   const [currentCourseForAssignment, setCurrentCourseForAssignment] = useState<Course | null>(null);
@@ -61,12 +61,12 @@ export default function TeacherCoursesPage() {
   useEffect(() => {
     if (searchParams.get('action') === 'create') {
       handleOpenCourseModal();
-      router.replace('/teacher/courses'); // Remove query param after opening
+      router.replace('/teacher/courses'); 
     }
   }, [searchParams, router]);
 
 
-  if (!currentUser) return <p>Loading...</p>;
+  if (!currentUser) return <p className="text-muted-foreground text-center py-10">Loading user data...</p>;
 
   const teacherCourses = courses.filter(course => course.teacherId === currentUser.id || currentUser.role === 'SuperAdmin');
 
@@ -84,22 +84,27 @@ export default function TeacherCoursesPage() {
     setCourseFormData(prev => ({ ...prev, [name]: name === 'cost' ? parseFloat(value) || 0 : value }));
   };
 
-  const handleCourseSubmit = () => {
+  const handleCourseSubmit = async () => {
     if (!courseFormData.name || !courseFormData.description) {
         toast({ title: "Error", description: "Course name and description are required.", variant: "destructive"});
         return;
     }
     
-    const payload: Course = {
+    const payload = {
         ...courseFormData,
-        id: courseFormData.id || `course-${Date.now()}`,
         teacherId: currentUser.id,
         studentIds: courseFormData.id ? (courses.find(c => c.id === courseFormData.id)?.studentIds || []) : [],
     };
     
-    dispatch({ type: courseFormData.id ? ActionType.UPDATE_COURSE : ActionType.CREATE_COURSE, payload });
-    // Success toast is handled by context
-    setIsCourseModalOpen(false);
+    if(courseFormData.id) {
+        await handleUpdateCourse(payload as Course);
+    } else {
+        await handleCreateCourse(payload as Course);
+    }
+
+    if (!state.error) {
+        setIsCourseModalOpen(false);
+    }
   };
 
   const handleOpenAssignmentModal = (course: Course) => {
@@ -124,19 +129,32 @@ export default function TeacherCoursesPage() {
     return lessons.filter(l => l.courseId === courseId).map(l => l.contentMarkdown).join('\n\n---\n\n');
   };
 
-  const handleAssignmentSubmit = () => {
-    if (!assignmentFormData.title || !assignmentFormData.dueDate) {
+  const handleAssignmentSubmit = async () => {
+    if (!assignmentFormData.title || !assignmentFormData.dueDate || !currentCourseForAssignment) {
         toast({ title: "Error", description: "Assignment title and due date are required.", variant: "destructive"});
         return;
     }
-    dispatch({ type: ActionType.CREATE_ASSIGNMENT, payload: assignmentFormData });
-    // Success toast handled by context
-    setIsAssignmentModalOpen(false);
+    // The `totalPoints` will be calculated in the context handler before saving
+    await handleCreateAssignment({ ...assignmentFormData, courseId: currentCourseForAssignment.id });
+    
+    if (!state.error) {
+        setIsAssignmentModalOpen(false);
+    }
   };
 
-  const handleDeleteCourse = (courseId: string) => {
-    // In a real app, this would show a confirmation dialog then dispatch DELETE_COURSE
-    toast({ title: "Mock Delete", description: `Course deletion initiated for ID: ${courseId}. (This is a mock action)`});
+  const confirmDeleteCourse = async (courseId: string) => {
+    const courseToDelete = courses.find(c => c.id === courseId);
+    if (!courseToDelete) return;
+
+    if (courseToDelete.studentIds.length > 0) {
+        toast({
+            title: "Cannot Delete Course",
+            description: `Course "${courseToDelete.name}" has enrolled students. Please unenroll students before deleting.`,
+            variant: "destructive"
+        });
+        return;
+    }
+    await handleDeleteCourse({ id: courseId });
   }
 
 
@@ -146,7 +164,7 @@ export default function TeacherCoursesPage() {
         <h1 className="text-3xl font-headline font-bold">My Courses</h1>
         <Dialog open={isCourseModalOpen} onOpenChange={setIsCourseModalOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => handleOpenCourseModal()}>
+            <Button onClick={() => handleOpenCourseModal()} disabled={isLoading}>
               <PlusCircle className="mr-2 h-5 w-5" /> Create Course
             </Button>
           </DialogTrigger>
@@ -160,36 +178,41 @@ export default function TeacherCoursesPage() {
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="name" className="text-right">Name</Label>
-                <Input id="name" name="name" value={courseFormData.name} onChange={handleCourseFormChange} className="col-span-3" />
+                <Input id="name" name="name" value={courseFormData.name} onChange={handleCourseFormChange} className="col-span-3" disabled={isLoading}/>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="description" className="text-right">Description</Label>
-                <Textarea id="description" name="description" value={courseFormData.description} onChange={handleCourseFormChange} className="col-span-3" />
+                <Textarea id="description" name="description" value={courseFormData.description} onChange={handleCourseFormChange} className="col-span-3" disabled={isLoading}/>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="category" className="text-right">Category</Label>
-                <Input id="category" name="category" value={courseFormData.category} onChange={handleCourseFormChange} className="col-span-3" />
+                <Input id="category" name="category" value={courseFormData.category} onChange={handleCourseFormChange} className="col-span-3" disabled={isLoading}/>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="cost" className="text-right">Cost ($)</Label>
-                <Input id="cost" name="cost" type="number" value={courseFormData.cost} onChange={handleCourseFormChange} className="col-span-3" />
+                <Input id="cost" name="cost" type="number" value={courseFormData.cost} onChange={handleCourseFormChange} className="col-span-3" disabled={isLoading}/>
               </div>
             </div>
             <DialogFooter>
-              <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-              <Button type="submit" onClick={handleCourseSubmit}>Save Course</Button>
+              <DialogClose asChild><Button variant="outline" disabled={isLoading}>Cancel</Button></DialogClose>
+              <Button type="submit" onClick={handleCourseSubmit} disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Course
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
-      {teacherCourses.length === 0 ? (
+      {isLoading && teacherCourses.length === 0 ? (
+         <p className="text-muted-foreground text-center py-10">Loading your courses...</p>
+      ) : teacherCourses.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-center">
             <BookOpen className="mx-auto h-12 w-12 text-muted-foreground" />
             <p className="mt-4 text-lg font-medium">No courses found.</p>
-            <p className="text-muted-foreground">Get started by creating your first course.</p>
-            <Button className="mt-4" onClick={() => handleOpenCourseModal()}>
+            <p className="text-muted-foreground">Get started by creating your first course. Students will be able to enroll once it's published.</p>
+            <Button className="mt-4" onClick={() => handleOpenCourseModal()} disabled={isLoading}>
               <PlusCircle className="mr-2 h-5 w-5" /> Create Your First Course
             </Button>
           </CardContent>
@@ -212,19 +235,19 @@ export default function TeacherCoursesPage() {
                 <p className="text-muted-foreground">Cost: ${course.cost || 0}</p>
               </CardContent>
               <CardFooter className="flex flex-col items-stretch gap-2 pt-4">
-                <Button variant="outline" asChild>
+                <Button variant="outline" asChild disabled={isLoading}>
                   <Link href={`/teacher/courses/${course.id}`}>
                     <BookOpen className="mr-2 h-4 w-4" /> Manage Course
                   </Link>
                 </Button>
                 <div className="grid grid-cols-3 gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleOpenCourseModal(course)} title="Edit Course" className="flex-1 justify-center">
+                    <Button variant="ghost" size="sm" onClick={() => handleOpenCourseModal(course)} title="Edit Course" className="flex-1 justify-center" disabled={isLoading}>
                         <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" title="Add Assignment" onClick={() => handleOpenAssignmentModal(course)} className="flex-1 justify-center">
+                    <Button variant="ghost" size="sm" title="Add Assignment" onClick={() => handleOpenAssignmentModal(course)} className="flex-1 justify-center" disabled={isLoading}>
                         <PlusCircle className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive-foreground hover:bg-destructive flex-1 justify-center" title="Delete Course" onClick={() => handleDeleteCourse(course.id)}>
+                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive-foreground hover:bg-destructive flex-1 justify-center" title="Delete Course" onClick={() => confirmDeleteCourse(course.id)} disabled={isLoading || course.studentIds.length > 0}>
                         <Trash2 className="h-4 w-4" />
                     </Button>
                 </div>
@@ -242,23 +265,23 @@ export default function TeacherCoursesPage() {
                         Fill in the details for the new assignment. You can use the AI Quiz Generator for quiz-type assignments.
                     </DialogDescription>
                 </DialogHeader>
-                <ScrollArea className="max-h-[70vh] p-1 pr-6"> {/* Added pr-6 for scrollbar */}
+                <ScrollArea className="max-h-[70vh] p-1 pr-6">
                   <div className="grid gap-6 py-4">
                       <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="assign-title" className="text-right">Title</Label>
-                          <Input id="assign-title" name="title" value={assignmentFormData.title} onChange={handleAssignmentFormChange} className="col-span-3" />
+                          <Input id="assign-title" name="title" value={assignmentFormData.title} onChange={handleAssignmentFormChange} className="col-span-3" disabled={isLoading}/>
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="assign-desc" className="text-right">Description</Label>
-                          <Textarea id="assign-desc" name="description" value={assignmentFormData.description} onChange={handleAssignmentFormChange} className="col-span-3" />
+                          <Textarea id="assign-desc" name="description" value={assignmentFormData.description} onChange={handleAssignmentFormChange} className="col-span-3" disabled={isLoading}/>
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="assign-due" className="text-right">Due Date</Label>
-                          <Input id="assign-due" name="dueDate" type="date" value={assignmentFormData.dueDate} onChange={handleAssignmentFormChange} className="col-span-3" />
+                          <Input id="assign-due" name="dueDate" type="date" value={assignmentFormData.dueDate} onChange={handleAssignmentFormChange} className="col-span-3" disabled={isLoading}/>
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="assign-type" className="text-right">Type</Label>
-                          <select id="assign-type" name="type" value={assignmentFormData.type} onChange={handleAssignmentFormChange} className="col-span-3 p-2 border rounded-md bg-input border-input-border">
+                          <select id="assign-type" name="type" value={assignmentFormData.type} onChange={handleAssignmentFormChange} className="col-span-3 p-2 border rounded-md bg-input border-input-border" disabled={isLoading}>
                               <option value={AssignmentType.STANDARD}>Standard</option>
                               <option value={AssignmentType.QUIZ}>Quiz</option>
                           </select>
@@ -280,7 +303,7 @@ export default function TeacherCoursesPage() {
                                   </div>
                               )}
                               <QuizGenerator 
-                                  assignmentId={`${currentCourseForAssignment.id}-${Date.now()}`} // Temporary unique ID for new assignment context
+                                  assignmentId={`${currentCourseForAssignment.id}-${Date.now()}`} 
                                   onQuestionsGenerated={handleGeneratedQuestions}
                                   existingLessonContent={getLessonContentForCourse(currentCourseForAssignment.id)}
                               />
@@ -289,14 +312,17 @@ export default function TeacherCoursesPage() {
                       {assignmentFormData.type === AssignmentType.STANDARD && (
                           <div className="grid grid-cols-4 items-center gap-4">
                               <Label htmlFor="assign-points" className="text-right">Total Points</Label>
-                              <Input id="assign-points" name="manualTotalPoints" type="number" placeholder="e.g., 100" value={assignmentFormData.manualTotalPoints || ''} onChange={handleAssignmentFormChange} className="col-span-3" />
+                              <Input id="assign-points" name="manualTotalPoints" type="number" placeholder="e.g., 100" value={assignmentFormData.manualTotalPoints || ''} onChange={handleAssignmentFormChange} className="col-span-3" disabled={isLoading}/>
                           </div>
                       )}
                   </div>
                 </ScrollArea>
                 <DialogFooter className="pt-4 border-t">
-                    <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                    <Button type="submit" onClick={handleAssignmentSubmit}>Save Assignment</Button>
+                    <DialogClose asChild><Button variant="outline" disabled={isLoading}>Cancel</Button></DialogClose>
+                    <Button type="submit" onClick={handleAssignmentSubmit} disabled={isLoading}>
+                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Save Assignment
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

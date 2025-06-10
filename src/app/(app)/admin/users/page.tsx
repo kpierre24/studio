@@ -45,7 +45,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Edit, Trash2, Eye, EyeOff, UploadCloud, Loader2 } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Eye, EyeOff, UploadCloud, Loader2, Users as UsersIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 type UserFormData = Omit<CreateUserPayload, 'avatarUrl'> & { id?: string; confirmPassword?: string };
@@ -54,7 +54,7 @@ const initialUserFormData: UserFormData = {
   id: undefined,
   name: '',
   email: '',
-  password: '', // For admin creation, this is advisory
+  password: '', 
   confirmPassword: '',
   role: UserRole.STUDENT,
 };
@@ -108,11 +108,10 @@ export default function AdminUsersPage() {
       toast({ title: "Validation Error", description: "Name and Email are required.", variant: "destructive" });
       return false;
     }
-    if (!userFormData.id) { // Creating new user
-        if (!userFormData.password) { // Password field in form is for admin's reference or to communicate
-            toast({ title: "Info", description: "Password field is for your reference if communicating to the user.", variant: "default" });
+    if (!userFormData.id) { 
+        if (!userFormData.password) { 
+            toast({ title: "Password Info", description: "Password field is for admin reference. Please communicate it to the user if setting one.", variant: "default" });
         }
-        // No password match validation needed here as it's not creating an Auth user directly
     }
     if (!/\S+@\S+\.\S+/.test(userFormData.email)) {
         toast({ title: "Validation Error", description: "Please enter a valid email address.", variant: "destructive" });
@@ -127,12 +126,11 @@ export default function AdminUsersPage() {
     const payload: CreateUserPayload = {
       name: userFormData.name,
       email: userFormData.email,
-      password: userFormData.password, // This password is not used for Firebase Auth creation here
+      password: userFormData.password, 
       role: userFormData.role,
     };
     await handleAdminCreateUser(payload);
-    // Assuming success/error is handled by global toast via AppContext
-    if (!state.error) { // Check if handleAdminCreateUser set an error
+    if (!state.error) { 
         setIsAddUserModalOpen(false);
     }
   };
@@ -233,12 +231,12 @@ export default function AdminUsersPage() {
         if (!password) missingFields.push("password");
 
         if (missingFields.length > 0) {
-          toast({ title: "Row Error", description: `Row ${i + 1}: Missing: ${missingFields.join(', ')}. Skipping.`, variant: "destructive" });
+          toast({ title: "Row Error", description: `Row ${i + 1}: Missing required field(s): ${missingFields.join(', ')}. Skipping.`, variant: "destructive" });
           continue;
         }
         
         if (!/\S+@\S+\.\S+/.test(email!)) { 
-          toast({ title: "Row Error", description: `Row ${i + 1}: Invalid email: ${email}. Skipping.`, variant: "destructive" });
+          toast({ title: "Row Error", description: `Row ${i + 1}: Invalid email format: ${email}. Skipping.`, variant: "destructive" });
           continue;
         }
         studentsToCreate.push({ name: name!, email: email!, password: password! });
@@ -274,8 +272,12 @@ export default function AdminUsersPage() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
-              <DialogTitle>Add New User</DialogTitle>
-              <DialogDescription>Create a new user document. Auth account must be created separately or by user registration.</DialogDescription>
+              <DialogTitle>Add New User Document</DialogTitle>
+              <DialogDescription>
+                This creates a user profile in the database. 
+                A Firebase Authentication account is NOT automatically created with this form. 
+                You will need to communicate the chosen password to the user or instruct them on how to register/reset their password if they don't have an auth account.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
@@ -289,7 +291,7 @@ export default function AdminUsersPage() {
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="password_add" className="text-right">Password</Label>
                 <div className="col-span-3 relative">
-                    <Input id="password_add" name="password" type={showPassword ? "text" : "password"} value={userFormData.password || ''} onChange={handleFormChange} placeholder="Advise user of this password" disabled={isLoading}/>
+                    <Input id="password_add" name="password" type={showPassword ? "text" : "password"} value={userFormData.password || ''} onChange={handleFormChange} placeholder="Set initial password (admin reference)" disabled={isLoading}/>
                     <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)} disabled={isLoading}>
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
@@ -346,112 +348,121 @@ export default function AdminUsersPage() {
         </CardContent>
       </Card>
 
-
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {users.map((user) => (
-            <TableRow key={user.id}>
-              <TableCell className="font-medium flex items-center gap-2">
-                <img src={user.avatarUrl || `https://placehold.co/32x32.png?text=${user.name.substring(0,1)}`} alt={user.name} className="h-8 w-8 rounded-full" data-ai-hint="user avatar"/>
-                {user.name}
-              </TableCell>
-              <TableCell>{user.email}</TableCell>
-              <TableCell>
-                <span className={`px-2 py-1 text-xs rounded-full ${
-                  user.role === UserRole.SUPER_ADMIN ? 'bg-red-100 text-red-700 dark:bg-red-700/30 dark:text-red-200' :
-                  user.role === UserRole.TEACHER ? 'bg-blue-100 text-blue-700 dark:bg-blue-700/30 dark:text-blue-200' :
-                  'bg-green-100 text-green-700 dark:bg-green-700/30 dark:text-green-200'
-                }`}>
-                  {user.role}
-                </span>
-              </TableCell>
-              <TableCell className="text-right space-x-2">
-                <Dialog open={isEditUserModalOpen && userFormData.id === user.id} onOpenChange={(isOpen) => {
-                    if (!isOpen) setIsEditUserModalOpen(false); else handleOpenEditUserModal(user);
-                }}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" onClick={() => handleOpenEditUserModal(user)} disabled={isLoading}>
-                      <Edit className="mr-1 h-4 w-4" /> Edit
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[480px]">
-                    <DialogHeader>
-                      <DialogTitle>Edit User: {userFormData.name}</DialogTitle>
-                      <DialogDescription>Modify user details.</DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="edit-name" className="text-right">Name</Label>
-                        <Input id="edit-name" name="name" value={userFormData.name} onChange={handleFormChange} className="col-span-3" disabled={isLoading}/>
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="edit-email" className="text-right">Email</Label>
-                        <Input id="edit-email" name="email" type="email" value={userFormData.email} className="col-span-3" disabled />
-                      </div>
-                       <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="edit-role" className="text-right">Role</Label>
-                        <Select value={userFormData.role} onValueChange={handleRoleChange} disabled={isLoading || (currentUser?.id === user.id && user.role === UserRole.SUPER_ADMIN)}>
-                          <SelectTrigger className="col-span-3">
-                            <SelectValue placeholder="Select a role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.values(UserRole).map(role => (
-                              <SelectItem key={role} value={role} disabled={currentUser?.id === user.id && role !== UserRole.SUPER_ADMIN && user.role === UserRole.SUPER_ADMIN}>
-                                {role}
-                                {currentUser?.id === user.id && role !== UserRole.SUPER_ADMIN && user.role === UserRole.SUPER_ADMIN && " (Cannot change own role)"}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <DialogFooter>
-                        <DialogClose asChild><Button variant="outline" onClick={() => setIsEditUserModalOpen(false)} disabled={isLoading}>Cancel</Button></DialogClose>
-                        <Button type="submit" onClick={handleEditUserSubmit} disabled={isLoading || (currentUser?.id === user.id && userFormData.role !== UserRole.SUPER_ADMIN && user.role === UserRole.SUPER_ADMIN)}>
-                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
-                            Save Changes
-                        </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-
-                <AlertDialog open={!!userToDelete && userToDelete.id === user.id} onOpenChange={(isOpen) => !isOpen && setUserToDelete(null)}>
-                    <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" onClick={() => setUserToDelete(user)} disabled={currentUser?.id === user.id || isLoading}>
-                            <Trash2 className="mr-1 h-4 w-4" /> Delete
-                        </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the user document for {userToDelete?.name}. 
-                            Firebase Auth account will not be deleted by this action.
-                        </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => userToDelete && handleDeleteUser(userToDelete.id)}>
-                            Yes, delete user document
-                        </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-              </TableCell>
+      {isLoading && users.length === 0 ? (
+         <p className="text-muted-foreground text-center py-10">Loading users...</p>
+      ) : users.length === 0 ? (
+        <Card>
+            <CardContent className="pt-6 text-center">
+                <UsersIcon className="mx-auto h-12 w-12 text-muted-foreground" />
+                <p className="mt-4 text-lg font-medium">No users found in the system.</p>
+                <p className="text-muted-foreground">Start by adding a new user or using the bulk upload feature.</p>
+            </CardContent>
+        </Card>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-      {users.length === 0 && (
-        <p className="text-center text-muted-foreground mt-4">No users found. Start by adding a new user.</p>
+          </TableHeader>
+          <TableBody>
+            {users.map((user) => (
+              <TableRow key={user.id}>
+                <TableCell className="font-medium flex items-center gap-2">
+                  <img src={user.avatarUrl || `https://placehold.co/32x32.png?text=${user.name.substring(0,1)}`} alt={user.name} className="h-8 w-8 rounded-full" data-ai-hint="user avatar"/>
+                  {user.name}
+                </TableCell>
+                <TableCell>{user.email}</TableCell>
+                <TableCell>
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    user.role === UserRole.SUPER_ADMIN ? 'bg-red-100 text-red-700 dark:bg-red-700/30 dark:text-red-200' :
+                    user.role === UserRole.TEACHER ? 'bg-blue-100 text-blue-700 dark:bg-blue-700/30 dark:text-blue-200' :
+                    'bg-green-100 text-green-700 dark:bg-green-700/30 dark:text-green-200'
+                  }`}>
+                    {user.role}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right space-x-2">
+                  <Dialog open={isEditUserModalOpen && userFormData.id === user.id} onOpenChange={(isOpen) => {
+                      if (!isOpen) setIsEditUserModalOpen(false); else handleOpenEditUserModal(user);
+                  }}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" onClick={() => handleOpenEditUserModal(user)} disabled={isLoading}>
+                        <Edit className="mr-1 h-4 w-4" /> Edit
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[480px]">
+                      <DialogHeader>
+                        <DialogTitle>Edit User: {userFormData.name}</DialogTitle>
+                        <DialogDescription>Modify user details. Email cannot be changed here.</DialogDescription>
+                      </DialogHeader>
+                      <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="edit-name" className="text-right">Name</Label>
+                          <Input id="edit-name" name="name" value={userFormData.name} onChange={handleFormChange} className="col-span-3" disabled={isLoading}/>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="edit-email" className="text-right">Email</Label>
+                          <Input id="edit-email" name="email" type="email" value={userFormData.email} className="col-span-3" disabled />
+                        </div>
+                         <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="edit-role" className="text-right">Role</Label>
+                          <Select value={userFormData.role} onValueChange={handleRoleChange} disabled={isLoading || (currentUser?.id === user.id && user.role === UserRole.SUPER_ADMIN)}>
+                            <SelectTrigger className="col-span-3">
+                              <SelectValue placeholder="Select a role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.values(UserRole).map(role => (
+                                <SelectItem key={role} value={role} disabled={currentUser?.id === user.id && role !== UserRole.SUPER_ADMIN && user.role === UserRole.SUPER_ADMIN}>
+                                  {role}
+                                  {currentUser?.id === user.id && role !== UserRole.SUPER_ADMIN && user.role === UserRole.SUPER_ADMIN && " (Cannot change own role)"}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <DialogFooter>
+                          <DialogClose asChild><Button variant="outline" onClick={() => setIsEditUserModalOpen(false)} disabled={isLoading}>Cancel</Button></DialogClose>
+                          <Button type="submit" onClick={handleEditUserSubmit} disabled={isLoading || (currentUser?.id === user.id && userFormData.role !== UserRole.SUPER_ADMIN && user.role === UserRole.SUPER_ADMIN)}>
+                              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                              Save Changes
+                          </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
+                  <AlertDialog open={!!userToDelete && userToDelete.id === user.id} onOpenChange={(isOpen) => !isOpen && setUserToDelete(null)}>
+                      <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="sm" onClick={() => setUserToDelete(user)} disabled={currentUser?.id === user.id || isLoading}>
+                              <Trash2 className="mr-1 h-4 w-4" /> Delete
+                          </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                          <AlertDialogHeader>
+                          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                              This action cannot be undone. This will permanently delete the user document for {userToDelete?.name}. 
+                              Firebase Auth account will NOT be deleted by this action and must be managed separately.
+                          </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                          <AlertDialogCancel onClick={() => setUserToDelete(null)} disabled={isLoading}>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => userToDelete && handleDeleteUser(userToDelete.id)} disabled={isLoading}>
+                              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Yes, delete user document
+                          </AlertDialogAction>
+                          </AlertDialogFooter>
+                      </AlertDialogContent>
+                  </AlertDialog>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

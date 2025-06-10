@@ -32,7 +32,7 @@ export default function StudentCourseDetailPage() {
   const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
   const [submissionContent, setSubmissionContent] = useState('');
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
-  const [isSubmittingFile, setIsSubmittingFile] = useState(false); // For file upload specifically
+  const [isSubmittingFile, setIsSubmittingFile] = useState(false);
 
 
   useEffect(() => {
@@ -46,14 +46,14 @@ export default function StudentCourseDetailPage() {
   }, [searchParams, assignments, courseId]);
 
 
-  if (!currentUser && !isLoading) { // If done loading and no user
-    router.push('/auth'); // Or some other appropriate action
+  if (!currentUser && !isLoading) { 
+    router.push('/auth'); 
     return <p className="text-center text-muted-foreground">Redirecting...</p>;
   }
-  if (isLoading && currentUser === undefined) { // Still initially loading auth state
+  if (isLoading && currentUser === undefined) { 
      return <p className="text-center text-muted-foreground">Loading user data...</p>;
   }
-  if (!currentUser) { // Should be caught by above, but as a fallback
+  if (!currentUser) { 
     return <p className="text-center text-muted-foreground">Please log in to view this page.</p>;
   }
 
@@ -62,7 +62,7 @@ export default function StudentCourseDetailPage() {
   const isEnrolled = enrollments && enrollments.some(e => e.studentId === currentUser.id && e.courseId === courseId);
 
 
-  if (!course && !isLoading) { // Course not found and not loading
+  if (!course && !isLoading) { 
     return (
       <div className="text-center py-10">
         <h2 className="text-2xl font-semibold">Course Not Found</h2>
@@ -83,15 +83,14 @@ export default function StudentCourseDetailPage() {
       </div>
     );
   }
-  // If still loading and either course or enrollment status is unknown, show generic loader
   if (isLoading && (!course || isEnrolled === undefined)) {
-    return <p className="text-center text-muted-foreground">Loading...</p>;
+    return <p className="text-center text-muted-foreground">Loading course content...</p>;
   }
 
 
   const courseLessons = lessons.filter(l => l.courseId === courseId).sort((a, b) => a.order - b.order);
   const courseAssignments = assignments.filter(a => a.courseId === courseId).sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-  const teacher = users.find(u => u.id === course?.teacherId); // Added optional chaining for course
+  const teacher = users.find(u => u.id === course?.teacherId); 
 
   const getStudentSubmission = (assignmentId: string): Submission | undefined => {
     return submissions.find(s => s.assignmentId === assignmentId && s.studentId === currentUser.id);
@@ -124,7 +123,7 @@ export default function StudentCourseDetailPage() {
         toast({ title: "Submission Error", description: "Please provide text content or upload a file.", variant: "destructive"});
         return;
     }
-    setIsSubmittingFile(true); // Generic submitting state for the whole operation
+    setIsSubmittingFile(true); 
 
     let uploadedFileUrl: string | undefined;
     let uploadedFileName: string | undefined;
@@ -135,14 +134,13 @@ export default function StudentCourseDetailPage() {
             uploadedFileUrl = fileUrl;
             uploadedFileName = fileName;
         } catch (error: any) {
-            // Toast is handled by AppContext
             setIsSubmittingFile(false);
             return;
         }
     }
 
     const submissionPayload: Submission = {
-      id: `temp-sub-${Date.now()}`, // Firestore will generate actual ID if not provided or use this
+      id: `temp-sub-${Date.now()}`, 
       assignmentId: selectedAssignment.id,
       studentId: currentUser.id,
       submittedAt: new Date().toISOString(), 
@@ -154,7 +152,7 @@ export default function StudentCourseDetailPage() {
     await handleStudentSubmitAssignment(submissionPayload);
     
     setIsSubmittingFile(false);
-    if(!state.error) { // Only close modal if no error during submission
+    if(!state.error) { 
       setIsSubmissionModalOpen(false);
       setSubmissionFile(null); 
       setSubmissionContent('');
@@ -194,7 +192,7 @@ export default function StudentCourseDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
-              <span>{courseLessons.length} Lessons</span>
+              <span>{courseLessons.length} Lesson{courseLessons.length === 1 ? "" : "s"}</span>
             </div>
           </div>
         </CardContent>
@@ -213,8 +211,9 @@ export default function StudentCourseDetailPage() {
               <CardDescription>Access all the learning materials for this course.</CardDescription>
             </CardHeader>
             <CardContent>
-              {courseLessons.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">No lessons available for this course yet.</p>
+              {isLoading && courseLessons.length === 0 && <p className="text-muted-foreground text-center py-4">Loading lessons...</p>}
+              {!isLoading && courseLessons.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No lessons available for this course yet. Check back soon!</p>
               ) : (
                 <Accordion type="single" collapsible className="w-full">
                   {courseLessons.map((lesson, index) => (
@@ -249,8 +248,9 @@ export default function StudentCourseDetailPage() {
               <CardDescription>View and complete your assignments.</CardDescription>
             </CardHeader>
             <CardContent>
-              {courseAssignments.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">No assignments posted for this course yet.</p>
+              {isLoading && courseAssignments.length === 0 && <p className="text-muted-foreground text-center py-4">Loading assignments...</p>}
+              {!isLoading && courseAssignments.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No assignments posted for this course yet. Relax for now!</p>
               ) : (
                 <ul className="space-y-4">
                   {courseAssignments.map(assignment => {
