@@ -49,6 +49,44 @@ export default function StudentLessonPage() {
   const prevLesson = currentLessonIndex > 0 ? courseLessons[currentLessonIndex - 1] : null;
   const nextLesson = currentLessonIndex < courseLessons.length - 1 ? courseLessons[currentLessonIndex + 1] : null;
 
+  // Basic Markdown to HTML conversion (replace newlines with <br> and handle simple list items)
+  // For more complex Markdown, a dedicated library like 'react-markdown' would be needed.
+  const renderMarkdown = (markdown: string) => {
+    if (!markdown) return null;
+    // Simple replacements - this is very basic and won't handle all Markdown features.
+    // It's a placeholder for a proper Markdown parsing solution.
+    // For now, this will at least make paragraphs and basic lists more readable than a single <pre> block.
+    const html = markdown
+      .split('\n\n') // Split into paragraphs
+      .map(paragraph => {
+        // Handle simple unordered lists
+        if (paragraph.startsWith('* ') || paragraph.startsWith('- ')) {
+          const listItems = paragraph.split('\n').map(item => `<li>${item.substring(2)}</li>`).join('');
+          return `<ul>${listItems}</ul>`;
+        }
+        // Handle simple ordered lists
+        if (paragraph.match(/^\d+\.\s/)) {
+           const listItems = paragraph.split('\n').map(item => `<li>${item.replace(/^\d+\.\s/, '')}</li>`).join('');
+           return `<ol>${listItems}</ol>`;
+        }
+        // Handle headings (h1 to h6)
+        if (paragraph.startsWith('#')) {
+          let level = 0;
+          while (paragraph[level] === '#') {
+            level++;
+          }
+          const title = paragraph.substring(level).trim();
+          if (level > 0 && level <= 6) {
+            return `<h${level}>${title}</h${level}>`;
+          }
+        }
+        return `<p>${paragraph.replace(/\n/g, '<br />')}</p>`; // Replace single newlines within paragraphs with <br>
+      })
+      .join('');
+    return { __html: html };
+  };
+
+
   return (
     <div className="space-y-6">
       <Button variant="outline" onClick={() => router.push(`/student/courses/${courseId}`)} className="mb-4">
@@ -68,12 +106,12 @@ export default function StudentLessonPage() {
           {lesson.videoUrl && (
             <div className="mb-6 rounded-lg overflow-hidden shadow-md">
               <div className="aspect-video bg-muted flex items-center justify-center">
-                 <iframe 
-                    width="100%" 
-                    height="100%" 
-                    src={lesson.videoUrl.replace("watch?v=", "embed/")} 
+                 <iframe
+                    width="100%"
+                    height="100%"
+                    src={lesson.videoUrl.replace("watch?v=", "embed/")}
                     title={lesson.title}
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     allowFullScreen
                     className="border-0"
                   ></iframe>
@@ -84,11 +122,9 @@ export default function StudentLessonPage() {
             </div>
           )}
           
-          <div className="prose prose-lg max-w-none dark:prose-invert">
-            <pre className="whitespace-pre-wrap font-body text-base leading-relaxed bg-background p-4 rounded-md border border-input-border">
-              {lesson.contentMarkdown}
-            </pre>
-          </div>
+          <div className="prose prose-lg max-w-none dark:prose-invert"
+            dangerouslySetInnerHTML={renderMarkdown(lesson.contentMarkdown)}
+          />
 
           {lesson.fileUrl && (
             <div className="mt-6 p-4 border rounded-md bg-muted/30">

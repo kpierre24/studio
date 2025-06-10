@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import Link from 'next/link';
 import {
   Dialog,
   DialogContent,
@@ -33,7 +34,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare, UploadCloud, Eye, FileArchive, CheckCircle, AlertCircle, Send, Paperclip, Loader2 } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare, UploadCloud, Eye, FileArchive, CheckCircle, AlertCircle, Send, Paperclip, Loader2, Settings } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { QuizGenerator } from '@/components/features/QuizGenerator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -44,7 +45,7 @@ import { Badge } from '@/components/ui/badge';
 interface LessonFormData extends Omit<CreateLessonPayload, 'courseId' | 'order' | 'fileUrl' | 'fileName'> {
   id?: string;
   order?: number;
-  file?: File | null; 
+  file?: File | null;
   fileName?: string;
   fileUrl?: string;
 }
@@ -52,9 +53,9 @@ const initialLessonFormData: LessonFormData = { title: '', contentMarkdown: '', 
 
 interface AssignmentFormData extends Omit<CreateAssignmentPayload, 'courseId' | 'rubric' | 'assignmentFileUrl' | 'assignmentFileName'> {
   id?: string;
-  questions?: QuizQuestion[]; 
-  manualTotalPoints?: number; 
-  assignmentFile?: File | null; 
+  questions?: QuizQuestion[];
+  manualTotalPoints?: number;
+  assignmentFile?: File | null;
   assignmentFileName?: string;
   assignmentFileUrl?: string;
 }
@@ -63,7 +64,7 @@ const initialAssignmentFormData: AssignmentFormData = { title: '', description: 
 
 interface GradingFormData {
   submissionId: string;
-  grade: string; 
+  grade: string;
   feedback: string;
 }
 
@@ -71,9 +72,9 @@ interface GradingFormData {
 export default function TeacherCourseDetailPage() {
   const { courseId } = useParams() as { courseId: string };
   const router = useRouter();
-  const { 
-    state, 
-    handleLessonFileUpload, 
+  const {
+    state,
+    handleLessonFileUpload,
     handleAssignmentAttachmentUpload,
     handleCreateLesson,
     handleUpdateLesson,
@@ -89,7 +90,7 @@ export default function TeacherCourseDetailPage() {
   const [course, setCourse] = useState<Course | null>(null);
   const courseLessons = useMemo(() => lessons.filter(l => l.courseId === courseId).sort((a, b) => a.order - b.order), [lessons, courseId]);
   const courseAssignments = useMemo(() => assignments.filter(a => a.courseId === courseId).sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [assignments, courseId]);
-  
+
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
   const [lessonToDelete, setLessonToDelete] = useState<Lesson | null>(null);
   const [lessonFormData, setLessonFormData] = useState<LessonFormData>(initialLessonFormData);
@@ -100,14 +101,14 @@ export default function TeacherCourseDetailPage() {
 
   const [isGradingModalOpen, setIsGradingModalOpen] = useState(false);
   const [selectedAssignmentForGrading, setSelectedAssignmentForGrading] = useState<Assignment | null>(null);
-  const [gradingFormsData, setGradingFormsData] = useState<Record<string, GradingFormData>>({}); 
+  const [gradingFormsData, setGradingFormsData] = useState<Record<string, GradingFormData>>({});
 
 
   useEffect(() => {
     const foundCourse = courses.find(c => c.id === courseId);
     if (foundCourse) {
       setCourse(foundCourse);
-    } else if (!isLoading) { 
+    } else if (!isLoading) {
       toast({ title: "Error", description: "Course not found.", variant: "destructive" });
       router.push(currentUser?.role === UserRole.SUPER_ADMIN ? '/admin/courses' : '/teacher/courses');
     }
@@ -119,8 +120,8 @@ export default function TeacherCourseDetailPage() {
   if (!currentUser || (currentUser.role !== UserRole.TEACHER && currentUser.role !== UserRole.SUPER_ADMIN)) {
     return <p className="text-center text-muted-foreground py-10">Access Denied: Required role missing.</p>;
   }
-  if (!course) { 
-    return <p className="text-center text-muted-foreground py-10">Course not found or still loading.</p>;
+  if (!course) {
+    return <p className="text-center text-muted-foreground py-10">Course not found. It might still be loading or does not exist.</p>;
   }
   if (currentUser.role === UserRole.TEACHER && course.teacherId !== currentUser.id) {
     return <p className="text-center text-muted-foreground py-10">Access Denied: You are not the teacher for this course.</p>;
@@ -129,10 +130,10 @@ export default function TeacherCourseDetailPage() {
 
   const handleOpenLessonModal = (lesson?: Lesson) => {
     if (lesson) {
-      setLessonFormData({ 
-        id: lesson.id, title: lesson.title, contentMarkdown: lesson.contentMarkdown, 
+      setLessonFormData({
+        id: lesson.id, title: lesson.title, contentMarkdown: lesson.contentMarkdown,
         videoUrl: lesson.videoUrl || '', order: lesson.order,
-        fileName: lesson.fileName, fileUrl: lesson.fileUrl, file: null 
+        fileName: lesson.fileName, fileUrl: lesson.fileUrl, file: null
       });
     } else {
       const nextOrder = courseLessons.length > 0 ? Math.max(...courseLessons.map(l => l.order)) + 1 : 1;
@@ -149,9 +150,9 @@ export default function TeacherCourseDetailPage() {
   const handleLessonFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      setLessonFormData(prev => ({ ...prev, file: file, fileName: file.name, fileUrl: undefined })); 
+      setLessonFormData(prev => ({ ...prev, file: file, fileName: file.name, fileUrl: undefined }));
     } else {
-      setLessonFormData(prev => ({ ...prev, file: null })); 
+      setLessonFormData(prev => ({ ...prev, file: null }));
     }
   };
 
@@ -160,7 +161,7 @@ export default function TeacherCourseDetailPage() {
       toast({ title: "Validation Error", description: "Lesson title is required.", variant: "destructive" });
       return;
     }
-    
+
     const payload: CreateLessonPayload | UpdateLessonPayload = {
       courseId: course.id, title: lessonFormData.title, contentMarkdown: lessonFormData.contentMarkdown,
       videoUrl: lessonFormData.videoUrl, order: lessonFormData.order || 1,
@@ -173,7 +174,7 @@ export default function TeacherCourseDetailPage() {
     } else {
       await handleCreateLesson({ ...payload as CreateLessonPayload, file: lessonFormData.file });
     }
-    
+
     if (!state.error) setIsLessonModalOpen(false);
   };
 
@@ -184,11 +185,11 @@ export default function TeacherCourseDetailPage() {
       if (!state.error) setLessonToDelete(null);
     }
   };
-  
+
   const handleOpenAssignmentModal = (assignment?: Assignment) => {
     if (assignment) {
-      setAssignmentFormData({ 
-        id: assignment.id, title: assignment.title, description: assignment.description, 
+      setAssignmentFormData({
+        id: assignment.id, title: assignment.title, description: assignment.description,
         dueDate: assignment.dueDate ? format(new Date(assignment.dueDate), "yyyy-MM-dd'T'HH:mm") : '', // For datetime-local
         type: assignment.type, questions: assignment.questions || [],
         manualTotalPoints: assignment.type === AssignmentType.STANDARD ? assignment.totalPoints : assignment.manualTotalPoints,
@@ -203,9 +204,9 @@ export default function TeacherCourseDetailPage() {
 
   const handleAssignmentFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setAssignmentFormData(prev => ({ 
-      ...prev, 
-      [name]: name === 'manualTotalPoints' ? (value ? parseFloat(value) : undefined) : value 
+    setAssignmentFormData(prev => ({
+      ...prev,
+      [name]: name === 'manualTotalPoints' ? (value ? parseFloat(value) : undefined) : value
     }));
   };
 
@@ -217,7 +218,7 @@ export default function TeacherCourseDetailPage() {
         setAssignmentFormData(prev => ({ ...prev, assignmentFile: null }));
     }
   };
-  
+
   const handleGeneratedQuestions = (newQuestions: QuizQuestion[]) => {
     setAssignmentFormData(prev => ({
       ...prev,
@@ -230,7 +231,7 @@ export default function TeacherCourseDetailPage() {
       toast({ title: "Validation Error", description: "Assignment title and due date are required.", variant: "destructive" });
       return;
     }
-    
+
     const payloadBase = {
       courseId: course.id, title: assignmentFormData.title, description: assignmentFormData.description,
       dueDate: new Date(assignmentFormData.dueDate).toISOString(), type: assignmentFormData.type,
@@ -238,7 +239,7 @@ export default function TeacherCourseDetailPage() {
       manualTotalPoints: assignmentFormData.type === AssignmentType.STANDARD ? assignmentFormData.manualTotalPoints : undefined,
       assignmentFileUrl: assignmentFormData.assignmentFileUrl, assignmentFileName: assignmentFormData.assignmentFileName,
     };
-    
+
     if (assignmentFormData.id) {
         await handleUpdateAssignment({ ...payloadBase, id: assignmentFormData.id, assignmentFile: assignmentFormData.assignmentFile });
     } else {
@@ -255,7 +256,7 @@ export default function TeacherCourseDetailPage() {
       if (!state.error) setAssignmentToDelete(null);
     }
   };
-  
+
   const getLessonContentForCourse = (): string => {
     return lessons.filter(l => l.courseId === course.id).map(l => `Lesson: ${l.title}\n${l.contentMarkdown}`).join('\n\n---\n\n');
   };
@@ -302,9 +303,6 @@ export default function TeacherCourseDetailPage() {
 
     const payload: GradeSubmissionPayload = { submissionId, grade, feedback: formData.feedback };
     await handleTeacherGradeSubmission(payload);
-     // Optionally, keep modal open and update specific submission's status if needed, or rely on global state update
-    // If you want to close it after every grade:
-    // if (!state.error) { setIsGradingModalOpen(false); } 
   };
 
   const getAssignmentSubmissions = (assignmentId: string) => {
@@ -343,7 +341,7 @@ export default function TeacherCourseDetailPage() {
               <TabsTrigger value="lessons" className="rounded-none py-3"><FileText className="mr-2" />Lessons ({courseLessons.length})</TabsTrigger>
               <TabsTrigger value="assignments" className="rounded-none py-3"><BookOpen className="mr-2" />Assignments ({courseAssignments.length})</TabsTrigger>
               <TabsTrigger value="students" className="rounded-none py-3"><UserSquare className="mr-2" />Students ({course.studentIds.length})</TabsTrigger>
-              <TabsTrigger value="settings" className="rounded-none py-3">Settings</TabsTrigger>
+              <TabsTrigger value="settings" className="rounded-none py-3"><Settings className="mr-2" />Settings</TabsTrigger>
             </TabsList>
 
             <TabsContent value="lessons" className="p-6">
@@ -359,7 +357,7 @@ export default function TeacherCourseDetailPage() {
               ) : (
                 <ul className="space-y-3">
                   {courseLessons.map(lesson => (
-                    <li key={lesson.id} className="p-4 border rounded-md flex justify-between items-center hover:shadow-sm">
+                    <li key={lesson.id} className="p-4 border rounded-md flex justify-between items-center hover:bg-muted/50 hover:shadow-sm transition-all">
                       <div>
                         <h4 className="font-medium">{lesson.order}. {lesson.title}</h4>
                         <p className="text-xs text-muted-foreground truncate max-w-md">{lesson.contentMarkdown.substring(0,100)}...</p>
@@ -368,7 +366,25 @@ export default function TeacherCourseDetailPage() {
                       </div>
                       <div className="space-x-2">
                         <Button variant="outline" size="sm" onClick={() => handleOpenLessonModal(lesson)} disabled={isLoading}><Edit className="h-4 w-4" /></Button>
-                        <Button variant="destructive" size="sm" onClick={() => setLessonToDelete(lesson)} disabled={isLoading}><Trash2 className="h-4 w-4" /></Button>
+                        <AlertDialog open={!!lessonToDelete && lessonToDelete.id === lesson.id} onOpenChange={(isOpen) => !isOpen && setLessonToDelete(null)}>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm" onClick={() => setLessonToDelete(lesson)} disabled={isLoading}><Trash2 className="h-4 w-4" /></Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Delete Lesson?</AlertDialogTitle></AlertDialogHeader>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete the lesson "{lessonToDelete?.title}"? This action cannot be undone.
+                              <br/><strong className="text-destructive mt-2 block">Note:</strong> If this lesson has an associated file in Firebase Storage, it will not be automatically deleted and will need manual cleanup from the Storage console.
+                            </AlertDialogDescription>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel onClick={() => setLessonToDelete(null)} disabled={isLoading}>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={confirmDeleteLesson} disabled={isLoading}>
+                                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                  Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </li>
                   ))}
@@ -389,7 +405,7 @@ export default function TeacherCourseDetailPage() {
               ) : (
                 <ul className="space-y-3">
                   {courseAssignments.map(assignment => (
-                    <li key={assignment.id} className="p-4 border rounded-md flex justify-between items-center hover:shadow-sm">
+                    <li key={assignment.id} className="p-4 border rounded-md flex justify-between items-center hover:bg-muted/50 hover:shadow-sm transition-all">
                       <div>
                         <h4 className="font-medium">{assignment.title} <Badge variant="secondary" className="capitalize">{assignment.type}</Badge></h4>
                         <p className="text-xs text-muted-foreground">Due: {format(new Date(assignment.dueDate), "PPP p")} - {assignment.totalPoints} pts</p>
@@ -404,14 +420,32 @@ export default function TeacherCourseDetailPage() {
                             <FileArchive className="h-4 w-4" />
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => handleOpenAssignmentModal(assignment)} title="Edit Assignment" disabled={isLoading}><Edit className="h-4 w-4" /></Button>
-                        <Button variant="destructive" size="sm" onClick={() => setAssignmentToDelete(assignment)} title="Delete Assignment" disabled={isLoading}><Trash2 className="h-4 w-4" /></Button>
+                        <AlertDialog open={!!assignmentToDelete && assignmentToDelete.id === assignment.id} onOpenChange={(isOpen) => !isOpen && setAssignmentToDelete(null)}>
+                           <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm" onClick={() => setAssignmentToDelete(assignment)} title="Delete Assignment" disabled={isLoading}><Trash2 className="h-4 w-4" /></Button>
+                           </AlertDialogTrigger>
+                           <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Delete Assignment?</AlertDialogTitle></AlertDialogHeader>
+                            <AlertDialogDescription>
+                                Are you sure you want to delete the assignment "{assignmentToDelete?.title}"? This will also delete all student submissions for it from local state.
+                                <br/><strong className="text-destructive mt-2 block">Note:</strong> The associated assignment file and any submitted files in Firebase Storage will not be automatically deleted and will need manual cleanup from the Storage console. This action cannot be undone.
+                            </AlertDialogDescription>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => setAssignmentToDelete(null)} disabled={isLoading}>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={confirmDeleteAssignment} disabled={isLoading}>
+                                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Delete
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                           </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </li>
                   ))}
                 </ul>
               )}
             </TabsContent>
-            
+
             <TabsContent value="students" className="p-6">
                 <h3 className="text-xl font-semibold mb-4">Enrolled Students</h3>
                  {isLoading && course.studentIds.length === 0 && !users.some(u => course.studentIds.includes(u.id)) && <p className="text-muted-foreground text-center py-4">Loading student information...</p>}
@@ -422,7 +456,7 @@ export default function TeacherCourseDetailPage() {
                     {course.studentIds.map(studentId => {
                         const student = users.find(u => u.id === studentId);
                         return student ? (
-                        <li key={student.id} className="p-3 border rounded-md flex items-center gap-3">
+                        <li key={student.id} className="p-3 border rounded-md flex items-center gap-3 hover:bg-muted/50 transition-colors">
                             <Image src={student.avatarUrl || `https://placehold.co/40x40.png?text=${student.name.substring(0,1)}`} alt={student.name} width={40} height={40} className="rounded-full" data-ai-hint="student avatar"/>
                             <div>
                                 <p className="font-medium">{student.name}</p>
@@ -436,8 +470,22 @@ export default function TeacherCourseDetailPage() {
             </TabsContent>
 
             <TabsContent value="settings" className="p-6">
-                <h3 className="text-xl font-semibold mb-4">Course Settings</h3>
-                <p className="text-muted-foreground">Course settings management (e.g., edit course details, prerequisites) would appear here. For now, use the main admin/teacher course list pages to edit general course info.</p>
+                <h3 className="text-xl font-semibold mb-2">Course Settings</h3>
+                {currentUser?.role === UserRole.SUPER_ADMIN ? (
+                    <p className="text-muted-foreground">
+                        As a Super Admin, you can edit core course details (name, description, teacher, cost, etc.) from the main {" "}
+                        <Link href="/admin/courses" className="text-primary hover:underline">Manage All Courses page</Link>.
+                        Find this course in the list and click 'Edit'.
+                    </p>
+                ) : (
+                     <p className="text-muted-foreground">
+                        Core course details such as name, description, assigned teacher, and cost are managed by administrators.
+                        As a teacher, you can manage course content (lessons, assignments) and view enrolled students using the tabs above.
+                    </p>
+                )}
+                 <p className="mt-4 text-sm text-muted-foreground">
+                    Additional settings like enrollment management, prerequisites, and publishing status may be added here in the future.
+                </p>
             </TabsContent>
           </Tabs>
         </CardContent>
@@ -473,9 +521,9 @@ export default function TeacherCourseDetailPage() {
                 </div>
                  {lessonFormData.fileName && (
                     <p className="text-xs text-muted-foreground mt-1">
-                        Current file: 
-                        {lessonFormData.fileUrl && !lessonFormData.fileUrl.startsWith("simulated-storage/") ? 
-                        <a href={lessonFormData.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">{lessonFormData.fileName}</a> : 
+                        Current file:
+                        {lessonFormData.fileUrl && !lessonFormData.fileUrl.startsWith("simulated-storage/") ?
+                        <a href={lessonFormData.fileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">{lessonFormData.fileName}</a> :
                         <span className="ml-1">{lessonFormData.fileName} {lessonFormData.fileUrl?.startsWith("simulated-storage/") ? "(Mock)" : "(New)"}</span>
                         }
                         {lessonFormData.id && lessonFormData.fileUrl && <Button variant="link" size="sm" className="p-0 h-auto ml-2 text-xs text-red-500" onClick={() => setLessonFormData(prev => ({...prev, file:null, fileName: undefined, fileUrl: undefined}))} disabled={isLoading}>Remove</Button>}
@@ -502,7 +550,7 @@ export default function TeacherCourseDetailPage() {
           <AlertDialogHeader><AlertDialogTitle>Delete Lesson?</AlertDialogTitle></AlertDialogHeader>
           <AlertDialogDescription>
             Are you sure you want to delete the lesson "{lessonToDelete?.title}"? This action cannot be undone.
-            <br/><strong className="text-destructive">Note:</strong> If this lesson has an associated file in Firebase Storage, it will not be automatically deleted and will need manual cleanup.
+            <br/><strong className="text-destructive mt-2 block">Note:</strong> If this lesson has an associated file in Firebase Storage, it will not be automatically deleted and will need manual cleanup from the Storage console.
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setLessonToDelete(null)} disabled={isLoading}>Cancel</AlertDialogCancel>
@@ -513,7 +561,7 @@ export default function TeacherCourseDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
+
         <Dialog open={isAssignmentModalOpen} onOpenChange={setIsAssignmentModalOpen}>
             <DialogContent className="sm:max-w-[625px] md:max-w-[750px] lg:max-w-[900px]">
                 <DialogHeader>
@@ -552,9 +600,9 @@ export default function TeacherCourseDetailPage() {
                                )}
                               {assignmentFormData.assignmentFileName && (
                                   <p className="text-xs text-muted-foreground mt-1">
-                                      Current file: 
-                                      {assignmentFormData.assignmentFileUrl && !assignmentFormData.assignmentFileUrl.startsWith("simulated-storage/") ? 
-                                      <a href={assignmentFormData.assignmentFileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">{assignmentFormData.assignmentFileName}</a> : 
+                                      Current file:
+                                      {assignmentFormData.assignmentFileUrl && !assignmentFormData.assignmentFileUrl.startsWith("simulated-storage/") ?
+                                      <a href={assignmentFormData.assignmentFileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">{assignmentFormData.assignmentFileName}</a> :
                                       <span className="ml-1">{assignmentFormData.assignmentFileName} {assignmentFormData.assignmentFileUrl?.startsWith("simulated-storage/") ? "(Mock)" : "(New)"}</span>
                                       }
                                       {assignmentFormData.id && assignmentFormData.assignmentFileUrl && <Button variant="link" size="sm" className="p-0 h-auto ml-2 text-xs text-red-500" onClick={() => setAssignmentFormData(prev => ({...prev, assignmentFile:null, assignmentFileName: undefined, assignmentFileUrl: undefined}))} disabled={isLoading}>Remove</Button>}
@@ -578,7 +626,7 @@ export default function TeacherCourseDetailPage() {
                                     </ScrollArea>
                                   </div>
                               )}
-                              <QuizGenerator 
+                              <QuizGenerator
                                   assignmentId={assignmentFormData.id || `${course.id}-${Date.now()}`}
                                   onQuestionsGenerated={handleGeneratedQuestions}
                                   existingLessonContent={getLessonContentForCourse()}
@@ -607,8 +655,8 @@ export default function TeacherCourseDetailPage() {
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle>Delete Assignment?</AlertDialogTitle></AlertDialogHeader>
           <AlertDialogDescription>
-            Are you sure you want to delete the assignment "{assignmentToDelete?.title}"? This will also delete all student submissions for it from local state. 
-            <br/><strong className="text-destructive">Note:</strong> The associated assignment file and any submitted files in Firebase Storage will not be automatically deleted and will need manual cleanup. This action cannot be undone.
+            Are you sure you want to delete the assignment "{assignmentToDelete?.title}"? This will also delete all student submissions for it from local state.
+            <br/><strong className="text-destructive mt-2 block">Note:</strong> The associated assignment file and any submitted files in Firebase Storage will not be automatically deleted and will need manual cleanup from the Storage console. This action cannot be undone.
           </AlertDialogDescription>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={() => setAssignmentToDelete(null)} disabled={isLoading}>Cancel</AlertDialogCancel>
@@ -671,7 +719,7 @@ export default function TeacherCourseDetailPage() {
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end pt-2">
                             <div className="space-y-1">
                               <Label htmlFor={`grade-${submission.id}`}>Grade ({selectedAssignmentForGrading.totalPoints} pts)</Label>
-                              <Input 
+                              <Input
                                 id={`grade-${submission.id}`} type="number" value={formData.grade}
                                 onChange={(e) => handleGradingFormChange(submission.id, 'grade', e.target.value)}
                                 placeholder={`0-${selectedAssignmentForGrading.totalPoints}`}
@@ -681,7 +729,7 @@ export default function TeacherCourseDetailPage() {
                             </div>
                             <div className="space-y-1 md:col-span-2">
                               <Label htmlFor={`feedback-${submission.id}`}>Feedback</Label>
-                              <Textarea 
+                              <Textarea
                                 id={`feedback-${submission.id}`} value={formData.feedback}
                                 onChange={(e) => handleGradingFormChange(submission.id, 'feedback', e.target.value)}
                                 placeholder="Provide feedback to the student..."
