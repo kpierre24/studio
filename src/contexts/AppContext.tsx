@@ -34,7 +34,6 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "fi
 import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 import { 
-  SAMPLE_USERS, 
   SAMPLE_COURSES, 
   SAMPLE_LESSONS, 
   SAMPLE_ASSIGNMENTS, 
@@ -571,11 +570,11 @@ const AppContext = createContext<{
   handleCreateCourse: (payload: CreateCoursePayload) => Promise<void>;
   handleUpdateCourse: (payload: UpdateCoursePayload) => Promise<void>;
   handleDeleteCourse: (payload: DeleteCoursePayload) => Promise<void>;
-  handleCreateLesson: (payload: CreateLessonPayload) => Promise<void>;
-  handleUpdateLesson: (payload: UpdateLessonPayload) => Promise<void>;
+  handleCreateLesson: (payload: CreateLessonPayload & { file?: File | null }) => Promise<void>;
+  handleUpdateLesson: (payload: UpdateLessonPayload & { file?: File | null }) => Promise<void>;
   handleDeleteLesson: (payload: DeleteLessonPayload) => Promise<void>;
-  handleCreateAssignment: (payload: CreateAssignmentPayload) => Promise<void>;
-  handleUpdateAssignment: (payload: UpdateAssignmentPayload) => Promise<void>;
+  handleCreateAssignment: (payload: CreateAssignmentPayload & { assignmentFile?: File | null }) => Promise<void>;
+  handleUpdateAssignment: (payload: UpdateAssignmentPayload & { assignmentFile?: File | null }) => Promise<void>;
   handleDeleteAssignment: (payload: DeleteAssignmentPayload) => Promise<void>;
   handleStudentSubmitAssignment: (payload: Submission) => Promise<void>; 
   handleTeacherGradeSubmission: (payload: GradeSubmissionPayload) => Promise<void>;
@@ -688,6 +687,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       if (!payload.password) throw new Error("Password is required.");
       await signInWithEmailAndPassword(authInstance, payload.email, payload.password);
+      // onAuthStateChanged will handle setting currentUser and fetching all users
     } catch (error: any) {
       dispatch({ type: ActionType.LOGIN_USER_FAILURE, payload: error.message || "Failed to login." });
     }
@@ -714,48 +714,297 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png?text=${payload.name.substring(0,2).toUpperCase()}`,
       };
       await setDoc(doc(dbInstance, "users", firebaseUser.uid), newUserForFirestore);
+      // onAuthStateChanged will handle setting currentUser and fetching all users
+      // We can dispatch a specific success for registration if needed for immediate UI update before auth state syncs
+      dispatch({ type: ActionType.REGISTER_STUDENT_SUCCESS, payload: newUserForFirestore });
       dispatch({ type: ActionType.ADD_NOTIFICATION, payload: {
         userId: firebaseUser.uid, type: 'success',
         message: `Welcome to ${APP_NAME}, ${newUserForFirestore.name}! Account created.`
       }});
-    } catch (error: any)      dispatch({ type: ActionType.CREATE_LESSON_REQUEST });
-      const db = getFirebaseDb();
-      if (!db) {
-        dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: "Firestore not available." });
+    } catch (error: any) {
+      dispatch({ type: ActionType.REGISTER_STUDENT_FAILURE, payload: error.message || "Failed to register." });
+    }
+  }, [dispatch]);
+
+  const handleLogoutUser = useCallback(async () => {
+    dispatch({ type: ActionType.LOGOUT_USER_REQUEST });
+    const authInstance = getFirebaseAuth();
+    if (!authInstance) {
+      dispatch({ type: ActionType.LOGOUT_USER_FAILURE, payload: "Firebase Auth not initialized." });
+      return;
+    }
+    try {
+      await signOut(authInstance);
+      dispatch({ type: ActionType.LOGOUT_USER_SUCCESS });
+    } catch (error: any) {
+      dispatch({ type: ActionType.LOGOUT_USER_FAILURE, payload: error.message || "Failed to logout." });
+    }
+  }, [dispatch]);
+  
+  const handleLessonFileUpload = useCallback(async (courseId: string, lessonId: string, file: File) => {
+    const storage = getFirebaseStorage();
+    if (!storage) {
+      throw new Error("Firebase Storage not available.");
+    }
+    console.log(`Firebase Storage Upload: User authenticated - ${!!getFirebaseAuth()?.currentUser?.uid}`);
+    const filePath = `lessons/${courseId}/${lessonId}/${file.name}`;
+    console.log(`Firebase Storage Upload: Attempting to upload to path: ${filePath}`);
+    const fileStorageRef = storageRef(storage, filePath);
+    await uploadBytes(fileStorageRef, file);
+    const fileUrl = await getDownloadURL(fileStorageRef);
+    return { fileUrl, fileName: file.name };
+  }, []);
+
+  const handleAssignmentAttachmentUpload = useCallback(async (courseId: string, assignmentId: string, file: File) => {
+    const storage = getFirebaseStorage();
+    if (!storage) {
+      throw new Error("Firebase Storage not available.");
+    }
+    const filePath = `assignment_attachments/${courseId}/${assignmentId}/${file.name}`;
+    const fileStorageRef = storageRef(storage, filePath);
+    await uploadBytes(fileStorageRef, file);
+    const assignmentFileUrl = await getDownloadURL(fileStorageRef);
+    return { assignmentFileUrl, assignmentFileName: file.name };
+  }, []);
+  
+  const handleStudentSubmissionUpload = useCallback(async (courseId: string, assignmentId: string, studentId: string, file: File) => {
+    const storage = getFirebaseStorage();
+    if (!storage) {
+      throw new Error("Firebase Storage not available.");
+    }
+    const filePath = `submissions/${courseId}/${assignmentId}/${studentId}/${file.name}`;
+    const fileStorageRef = storageRef(storage, filePath);
+    await uploadBytes(fileStorageRef, file);
+    const fileUrl = await getDownloadURL(fileStorageRef);
+    return { fileUrl, fileName: file.name };
+  }, []);
+
+  const handleBulkCreateStudents = useCallback(async (studentsToCreate: BulkCreateStudentData[]) => {
+    dispatch({ type: ActionType.BULK_CREATE_STUDENTS_REQUEST });
+    const auth = getFirebaseAuth();
+    const db = getFirebaseDb();
+    if (!auth || !db) {
+      dispatch({ type: ActionType.BULK_CREATE_STUDENTS_FAILURE, payload: { error: "Firebase services not initialized.", results: [] } });
+      return;
+    }
+
+    const results: BulkCreateStudentsResult = [];
+    const createdUsers: User[] = [];
+
+    for (const studentData of studentsToCreate) {
+      try {
+        const existingUser = state.users.find(u => u.email === studentData.email);
+        if (existingUser) {
+            results.push({ success: false, email: studentData.email, error: "Email already exists in local state." });
+            continue;
+        }
+        
+        const userCredential = await createUserWithEmailAndPassword(auth, studentData.email, studentData.password || "defaultPassword123"); // Consider stronger default or enforce in CSV
+        const firebaseUser = userCredential.user;
+        const newUserDoc: User = {
+          id: firebaseUser.uid,
+          name: studentData.name,
+          email: firebaseUser.email || studentData.email,
+          role: UserRole.STUDENT,
+          avatarUrl: `https://placehold.co/100x100.png?text=${studentData.name.substring(0,2).toUpperCase()}`,
+        };
+        await setDoc(doc(db, "users", firebaseUser.uid), newUserDoc);
+        results.push({ success: true, email: studentData.email, userId: firebaseUser.uid });
+        createdUsers.push(newUserDoc);
+         dispatch({ type: ActionType.ADD_NOTIFICATION, payload: {
+            userId: firebaseUser.uid, type: 'success',
+            message: `Welcome to ${APP_NAME}, ${newUserDoc.name}! Your account was created by an admin.`
+        }});
+      } catch (error: any) {
+        results.push({ success: false, email: studentData.email, error: error.message || "Unknown error during creation." });
+      }
+    }
+    
+    if (createdUsers.length > 0) {
+      dispatch({ type: ActionType.BULK_CREATE_STUDENTS_SUCCESS, payload: { users: createdUsers, results } });
+    } else if (results.some(r => !r.success && r.error !== "Email already exists in local state.")) { // Only dispatch failure if actual errors occurred beyond local skips
+      dispatch({ type: ActionType.BULK_CREATE_STUDENTS_FAILURE, payload: { error: "Some students could not be created. Check details.", results } });
+    } else {
+       dispatch({ type: ActionType.BULK_CREATE_STUDENTS_SUCCESS, payload: { users: [], results } }); // No new users, but no critical errors
+    }
+
+  }, [dispatch, state.users]);
+
+  const handleAdminCreateUser = useCallback(async (payload: CreateUserPayload) => {
+    dispatch({ type: ActionType.CREATE_USER_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.CREATE_USER_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      // For Admin user creation, we typically DO NOT create Firebase Auth user here
+      // as it would sign the admin out. This creates only the Firestore document.
+      // The admin should instruct the user how to log in or a separate flow for auth creation is needed.
+      const userId = doc(collection(db, "users")).id; // Generate a new ID for Firestore
+      const newUserDoc: User = {
+        id: userId,
+        name: payload.name,
+        email: payload.email,
+        role: payload.role,
+        avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png?text=${payload.name.substring(0,2).toUpperCase()}`,
+      };
+      await setDoc(doc(db, "users", userId), newUserDoc);
+      dispatch({ type: ActionType.CREATE_USER_SUCCESS, payload: newUserDoc });
+      // Potentially send an email or notification if user management system supports it
+    } catch (error: any) {
+      dispatch({ type: ActionType.CREATE_USER_FAILURE, payload: error.message || "Failed to create user document." });
+    }
+  }, [dispatch]);
+
+  const handleAdminUpdateUser = useCallback(async (payload: UpdateUserPayload) => {
+    dispatch({ type: ActionType.UPDATE_USER_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.UPDATE_USER_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      const userRef = doc(db, "users", payload.id);
+      await updateDoc(userRef, { name: payload.name, role: payload.role, avatarUrl: payload.avatarUrl });
+      dispatch({ type: ActionType.UPDATE_USER_SUCCESS, payload });
+    } catch (error: any) {
+      dispatch({ type: ActionType.UPDATE_USER_FAILURE, payload: error.message || "Failed to update user."});
+    }
+  }, [dispatch]);
+
+  const handleAdminDeleteUser = useCallback(async (payload: DeleteUserPayload) => {
+    dispatch({ type: ActionType.DELETE_USER_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.DELETE_USER_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      // Deleting Firebase Auth user is complex from client-side admin and usually done via Admin SDK.
+      // This will only delete the Firestore document.
+      await deleteDoc(doc(db, "users", payload.id));
+      dispatch({ type: ActionType.DELETE_USER_SUCCESS, payload });
+    } catch (error: any) {
+      dispatch({ type: ActionType.DELETE_USER_FAILURE, payload: error.message || "Failed to delete user document."});
+    }
+  }, [dispatch]);
+
+  const handleCreateCourse = useCallback(async (payload: CreateCoursePayload) => {
+    dispatch({ type: ActionType.CREATE_COURSE_REQUEST });
+    const db = getFirebaseDb();
+    
+    if (!db) {
+        console.error("Firestore DB instance is not available for handleCreateCourse.");
+        dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: "Firestore not available." });
+        return;
+    }
+    if (!state.currentUser) {
+        console.error("Current user is not available for handleCreateCourse.");
+        dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: "User not authenticated to create course." });
+        return;
+    }
+
+    try {
+        const courseId = payload.id || doc(collection(db, "courses")).id;
+        const newCourse: Course = {
+            id: courseId,
+            name: payload.name,
+            description: payload.description,
+            teacherId: payload.teacherId || state.currentUser.id, // Default to current user if teacher
+            studentIds: payload.studentIds || [],
+            category: payload.category || '',
+            cost: payload.cost || 0,
+            prerequisites: payload.prerequisites || [],
+        };
+        console.log("Attempting to save course to Firestore:", newCourse);
+        await setDoc(doc(db, "courses", courseId), newCourse);
+        console.log("Course saved successfully to Firestore with ID:", courseId);
+        dispatch({ type: ActionType.CREATE_COURSE_SUCCESS, payload: newCourse });
+    } catch (error: any) {
+        let errorMessage = error.message || "Failed to create course.";
+        if (error.code === 'permission-denied') {
+            errorMessage = "Permission denied. Check Firestore security rules for creating courses.";
+        }
+        console.error("Firestore Error - Failed to create course:", error.code, error.message, error);
+        dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: errorMessage });
+    }
+}, [dispatch, state.currentUser]);
+
+
+  const handleUpdateCourse = useCallback(async (payload: UpdateCoursePayload) => {
+    dispatch({ type: ActionType.UPDATE_COURSE_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.UPDATE_COURSE_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      const courseRef = doc(db, "courses", payload.id);
+      const updateData: Partial<Course> = { ...payload };
+      delete updateData.id; 
+      await updateDoc(courseRef, updateData as any);
+      dispatch({ type: ActionType.UPDATE_COURSE_SUCCESS, payload });
+    } catch (error: any) {
+      dispatch({ type: ActionType.UPDATE_COURSE_FAILURE, payload: error.message || "Failed to update course."});
+    }
+  }, [dispatch]);
+
+  const handleDeleteCourse = useCallback(async (payload: DeleteCoursePayload) => {
+    dispatch({ type: ActionType.DELETE_COURSE_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.DELETE_COURSE_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, "courses", payload.id));
+      // In a real app, you'd also want to delete subcollections (lessons, assignments) using a Cloud Function.
+      dispatch({ type: ActionType.DELETE_COURSE_SUCCESS, payload });
+    } catch (error: any) {
+      dispatch({ type: ActionType.DELETE_COURSE_FAILURE, payload: error.message || "Failed to delete course."});
+    }
+  }, [dispatch]);
+  
+  const handleCreateLesson = useCallback(async (payload: CreateLessonPayload & { file?: File | null }) => {
+    dispatch({ type: ActionType.CREATE_LESSON_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    let uploadedFileUrl = payload.fileUrl;
+    let uploadedFileName = payload.fileName;
+
+    if (payload.file) {
+      try {
+        const { fileUrl: newFileUrl, fileName: newFileName } = await handleLessonFileUpload(payload.courseId, payload.id || `new-${Date.now()}`, payload.file);
+        uploadedFileUrl = newFileUrl;
+        uploadedFileName = newFileName;
+      } catch (error: any) {
+        dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: error.message || "Failed to upload lesson file." });
         return;
       }
-      let uploadedFileUrl = payload.fileUrl;
-      let uploadedFileName = payload.fileName;
-
-      if (payload.file) {
-        try {
-          const { fileUrl: newFileUrl, fileName: newFileName } = await handleLessonFileUpload(payload.courseId, payload.id || `new-${Date.now()}`, payload.file);
-          uploadedFileUrl = newFileUrl;
-          uploadedFileName = newFileName;
-        } catch (error: any) {
-          dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: error.message || "Failed to upload lesson file." });
-          return;
-        }
-      }
-      
-      try {
-        const lessonId = payload.id || doc(collection(db, "courses", payload.courseId, "lessons")).id;
-        const newLesson: Lesson = { 
-          id: lessonId,
-          courseId: payload.courseId,
-          title: payload.title,
-          contentMarkdown: payload.contentMarkdown,
-          videoUrl: payload.videoUrl,
-          order: payload.order,
-          fileUrl: uploadedFileUrl,
-          fileName: uploadedFileName,
-        };
-        await setDoc(doc(db, "courses", payload.courseId, "lessons", lessonId), newLesson);
-        dispatch({ type: ActionType.CREATE_LESSON_SUCCESS, payload: newLesson });
-      } catch (error: any) {
-        dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: error.message || "Failed to create lesson."});
-      }
-    }, [dispatch, handleLessonFileUpload]);
+    }
+    
+    try {
+      const lessonId = payload.id || doc(collection(db, "courses", payload.courseId, "lessons")).id;
+      const newLesson: Lesson = { 
+        id: lessonId,
+        courseId: payload.courseId,
+        title: payload.title,
+        contentMarkdown: payload.contentMarkdown,
+        videoUrl: payload.videoUrl,
+        order: payload.order,
+        fileUrl: uploadedFileUrl,
+        fileName: uploadedFileName,
+      };
+      await setDoc(doc(db, "courses", payload.courseId, "lessons", lessonId), newLesson);
+      dispatch({ type: ActionType.CREATE_LESSON_SUCCESS, payload: newLesson });
+    } catch (error: any) {
+      dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: error.message || "Failed to create lesson."});
+    }
+  }, [dispatch, handleLessonFileUpload]);
 
   const handleUpdateLesson = useCallback(async (payload: UpdateLessonPayload & { file?: File | null }) => {
     dispatch({ type: ActionType.UPDATE_LESSON_REQUEST });
@@ -780,10 +1029,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else if (payload.file === null && payload.fileUrl === undefined) { // File explicitly removed
         uploadedFileUrl = undefined;
         uploadedFileName = undefined;
-        // Potentially delete old file from storage here if needed, but requires old file path.
-        // For now, just removes the reference from Firestore.
     }
-
 
     try {
       const lessonRef = doc(db, "courses", payload.courseId, "lessons", payload.id);
@@ -810,12 +1056,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
-      // Optionally: Delete file from Firebase Storage if fileUrl exists
-      // const lessonDoc = state.lessons.find(l => l.id === payload.id && l.courseId === payload.courseId);
-      // if (lessonDoc && lessonDoc.fileUrl) {
-      //   const fileStorageRef = storageRef(getFirebaseStorage()!, lessonDoc.fileUrl);
-      //   try { await deleteObject(fileStorageRef); } catch (e) { console.warn("Could not delete lesson file from storage", e); }
-      // }
       await deleteDoc(doc(db, "courses", payload.courseId, "lessons", payload.id));
       dispatch({ type: ActionType.DELETE_LESSON_SUCCESS, payload });
     } catch (error: any) {
@@ -823,7 +1063,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch]);
 
-  const handleCreateAssignment = useCallback(async (payload: CreateAssignmentPayload) => {
+  const handleCreateAssignment = useCallback(async (payload: CreateAssignmentPayload & { assignmentFile?: File | null }) => {
     dispatch({ type: ActionType.CREATE_ASSIGNMENT_REQUEST });
     const db = getFirebaseDb();
     if (!db) {
@@ -873,7 +1113,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch, handleAssignmentAttachmentUpload]);
 
-  const handleUpdateAssignment = useCallback(async (payload: UpdateAssignmentPayload) => {
+  const handleUpdateAssignment = useCallback(async (payload: UpdateAssignmentPayload & { assignmentFile?: File | null }) => {
     dispatch({ type: ActionType.UPDATE_ASSIGNMENT_REQUEST });
     const db = getFirebaseDb();
     if (!db || !payload.courseId) {
@@ -935,7 +1175,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       await deleteDoc(doc(db, "courses", payload.courseId, "assignments", payload.id));
-      // Potentially delete associated submissions and files from storage
       dispatch({ type: ActionType.DELETE_ASSIGNMENT_SUCCESS, payload });
     } catch (error: any) {
       dispatch({ type: ActionType.DELETE_ASSIGNMENT_FAILURE, payload: error.message || "Failed to delete assignment."});
@@ -962,7 +1201,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: submissionId,
         submittedAt: payload.submittedAt || new Date().toISOString(),
       };
-      delete (finalSubmission as any).file; // Remove transient file object
+      delete (finalSubmission as any).file; 
 
       await setDoc(doc(db, "courses", assignment.courseId, "assignments", payload.assignmentId, "submissions", submissionId), finalSubmission);
       dispatch({ type: ActionType.SUBMIT_ASSIGNMENT_SUCCESS, payload: finalSubmission });
@@ -1038,3 +1277,4 @@ export const useAppContext = () => {
   }
   return context;
 };
+
