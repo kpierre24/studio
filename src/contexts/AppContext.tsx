@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import type { Dispatch } from 'react';
@@ -26,12 +27,14 @@ import {
   where, 
   getDocs, 
   writeBatch, 
+  arrayUnion,
+  arrayRemove,
   type Firestore 
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem, Enrollment, EnrollStudentPayload, EnrollStudentSuccessPayload, UnenrollStudentPayload, UnenrollStudentSuccessPayload } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 import { 
   SAMPLE_COURSES, 
@@ -146,6 +149,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.CREATE_COURSE_REQUEST:
     case ActionType.UPDATE_COURSE_REQUEST:
     case ActionType.DELETE_COURSE_REQUEST:
+    case ActionType.ENROLL_STUDENT_REQUEST:
+    case ActionType.UNENROLL_STUDENT_REQUEST:
     case ActionType.CREATE_LESSON_REQUEST:
     case ActionType.UPDATE_LESSON_REQUEST:
     case ActionType.DELETE_LESSON_REQUEST:
@@ -180,6 +185,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.CREATE_COURSE_FAILURE:
     case ActionType.UPDATE_COURSE_FAILURE:
     case ActionType.DELETE_COURSE_FAILURE:
+    case ActionType.ENROLL_STUDENT_FAILURE:
+    case ActionType.UNENROLL_STUDENT_FAILURE:
     case ActionType.CREATE_LESSON_FAILURE:
     case ActionType.UPDATE_LESSON_FAILURE:
     case ActionType.DELETE_LESSON_FAILURE:
@@ -191,6 +198,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return { ...state, isLoading: false, error: action.payload, currentUser: state.currentUser === undefined ? null : state.currentUser  }; 
 
     case ActionType.LOGOUT_USER_SUCCESS:
+      // TODO: Consider clearing other data arrays (courses, lessons, etc.) on logout,
+      // or ensure they are re-fetched correctly on next login.
       return { 
         ...initialState, 
         users: [], 
@@ -290,6 +299,57 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         assignments: state.assignments.filter(assignment => assignment.courseId !== id), 
         isLoading: false, error: null,
         successMessage: `Course "${courseToDelete?.name || id}" deleted successfully.`,
+      };
+    }
+    
+    case ActionType.ENROLL_STUDENT_SUCCESS: {
+      const { course, enrollment } = action.payload;
+      const student = state.users.find(u => u.id === enrollment.studentId);
+      const courseName = course.name;
+      return {
+        ...state,
+        courses: state.courses.map(c => c.id === course.id ? course : c),
+        enrollments: [...state.enrollments, enrollment],
+        isLoading: false,
+        error: null,
+        successMessage: `Student ${student?.name || enrollment.studentId} enrolled in ${courseName}.`,
+        notifications: [
+          {
+            id: `notif-enroll-${enrollment.id}`,
+            userId: enrollment.studentId,
+            type: 'enrollment_update',
+            message: `You have been enrolled in the course: ${courseName}.`,
+            link: `/student/courses/${course.id}`,
+            read: false,
+            timestamp: Date.now(),
+          },
+          ...state.notifications,
+        ].slice(0, 20),
+      };
+    }
+
+    case ActionType.UNENROLL_STUDENT_SUCCESS: {
+      const { course, studentId, enrollmentId } = action.payload;
+      const student = state.users.find(u => u.id === studentId);
+      const courseName = course.name;
+      return {
+        ...state,
+        courses: state.courses.map(c => c.id === course.id ? course : c),
+        enrollments: state.enrollments.filter(e => e.id !== enrollmentId),
+        isLoading: false,
+        error: null,
+        successMessage: `Student ${student?.name || studentId} unenrolled from ${courseName}.`,
+         notifications: [
+          {
+            id: `notif-unenroll-${enrollmentId}`,
+            userId: studentId,
+            type: 'enrollment_update',
+            message: `You have been unenrolled from the course: ${courseName}.`,
+            read: false,
+            timestamp: Date.now(),
+          },
+          ...state.notifications,
+        ].slice(0, 20),
       };
     }
     
@@ -575,6 +635,8 @@ const AppContext = createContext<{
   handleCreateCourse: (payload: CreateCoursePayload) => Promise<void>;
   handleUpdateCourse: (payload: UpdateCoursePayload) => Promise<void>;
   handleDeleteCourse: (payload: DeleteCoursePayload) => Promise<void>;
+  handleEnrollStudent: (payload: EnrollStudentPayload) => Promise<void>;
+  handleUnenrollStudent: (payload: UnenrollStudentPayload) => Promise<void>;
   handleCreateLesson: (payload: CreateLessonPayload & { file?: File | null }) => Promise<void>;
   handleUpdateLesson: (payload: UpdateLessonPayload & { file?: File | null }) => Promise<void>;
   handleDeleteLesson: (payload: DeleteLessonPayload) => Promise<void>;
@@ -756,13 +818,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error("Firebase Storage service not available for lesson file upload.");
       throw new Error("Firebase Storage not available.");
     }
-    console.log(`[Storage Upload] User authenticated: ${!!getFirebaseAuth()?.currentUser?.uid}`);
+    console.log(`[Firebase Storage Upload]: User authenticated: ${!!getFirebaseAuth()?.currentUser?.uid}`);
     const filePath = `lessons/${courseId}/${lessonId}/${file.name}`;
-    console.log(`[Storage Upload] Attempting to upload to path: ${filePath}`);
+    console.log(`[Firebase Storage Upload]: Attempting to upload to path: ${filePath}`);
     const fileStorageRef = storageRef(storage, filePath);
     await uploadBytes(fileStorageRef, file);
     const fileUrl = await getDownloadURL(fileStorageRef);
-    console.log(`[Storage Upload] File uploaded successfully: ${fileUrl}`);
+    console.log(`[Firebase Storage Upload]: File uploaded successfully: ${fileUrl}`);
     return { fileUrl, fileName: file.name };
   }, []);
 
@@ -902,16 +964,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const db = getFirebaseDb();
     
     if (!db) {
-        console.error("Firestore DB instance is not available for handleCreateCourse.");
+        console.error("[AppContext] Firestore DB instance is not available for handleCreateCourse.");
         dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: "Firestore not available." });
         return;
     }
     if (!state.currentUser) {
-        console.error("Current user is not available for handleCreateCourse.");
+        console.error("[AppContext] Current user is not available for handleCreateCourse.");
         dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: "User not authenticated to create course." });
         return;
     }
-    console.log("handleCreateCourse: User is authenticated. Proceeding...");
+    console.log("[AppContext] handleCreateCourse: User is authenticated. Proceeding...");
 
     try {
         const courseId = payload.id || doc(collection(db, "courses")).id;
@@ -925,16 +987,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             cost: payload.cost || 0,
             prerequisites: payload.prerequisites || [],
         };
-        console.log("Attempting to save course to Firestore:", newCourse);
+        console.log("[AppContext] Attempting to save course to Firestore:", newCourse);
         await setDoc(doc(db, "courses", courseId), newCourse);
-        console.log("Course saved successfully to Firestore with ID:", courseId);
+        console.log("[AppContext] Course saved successfully to Firestore with ID:", courseId);
         dispatch({ type: ActionType.CREATE_COURSE_SUCCESS, payload: newCourse });
     } catch (error: any) {
         let errorMessage = error.message || "Failed to create course.";
         if (error.code === 'permission-denied') {
             errorMessage = "Permission denied. Check Firestore security rules for creating courses.";
         }
-        console.error("Firestore Error - Failed to create course:", error.code, error.message, error);
+        console.error("[AppContext] Firestore Error - Failed to create course:", error.code, error.message, error);
         dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: errorMessage });
     }
 }, [dispatch, state.currentUser]);
@@ -973,6 +1035,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch]);
   
+  const handleEnrollStudent = useCallback(async (payload: EnrollStudentPayload) => {
+    dispatch({ type: ActionType.ENROLL_STUDENT_REQUEST });
+    const { courseId, studentId } = payload;
+    const db = getFirebaseDb();
+
+    if (!db) {
+      dispatch({ type: ActionType.ENROLL_STUDENT_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      const courseRef = doc(db, "courses", courseId);
+      const enrollmentId = `enroll-${courseId}-${studentId}`;
+      const enrollmentRef = doc(db, "enrollments", enrollmentId);
+
+      const batch = writeBatch(db);
+      batch.update(courseRef, { studentIds: arrayUnion(studentId) });
+      const newEnrollment: Enrollment = {
+        id: enrollmentId,
+        courseId,
+        studentId,
+        enrollmentDate: new Date().toISOString(),
+      };
+      batch.set(enrollmentRef, newEnrollment);
+      await batch.commit();
+
+      const updatedCourseDoc = await getDoc(courseRef);
+      const updatedCourse = { id: updatedCourseDoc.id, ...updatedCourseDoc.data() } as Course;
+      
+      dispatch({ type: ActionType.ENROLL_STUDENT_SUCCESS, payload: { course: updatedCourse, enrollment: newEnrollment } });
+
+    } catch (error: any) {
+      dispatch({ type: ActionType.ENROLL_STUDENT_FAILURE, payload: error.message || "Failed to enroll student." });
+    }
+  }, [dispatch]);
+
+  const handleUnenrollStudent = useCallback(async (payload: UnenrollStudentPayload) => {
+    dispatch({ type: ActionType.UNENROLL_STUDENT_REQUEST });
+    const { courseId, studentId } = payload;
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.UNENROLL_STUDENT_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      const courseRef = doc(db, "courses", courseId);
+      const enrollmentId = `enroll-${courseId}-${studentId}`; // Construct ID to find it
+      const enrollmentRef = doc(db, "enrollments", enrollmentId);
+
+      const batch = writeBatch(db);
+      batch.update(courseRef, { studentIds: arrayRemove(studentId) });
+      batch.delete(enrollmentRef);
+      await batch.commit();
+      
+      const updatedCourseDoc = await getDoc(courseRef);
+      const updatedCourse = { id: updatedCourseDoc.id, ...updatedCourseDoc.data() } as Course;
+
+      dispatch({ type: ActionType.UNENROLL_STUDENT_SUCCESS, payload: { course: updatedCourse, studentId, enrollmentId } });
+    } catch (error: any) {
+      dispatch({ type: ActionType.UNENROLL_STUDENT_FAILURE, payload: error.message || "Failed to unenroll student." });
+    }
+  }, [dispatch]);
+
   const handleCreateLesson = useCallback(async (payload: CreateLessonPayload & { file?: File | null }) => {
     dispatch({ type: ActionType.CREATE_LESSON_REQUEST });
     const db = getFirebaseDb();
@@ -1055,6 +1179,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch, handleLessonFileUpload]);
   
+  // TODO: Consider implementing Firebase Functions to delete associated files from Storage
   const handleDeleteLesson = useCallback(async (payload: DeleteLessonPayload) => {
     dispatch({ type: ActionType.DELETE_LESSON_REQUEST });
     const db = getFirebaseDb();
@@ -1063,7 +1188,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
-      // TODO: Consider deleting associated file from Firebase Storage via a Cloud Function.
       await deleteDoc(doc(db, "courses", payload.courseId, "lessons", payload.id));
       dispatch({ type: ActionType.DELETE_LESSON_SUCCESS, payload });
     } catch (error: any) {
@@ -1174,6 +1298,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch, handleAssignmentAttachmentUpload]);
 
+  // TODO: Consider implementing Firebase Functions to delete associated files and submissions from Storage/Firestore
   const handleDeleteAssignment = useCallback(async (payload: DeleteAssignmentPayload) => {
     dispatch({ type: ActionType.DELETE_ASSIGNMENT_REQUEST });
     const db = getFirebaseDb();
@@ -1182,7 +1307,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
-      // TODO: Consider deleting associated file and all submissions from Firebase Storage/Firestore via a Cloud Function.
       await deleteDoc(doc(db, "courses", payload.courseId, "assignments", payload.id));
       dispatch({ type: ActionType.DELETE_ASSIGNMENT_SUCCESS, payload });
     } catch (error: any) {
@@ -1262,6 +1386,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     handleCreateCourse,
     handleUpdateCourse,
     handleDeleteCourse,
+    handleEnrollStudent,
+    handleUnenrollStudent,
     handleCreateLesson,
     handleUpdateLesson,
     handleDeleteLesson,
@@ -1286,4 +1412,5 @@ export const useAppContext = () => {
   }
   return context;
 };
+
 

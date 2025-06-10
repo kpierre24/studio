@@ -84,7 +84,15 @@ export enum ActionType {
   DELETE_COURSE_REQUEST = 'DELETE_COURSE_REQUEST',
   DELETE_COURSE_SUCCESS = 'DELETE_COURSE_SUCCESS',
   DELETE_COURSE_FAILURE = 'DELETE_COURSE_FAILURE',
-  ENROLL_COURSE = 'ENROLL_COURSE', 
+  
+  // Enrollment Management
+  ENROLL_STUDENT_REQUEST = 'ENROLL_STUDENT_REQUEST',
+  ENROLL_STUDENT_SUCCESS = 'ENROLL_STUDENT_SUCCESS',
+  ENROLL_STUDENT_FAILURE = 'ENROLL_STUDENT_FAILURE',
+  UNENROLL_STUDENT_REQUEST = 'UNENROLL_STUDENT_REQUEST',
+  UNENROLL_STUDENT_SUCCESS = 'UNENROLL_STUDENT_SUCCESS',
+  UNENROLL_STUDENT_FAILURE = 'UNENROLL_STUDENT_FAILURE',
+
   // Lesson Management
   CREATE_LESSON_REQUEST = 'CREATE_LESSON_REQUEST',
   CREATE_LESSON_SUCCESS = 'CREATE_LESSON_SUCCESS',
@@ -253,7 +261,7 @@ export interface NotificationMessage {
   id: string;
   userId?: string; 
   courseId?: string; 
-  type: 'success' | 'error' | 'info' | 'warning' | 'new_assignment' | 'grade_update' | 'announcement' | 'payment_due' | 'payment_received' | 'submission_received' | 'submission_graded';
+  type: 'success' | 'error' | 'info' | 'warning' | 'new_assignment' | 'grade_update' | 'announcement' | 'payment_due' | 'payment_received' | 'submission_received' | 'submission_graded' | 'enrollment_update';
   message: string;
   link?: string; 
   read: boolean;
@@ -305,6 +313,11 @@ export type BulkCreateStudentsResult = BulkCreateStudentsResultItem[];
 export type CreateCoursePayload = Omit<Course, 'id' | 'studentIds'> & { studentIds?: string[]; id?: string; }; 
 export type UpdateCoursePayload = Partial<Omit<Course, 'id'>> & { id: string };
 export type DeleteCoursePayload = { id: string };
+
+export type EnrollStudentPayload = { courseId: string; studentId: string; };
+export type EnrollStudentSuccessPayload = { course: Course; enrollment: Enrollment; };
+export type UnenrollStudentPayload = { courseId: string; studentId: string; };
+export type UnenrollStudentSuccessPayload = { course: Course; studentId: string; enrollmentId: string; };
 
 
 export type CreateLessonPayload = Omit<Lesson, 'id'>;
@@ -376,6 +389,13 @@ export type AppAction =
   | { type: ActionType.DELETE_COURSE_SUCCESS; payload: DeleteCoursePayload }
   | { type: ActionType.DELETE_COURSE_FAILURE; payload: string }
 
+  | { type: ActionType.ENROLL_STUDENT_REQUEST }
+  | { type: ActionType.ENROLL_STUDENT_SUCCESS; payload: EnrollStudentSuccessPayload }
+  | { type: ActionType.ENROLL_STUDENT_FAILURE; payload: string }
+  | { type: ActionType.UNENROLL_STUDENT_REQUEST }
+  | { type: ActionType.UNENROLL_STUDENT_SUCCESS; payload: UnenrollStudentSuccessPayload }
+  | { type: ActionType.UNENROLL_STUDENT_FAILURE; payload: string }
+
   | { type: ActionType.CREATE_LESSON_REQUEST }
   | { type: ActionType.CREATE_LESSON_SUCCESS; payload: Lesson }
   | { type: ActionType.CREATE_LESSON_FAILURE; payload: string }
@@ -434,4 +454,5 @@ export interface GenerateQuizQuestionsOutput {
         correctAnswer: string;
     }>;
 }
+
 
