@@ -1,5 +1,4 @@
 
-
 import type { User, Course, Lesson, Assignment, Submission, Payment, AttendanceRecord, NotificationMessage, Enrollment, QuizQuestion, RubricCriterion, Announcement } from '@/types';
 import { UserRole, AssignmentType, QuestionType, AttendanceStatus } from '@/types';
 
@@ -9,7 +8,7 @@ export const SAMPLE_SUPER_ADMIN: User = {
   id: 'user-super-admin',
   name: 'Super Admin',
   email: 'superadmin@classroomhq.com',
-  password: 'password123', // In a real app, this would be hashed or managed by an auth provider
+  password: 'password123',
   role: UserRole.SUPER_ADMIN,
   avatarUrl: 'https://placehold.co/100x100.png?text=SA',
 };
@@ -66,13 +65,16 @@ export const SAMPLE_USERS: User[] = [
   ...SAMPLE_STUDENTS,
 ];
 
+// Get all student IDs for easier enrollment
+const allStudentIds = SAMPLE_STUDENTS.map(student => student.id);
+
 export const SAMPLE_COURSES: Course[] = [
   {
     id: 'course-1',
-    name: 'Introduction to Programming',
-    description: 'Learn the fundamentals of programming using JavaScript.',
+    name: 'Introduction to Programming (School of Ministry)', // Renamed for clarity
+    description: 'Learn the fundamentals of programming using JavaScript. This is the core School of Ministry course.',
     teacherId: 'user-teacher-1',
-    studentIds: ['user-student-1', 'user-student-2', 'user-student-3'],
+    studentIds: allStudentIds, // Enroll all sample students
     category: 'Computer Science',
     cost: 100,
     prerequisites: [],
@@ -82,10 +84,10 @@ export const SAMPLE_COURSES: Course[] = [
     name: 'Advanced Mathematics',
     description: 'Explore complex mathematical concepts.',
     teacherId: 'user-teacher-2',
-    studentIds: ['user-student-1'],
+    studentIds: ['user-student-1'], // Kept specific enrollment for this course
     category: 'Mathematics',
     cost: 150,
-    prerequisites: ['course-1'], // Example prerequisite
+    prerequisites: ['course-1'],
   },
 ];
 
@@ -95,7 +97,7 @@ export const SAMPLE_LESSONS: Lesson[] = [
     courseId: 'course-1',
     title: 'Variables and Data Types',
     contentMarkdown: '### What are Variables?\nVariables are containers for storing data values. In JavaScript, variables can be declared with `var`, `let`, or `const` keywords.',
-    videoUrl: 'https://www.youtube.com/watch?v= primjer', // Example video URL
+    videoUrl: 'https://www.youtube.com/watch?v= primjer',
     order: 1,
   },
   {
@@ -125,9 +127,9 @@ export const SAMPLE_ASSIGNMENTS: Assignment[] = [
     courseId: 'course-1',
     title: 'First Programming Challenge',
     description: 'Write a simple JavaScript function.',
-    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // Due in 7 days
+    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     type: AssignmentType.STANDARD,
-    totalPoints: 30, // Sum of rubric points
+    totalPoints: 30,
     rubric: sampleRubricForAssign1,
   },
   {
@@ -135,9 +137,9 @@ export const SAMPLE_ASSIGNMENTS: Assignment[] = [
     courseId: 'course-1',
     title: 'Basic Concepts Quiz',
     description: 'Test your understanding of variables and types.',
-    dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(), // Due in 10 days
+    dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
     type: AssignmentType.QUIZ,
-    totalPoints: 15, // Sum of question points
+    totalPoints: 15,
     questions: quiz1Questions.map(q => ({...q, assignmentId: 'assign-1-2'})),
   },
 ];
@@ -149,20 +151,19 @@ export const SAMPLE_SUBMISSIONS: Submission[] = [
     studentId: 'user-student-1',
     submittedAt: new Date().toISOString(),
     content: 'This is my submission for the first programming challenge.',
-    grade: 25, // Example grade
+    grade: 25,
     feedback: 'Good effort, but review the section on loops.',
     rubricScores: [ { criterionId: 'rubric-1-1', score: 8 }, { criterionId: 'rubric-1-2', score: 12 }, { criterionId: 'rubric-1-3', score: 5 }]
   },
   {
     id: 'sub-2',
-    assignmentId: 'assign-1-2', // Quiz submission
+    assignmentId: 'assign-1-2',
     studentId: 'user-student-1',
     submittedAt: new Date().toISOString(),
     quizAnswers: [
       { questionId: 'q1', studentAnswer: 'const' },
       { questionId: 'q2', studentAnswer: 'False' },
     ],
-    // Grade will be auto-calculated by LOAD_DATA in AppContext
   },
 ];
 
@@ -191,15 +192,13 @@ export const SAMPLE_ATTENDANCE: AttendanceRecord[] = [
   { id: `att-c1-s1-${twoDaysAgo}`, studentId: 'user-student-1', courseId: 'course-1', date: twoDaysAgo, status: AttendanceStatus.PRESENT },
   { id: `att-c1-s2-${twoDaysAgo}`, studentId: 'user-student-2', courseId: 'course-1', date: twoDaysAgo, status: AttendanceStatus.PRESENT },
   { id: `att-c1-s3-${twoDaysAgo}`, studentId: 'user-student-3', courseId: 'course-1', date: twoDaysAgo, status: AttendanceStatus.EXCUSED, notes: "Doctor's appointment" },
-  
-  // No records for 'today' initially, teacher will create them
 ];
 
-export const SAMPLE_NOTIFICATIONS: NotificationMessage[] = []; // Start with no notifications, they are generated by actions
+export const SAMPLE_NOTIFICATIONS: NotificationMessage[] = [];
 
 
 export const INITIAL_ENROLLMENTS: Enrollment[] = SAMPLE_COURSES.flatMap(course =>
-  course.studentIds.map(studentId => ({
+  (course.studentIds || []).map(studentId => ({ // Added null check for studentIds defensively
     id: `enroll-${course.id}-${studentId}`,
     studentId,
     courseId: course.id,
@@ -211,35 +210,30 @@ export const SAMPLE_ANNOUNCEMENTS: Announcement[] = [
   {
     id: 'announce-1',
     message: "Welcome to the new semester!\nWe're excited to have you all. Please check your course pages for initial assignments and materials.",
-    timestamp: Date.now() - (2 * 24 * 60 * 60 * 1000), // 2 days ago
-    type: 'announcement', // General announcement
+    timestamp: Date.now() - (2 * 24 * 60 * 60 * 1000),
+    type: 'announcement',
     link: '/student/dashboard'
   },
   {
     id: 'announce-2',
     message: "Scheduled Maintenance Notice\nThe platform will be down for maintenance on Saturday from 2 AM to 4 AM. We apologize for any inconvenience.",
-    timestamp: Date.now() - (1 * 24 * 60 * 60 * 1000), // 1 day ago
-    type: 'announcement', // General announcement
+    timestamp: Date.now() - (1 * 24 * 60 * 60 * 1000),
+    type: 'announcement',
   },
   {
     id: 'announce-course-1-update',
     courseId: 'course-1',
-    message: "Intro to Programming: Week 1 materials are now live!\nPlease review Lesson 1 and start working on the first challenge.",
-    timestamp: Date.now() - (12 * 60 * 60 * 1000), // 12 hours ago
-    type: 'course_update', // Course-specific type, or could be 'announcement' with courseId
+    message: "Intro to Programming (School of Ministry): Week 1 materials are now live!\nPlease review Lesson 1 and start working on the first challenge.",
+    timestamp: Date.now() - (12 * 60 * 60 * 1000),
+    type: 'course_update',
     link: '/student/courses/course-1'
   },
     {
     id: 'announce-student-1-specific',
-    userId: 'user-student-1', // Target student
+    userId: 'user-student-1',
     message: "Hi Charlie, just a reminder that your payment for Advanced Maths is due next week.",
-    timestamp: Date.now() - (6 * 60 * 60 * 1000), // 6 hours ago
-    type: 'user_specific_reminder', // User-specific type
+    timestamp: Date.now() - (6 * 60 * 60 * 1000),
+    type: 'user_specific_reminder',
     link: '/student/payments'
   },
 ];
-
-
-// This is a simplified version. User should provide their full constants.ts content.
-// For example, more detailed announcements, forum posts, etc.
-
