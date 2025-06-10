@@ -53,8 +53,8 @@ export enum ActionType {
   LOGOUT_USER_SUCCESS = 'LOGOUT_USER_SUCCESS',
   LOGOUT_USER_FAILURE = 'LOGOUT_USER_FAILURE',
   SET_CURRENT_USER = 'SET_CURRENT_USER', 
-  FETCH_USER_PROFILE_SUCCESS = 'FETCH_USER_PROFILE_SUCCESS',
-  FETCH_USER_PROFILE_FAILURE = 'FETCH_USER_PROFILE_FAILURE',
+  FETCH_USER_PROFILE_SUCCESS = 'FETCH_USER_PROFILE_SUCCESS', // Used internally by auth flow
+  FETCH_USER_PROFILE_FAILURE = 'FETCH_USER_PROFILE_FAILURE', // Used internally by auth flow
 
   CREATE_USER_REQUEST = 'CREATE_USER_REQUEST',
   CREATE_USER_SUCCESS = 'CREATE_USER_SUCCESS',
@@ -65,6 +65,10 @@ export enum ActionType {
   DELETE_USER_REQUEST = 'DELETE_USER_REQUEST',
   DELETE_USER_SUCCESS = 'DELETE_USER_SUCCESS',
   DELETE_USER_FAILURE = 'DELETE_USER_FAILURE',
+  
+  FETCH_USERS_REQUEST = 'FETCH_USERS_REQUEST',
+  FETCH_USERS_SUCCESS = 'FETCH_USERS_SUCCESS',
+  FETCH_USERS_FAILURE = 'FETCH_USERS_FAILURE',
   
   BULK_CREATE_STUDENTS_REQUEST = 'BULK_CREATE_STUDENTS_REQUEST',
   BULK_CREATE_STUDENTS_SUCCESS = 'BULK_CREATE_STUDENTS_SUCCESS',
@@ -80,7 +84,7 @@ export enum ActionType {
   DELETE_COURSE_REQUEST = 'DELETE_COURSE_REQUEST',
   DELETE_COURSE_SUCCESS = 'DELETE_COURSE_SUCCESS',
   DELETE_COURSE_FAILURE = 'DELETE_COURSE_FAILURE',
-  ENROLL_COURSE = 'ENROLL_COURSE', // TODO: Implement Firestore logic
+  ENROLL_COURSE = 'ENROLL_COURSE', 
   // Lesson Management
   CREATE_LESSON_REQUEST = 'CREATE_LESSON_REQUEST',
   CREATE_LESSON_SUCCESS = 'CREATE_LESSON_SUCCESS',
@@ -139,7 +143,7 @@ export interface User {
   email: string; 
   role: UserRole;
   avatarUrl?: string; 
-  password?: string; // Only for payload during creation, not stored in Firestore doc
+  password?: string; // Only for payload during creation by admin, not stored in Firestore doc
 }
 
 export interface Course {
@@ -298,13 +302,13 @@ export type BulkCreateStudentsResultItem = { success: boolean; email: string; us
 export type BulkCreateStudentsResult = BulkCreateStudentsResultItem[];
 
 
-export type CreateCoursePayload = Omit<Course, 'id' | 'studentIds'> & { studentIds?: string[]; id?: string; }; // id optional for client generation
+export type CreateCoursePayload = Omit<Course, 'id' | 'studentIds'> & { studentIds?: string[]; id?: string; }; 
 export type UpdateCoursePayload = Partial<Omit<Course, 'id'>> & { id: string };
 export type DeleteCoursePayload = { id: string };
 
 
 export type CreateLessonPayload = Omit<Lesson, 'id'>;
-export type UpdateLessonPayload = Partial<Omit<Lesson, 'id' | 'courseId'>> & { id: string; courseId?: string; }; // courseId needed for path
+export type UpdateLessonPayload = Partial<Omit<Lesson, 'id' | 'courseId'>> & { id: string; courseId?: string; }; 
 export type DeleteLessonPayload = { id: string; courseId: string };
 
 
@@ -353,6 +357,10 @@ export type AppAction =
   | { type: ActionType.DELETE_USER_REQUEST }
   | { type: ActionType.DELETE_USER_SUCCESS; payload: DeleteUserPayload }
   | { type: ActionType.DELETE_USER_FAILURE; payload: string }
+  
+  | { type: ActionType.FETCH_USERS_REQUEST }
+  | { type: ActionType.FETCH_USERS_SUCCESS; payload: User[] }
+  | { type: ActionType.FETCH_USERS_FAILURE; payload: string }
   
   | { type: ActionType.BULK_CREATE_STUDENTS_REQUEST }
   | { type: ActionType.BULK_CREATE_STUDENTS_SUCCESS; payload: { users: User[]; results: BulkCreateStudentsResult } }
@@ -426,3 +434,4 @@ export interface GenerateQuizQuestionsOutput {
         correctAnswer: string;
     }>;
 }
+
