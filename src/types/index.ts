@@ -75,6 +75,9 @@ export enum ActionType {
   BULK_CREATE_STUDENTS_FAILURE = 'BULK_CREATE_STUDENTS_FAILURE',
   
   // Course Management
+  FETCH_COURSES_REQUEST = 'FETCH_COURSES_REQUEST',
+  FETCH_COURSES_SUCCESS = 'FETCH_COURSES_SUCCESS',
+  FETCH_COURSES_FAILURE = 'FETCH_COURSES_FAILURE',
   CREATE_COURSE_REQUEST = 'CREATE_COURSE_REQUEST',
   CREATE_COURSE_SUCCESS = 'CREATE_COURSE_SUCCESS',
   CREATE_COURSE_FAILURE = 'CREATE_COURSE_FAILURE',
@@ -379,6 +382,9 @@ export type AppAction =
   | { type: ActionType.BULK_CREATE_STUDENTS_SUCCESS; payload: { users: User[]; results: BulkCreateStudentsResult } }
   | { type: ActionType.BULK_CREATE_STUDENTS_FAILURE; payload: { error: string; results: BulkCreateStudentsResult } }
 
+  | { type: ActionType.FETCH_COURSES_REQUEST }
+  | { type: ActionType.FETCH_COURSES_SUCCESS; payload: Course[] }
+  | { type: ActionType.FETCH_COURSES_FAILURE; payload: string }
   | { type: ActionType.CREATE_COURSE_REQUEST }
   | { type: ActionType.CREATE_COURSE_SUCCESS; payload: Course }
   | { type: ActionType.CREATE_COURSE_FAILURE; payload: string }
@@ -428,7 +434,7 @@ export type AppAction =
   | { type: ActionType.UPDATE_ATTENDANCE_RECORD; payload: UpdateAttendanceRecordPayload }
   | { type: ActionType.RECORD_PAYMENT; payload: RecordPaymentPayload }
   | { type: ActionType.UPDATE_PAYMENT; payload: UpdatePaymentPayload }
-  | { type: ActionType.LOAD_DATA; payload: Partial<AppState> }
+  | { type: ActionType.LOAD_DATA; payload: Partial<AppState> } // This will primarily load other sample data for now
   | { type: ActionType.SET_LOADING; payload: boolean }
   | { type: ActionType.SET_ERROR; payload: string | null }
   | { type: ActionType.CLEAR_ERROR }
@@ -454,5 +460,6 @@ export interface GenerateQuizQuestionsOutput {
         correctAnswer: string;
     }>;
 }
+
 
 

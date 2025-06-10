@@ -96,13 +96,11 @@ const autoGradeQuizAnswer = (question: QuizQuestion, studentAnswer: string | str
 const appReducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
     case ActionType.LOAD_DATA: {
-      // TODO: Replace SAMPLE_DATA loading with Firestore fetching for all entities.
-      // This action currently loads sample data if the corresponding state array is empty
-      // AFTER initial auth checks. For a fully persistent app, each entity
-      // (courses, lessons, etc.) should be fetched from Firestore similar to how users are fetched.
+      // This action now primarily loads other sample data. Courses will be fetched.
+      // TODO: Gradually replace all SAMPLE_DATA loading with Firestore fetching.
       return {
         ...state,
-        courses: action.payload.courses || (state.courses.length === 0 ? SAMPLE_COURSES : state.courses),
+        courses: action.payload.courses || state.courses, // Preserve fetched/existing or use payload
         lessons: action.payload.lessons || (state.lessons.length === 0 ? SAMPLE_LESSONS : state.lessons),
         assignments: action.payload.assignments || (state.assignments.length === 0 ? SAMPLE_ASSIGNMENTS : state.assignments),
         submissions: (action.payload.submissions || (state.submissions.length === 0 ? SAMPLE_SUBMISSIONS : state.submissions)).map(submission => {
@@ -137,6 +135,13 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.FETCH_USERS_SUCCESS:
       return { ...state, users: action.payload, isLoading: false, error: null };
     case ActionType.FETCH_USERS_FAILURE:
+      return { ...state, isLoading: false, error: action.payload };
+
+    case ActionType.FETCH_COURSES_REQUEST:
+      return { ...state, isLoading: true, error: null };
+    case ActionType.FETCH_COURSES_SUCCESS:
+      return { ...state, courses: action.payload, isLoading: false, error: null };
+    case ActionType.FETCH_COURSES_FAILURE:
       return { ...state, isLoading: false, error: action.payload };
 
     case ActionType.LOGIN_USER_REQUEST:
@@ -198,20 +203,17 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return { ...state, isLoading: false, error: action.payload, currentUser: state.currentUser === undefined ? null : state.currentUser  }; 
 
     case ActionType.LOGOUT_USER_SUCCESS:
-      // TODO: Consider clearing other data arrays (courses, lessons, etc.) on logout,
-      // or ensure they are re-fetched correctly on next login.
       return { 
         ...initialState, 
         users: [], 
-        // Preserve some data if needed across logout, or clear them too
-        courses: state.courses, // For now, keeping these. TODO: Re-evaluate if these should be cleared or re-fetched.
-        lessons: state.lessons,
-        assignments: state.assignments,
-        submissions: state.submissions,
-        enrollments: state.enrollments,
-        attendanceRecords: state.attendanceRecords,
-        payments: state.payments,
-        announcements: state.announcements, 
+        courses: [], 
+        lessons: [], 
+        assignments: [], 
+        submissions: [], 
+        enrollments: [], 
+        attendanceRecords: [],
+        payments: [],
+        announcements: [], 
         currentUser: null, 
         isLoading: false, 
         successMessage: 'Logged out successfully.' 
@@ -269,9 +271,10 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     
      case ActionType.CREATE_COURSE_SUCCESS: {
       const courseToAdd = action.payload as Course; 
+      const courseExists = state.courses.some(c => c.id === courseToAdd.id);
       return {
         ...state,
-        courses: [...state.courses, courseToAdd],
+        courses: courseExists ? state.courses.map(c => c.id === courseToAdd.id ? courseToAdd : c) : [...state.courses, courseToAdd],
         isLoading: false, error: null,
         successMessage: `Course "${courseToAdd.name}" created successfully.`,
       };
@@ -309,7 +312,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         courses: state.courses.map(c => c.id === course.id ? course : c),
-        enrollments: [...state.enrollments, enrollment],
+        enrollments: [...state.enrollments.filter(e => e.id !== enrollment.id), enrollment],
         isLoading: false,
         error: null,
         successMessage: `Student ${student?.name || enrollment.studentId} enrolled in ${courseName}.`,
@@ -653,9 +656,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [state, dispatch] = useReducer(appReducer, initialState);
   const { toast } = useToast();
 
+  // TODO: This LOAD_DATA action currently loads sample data if the corresponding state array is empty
+  // AFTER initial auth checks. For a fully persistent app, each entity
+  // (courses, lessons, etc.) should be fetched from Firestore similar to how users are fetched.
+  // For now, courses will be fetched directly; this remains for other sample data.
   useEffect(() => {
-    // TODO: Implement Firestore fetching for all primary data entities (courses, lessons, etc.)
-    // For now, LOAD_DATA will use sample data if state arrays are empty after auth checks.
     dispatch({ type: ActionType.LOAD_DATA, payload: {} }); 
   }, [dispatch]);
 
@@ -676,6 +681,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.FETCH_USERS_FAILURE, payload: error.message || "Failed to fetch all users." });
     }
   }, [dispatch]);
+
+  const fetchAllCourses = useCallback(async () => {
+    dispatch({ type: ActionType.FETCH_COURSES_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.FETCH_COURSES_FAILURE, payload: "Firestore not available to fetch courses." });
+      return;
+    }
+    try {
+      const coursesCol = collection(db, "courses");
+      const courseSnapshot = await getDocs(coursesCol);
+      const coursesList = courseSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course));
+      dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: coursesList });
+    } catch (error: any) {
+      console.error("Error fetching all courses:", error);
+      dispatch({ type: ActionType.FETCH_COURSES_FAILURE, payload: error.message || "Failed to fetch all courses." });
+    }
+  }, [dispatch]);
+
+  // TODO: Implement similar fetch functions for Lessons (scoped by courseId), Assignments (scoped by courseId),
+  // Submissions (scoped by assignmentId), Enrollments, AttendanceRecords, Payments, Notifications, Announcements.
+  // These would typically be called when a user navigates to a relevant page or when a broader context (like a course detail page) is loaded.
+
 
   useEffect(() => {
     const authInstance = getFirebaseAuth();
@@ -710,8 +738,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
             if (userProfile) { 
                 await fetchAllUsers(); 
-                // TODO: Add calls to fetch other core data here, e.g., fetchAllCourses(), etc.
-                // These fetches should ideally happen based on user role or initial app needs.
+                await fetchAllCourses(); // Fetch courses after users
+                // TODO: Add calls to fetch other core data here, e.g., fetchAllEnrollments(), etc.,
+                // or fetch them on-demand in specific page components.
             } else {
                 dispatch({ type: ActionType.SET_LOADING, payload: false }); 
             }
@@ -719,25 +748,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             await signOut(authInstance); 
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
             dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
+            dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
+            // TODO: Consider clearing other data arrays (lessons, assignments, etc.) on logout.
             dispatch({ type: ActionType.SET_ERROR, payload: "User profile not found in database. Signed out." });
             dispatch({ type: ActionType.SET_LOADING, payload: false });
           }
         } catch (error: any) {
           dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
           dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
+          dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
+          // TODO: Consider clearing other data arrays (lessons, assignments, etc.) on logout.
           dispatch({ type: ActionType.SET_ERROR, payload: error.message || "Failed to load user profile." });
           dispatch({ type: ActionType.SET_LOADING, payload: false });
         }
       } else { 
         dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
         dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
-        // TODO: Consider clearing other data arrays (courses, lessons, etc.) on logout,
-        // or ensure they are re-fetched correctly on next login.
+        dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
+        // TODO: Consider clearing other data arrays (lessons, assignments, etc.) on logout,
+        // or ensure they are re-fetched correctly on next login if not cleared.
         dispatch({ type: ActionType.SET_LOADING, payload: false });
       }
     });
     return () => unsubscribe();
-  }, [dispatch, fetchAllUsers]); 
+  }, [dispatch, fetchAllUsers, fetchAllCourses]); 
 
   useEffect(() => {
     if (state.error) {
@@ -760,7 +794,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       if (!payload.password) throw new Error("Password is required.");
       await signInWithEmailAndPassword(authInstance, payload.email, payload.password);
-      // onAuthStateChanged will handle setting currentUser and fetching all users
     } catch (error: any) {
       dispatch({ type: ActionType.LOGIN_USER_FAILURE, payload: error.message || "Failed to login." });
     }
@@ -787,7 +820,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png?text=${payload.name.substring(0,2).toUpperCase()}`,
       };
       await setDoc(doc(dbInstance, "users", firebaseUser.uid), newUserForFirestore);
-      dispatch({ type: ActionType.REGISTER_STUDENT_SUCCESS, payload: newUserForFirestore });
+      dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [...state.users, newUserForFirestore] });
       dispatch({ type: ActionType.ADD_NOTIFICATION, payload: {
         userId: firebaseUser.uid, type: 'success',
         message: `Welcome to ${APP_NAME}, ${newUserForFirestore.name}! Account created.`
@@ -795,7 +828,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error: any) {
       dispatch({ type: ActionType.REGISTER_STUDENT_FAILURE, payload: error.message || "Failed to register." });
     }
-  }, [dispatch]);
+  }, [dispatch, state.users]);
 
   const handleLogoutUser = useCallback(async () => {
     dispatch({ type: ActionType.LOGOUT_USER_REQUEST });
@@ -1028,6 +1061,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
+      // TODO: Consider using a Firebase Function to delete subcollections (lessons, assignments, submissions) associated with the course.
+      // For now, this only deletes the course document itself.
       await deleteDoc(doc(db, "courses", payload.id));
       dispatch({ type: ActionType.DELETE_COURSE_SUCCESS, payload });
     } catch (error: any) {
@@ -1074,23 +1109,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     dispatch({ type: ActionType.UNENROLL_STUDENT_REQUEST });
     const { courseId, studentId } = payload;
     const db = getFirebaseDb();
+
     if (!db) {
       dispatch({ type: ActionType.UNENROLL_STUDENT_FAILURE, payload: "Firestore not available." });
       return;
     }
     try {
       const courseRef = doc(db, "courses", courseId);
-      const enrollmentId = `enroll-${courseId}-${studentId}`; // Construct ID to find it
+      const enrollmentId = `enroll-${courseId}-${studentId}`;
       const enrollmentRef = doc(db, "enrollments", enrollmentId);
 
       const batch = writeBatch(db);
       batch.update(courseRef, { studentIds: arrayRemove(studentId) });
       batch.delete(enrollmentRef);
       await batch.commit();
-      
+
       const updatedCourseDoc = await getDoc(courseRef);
       const updatedCourse = { id: updatedCourseDoc.id, ...updatedCourseDoc.data() } as Course;
-
+      
       dispatch({ type: ActionType.UNENROLL_STUDENT_SUCCESS, payload: { course: updatedCourse, studentId, enrollmentId } });
     } catch (error: any) {
       dispatch({ type: ActionType.UNENROLL_STUDENT_FAILURE, payload: error.message || "Failed to unenroll student." });
@@ -1099,43 +1135,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const handleCreateLesson = useCallback(async (payload: CreateLessonPayload & { file?: File | null }) => {
     dispatch({ type: ActionType.CREATE_LESSON_REQUEST });
-    const db = getFirebaseDb();
-    if (!db) {
-      dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: "Firestore not available." });
-      return;
-    }
-    let uploadedFileUrl = payload.fileUrl;
-    let uploadedFileName = payload.fileName;
-
-    if (payload.file) {
-      try {
-        const { fileUrl: newFileUrl, fileName: newFileName } = await handleLessonFileUpload(payload.courseId, payload.id || `new-${Date.now()}`, payload.file);
-        uploadedFileUrl = newFileUrl;
-        uploadedFileName = newFileName;
-      } catch (error: any) {
-        dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: error.message || "Failed to upload lesson file." });
+      const db = getFirebaseDb();
+      if (!db) {
+        dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: "Firestore not available." });
         return;
       }
-    }
-    
-    try {
-      const lessonId = payload.id || doc(collection(db, "courses", payload.courseId, "lessons")).id;
-      const newLesson: Lesson = { 
-        id: lessonId,
-        courseId: payload.courseId,
-        title: payload.title,
-        contentMarkdown: payload.contentMarkdown,
-        videoUrl: payload.videoUrl,
-        order: payload.order,
-        fileUrl: uploadedFileUrl,
-        fileName: uploadedFileName,
-      };
-      await setDoc(doc(db, "courses", payload.courseId, "lessons", lessonId), newLesson);
-      dispatch({ type: ActionType.CREATE_LESSON_SUCCESS, payload: newLesson });
-    } catch (error: any) {
-      dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: error.message || "Failed to create lesson."});
-    }
-  }, [dispatch, handleLessonFileUpload]);
+      let uploadedFileUrl = payload.fileUrl;
+      let uploadedFileName = payload.fileName;
+
+      if (payload.file) {
+        try {
+          const { fileUrl: newFileUrl, fileName: newFileName } = await handleLessonFileUpload(payload.courseId, payload.id || `new-${Date.now()}`, payload.file);
+          uploadedFileUrl = newFileUrl;
+          uploadedFileName = newFileName;
+        } catch (error: any) {
+          dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: error.message || "Failed to upload lesson file." });
+          return;
+        }
+      }
+      
+      try {
+        const lessonId = payload.id || doc(collection(db, "courses", payload.courseId, "lessons")).id;
+        const newLesson: Lesson = { 
+          id: lessonId,
+          courseId: payload.courseId,
+          title: payload.title,
+          contentMarkdown: payload.contentMarkdown,
+          videoUrl: payload.videoUrl,
+          order: payload.order,
+          fileUrl: uploadedFileUrl,
+          fileName: uploadedFileName,
+        };
+        await setDoc(doc(db, "courses", payload.courseId, "lessons", lessonId), newLesson);
+        dispatch({ type: ActionType.CREATE_LESSON_SUCCESS, payload: newLesson });
+      } catch (error: any) {
+        dispatch({ type: ActionType.CREATE_LESSON_FAILURE, payload: error.message || "Failed to create lesson."});
+      }
+    }, [dispatch, handleLessonFileUpload]);
 
   const handleUpdateLesson = useCallback(async (payload: UpdateLessonPayload & { file?: File | null }) => {
     dispatch({ type: ActionType.UPDATE_LESSON_REQUEST });
@@ -1188,12 +1224,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
+      // TODO: Add logic to delete file from Firebase Storage if fileUrl exists
+      const lessonToDelete = state.lessons.find(l => l.id === payload.id && l.courseId === payload.courseId);
+      if (lessonToDelete?.fileUrl) {
+        const fileStorageRef = storageRef(getFirebaseStorage()!, lessonToDelete.fileUrl);
+        try {
+          await deleteObject(fileStorageRef);
+          console.log("Associated lesson file deleted from storage:", lessonToDelete.fileUrl);
+        } catch (storageError: any) {
+          // Log error but continue deleting Firestore doc, as file might not exist or rules prevent.
+          console.warn("Could not delete lesson file from storage:", storageError.message);
+        }
+      }
       await deleteDoc(doc(db, "courses", payload.courseId, "lessons", payload.id));
       dispatch({ type: ActionType.DELETE_LESSON_SUCCESS, payload });
     } catch (error: any) {
       dispatch({ type: ActionType.DELETE_LESSON_FAILURE, payload: error.message || "Failed to delete lesson."});
     }
-  }, [dispatch]);
+  }, [dispatch, state.lessons]);
 
   const handleCreateAssignment = useCallback(async (payload: CreateAssignmentPayload & { assignmentFile?: File | null }) => {
     dispatch({ type: ActionType.CREATE_ASSIGNMENT_REQUEST });
@@ -1298,7 +1346,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch, handleAssignmentAttachmentUpload]);
 
-  // TODO: Consider implementing Firebase Functions to delete associated files and submissions from Storage/Firestore
   const handleDeleteAssignment = useCallback(async (payload: DeleteAssignmentPayload) => {
     dispatch({ type: ActionType.DELETE_ASSIGNMENT_REQUEST });
     const db = getFirebaseDb();
@@ -1307,12 +1354,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
+      // TODO: Add logic to delete assignment file and all student submission files from Firebase Storage.
+      // This would typically be done in a Firebase Function for atomicity and permissions.
+      const assignmentToDelete = state.assignments.find(a => a.id === payload.id && a.courseId === payload.courseId);
+      if (assignmentToDelete?.assignmentFileUrl) {
+         const fileStorageRef = storageRef(getFirebaseStorage()!, assignmentToDelete.assignmentFileUrl);
+         try {
+           await deleteObject(fileStorageRef);
+           console.log("Associated assignment file deleted from storage:", assignmentToDelete.assignmentFileUrl);
+         } catch (storageError: any) {
+           console.warn("Could not delete assignment file from storage:", storageError.message);
+         }
+      }
+      // Also delete submissions locally and consider deleting from Firestore subcollection
+      // For now, local state submissions are filtered out by the reducer for DELETE_ASSIGNMENT_SUCCESS
+
       await deleteDoc(doc(db, "courses", payload.courseId, "assignments", payload.id));
       dispatch({ type: ActionType.DELETE_ASSIGNMENT_SUCCESS, payload });
     } catch (error: any) {
       dispatch({ type: ActionType.DELETE_ASSIGNMENT_FAILURE, payload: error.message || "Failed to delete assignment."});
     }
-  }, [dispatch]);
+  }, [dispatch, state.assignments]);
   
   const handleStudentSubmitAssignment = useCallback(async (payload: Submission) => {
     dispatch({ type: ActionType.SUBMIT_ASSIGNMENT_REQUEST });
@@ -1412,5 +1474,4 @@ export const useAppContext = () => {
   }
   return context;
 };
-
 
