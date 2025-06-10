@@ -1,31 +1,47 @@
 
 "use client";
 
+import { useMemo } from 'react';
 import { useAppContext } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { BookOpen, Edit3, Users, CalendarCheck, PlusCircle } from "lucide-react";
+import { BookOpen, Edit3, Users, CalendarCheck, PlusCircle, Clock } from "lucide-react";
 import { useRouter } from 'next/navigation';
-
+import { format } from 'date-fns';
 
 export default function TeacherDashboardPage() {
   const { state } = useAppContext();
-  const { currentUser, courses, assignments, submissions } = state;
+  const { currentUser, courses, assignments, submissions, isLoading } = state;
   const router = useRouter();
 
-  if (!currentUser) return <p>Loading...</p>; // Or a more sophisticated loading state
+  if (!currentUser && !isLoading) return <p>Redirecting to login...</p>;
+  if (isLoading || !currentUser) return <p>Loading dashboard...</p>;
 
-  const teacherCourses = courses.filter(course => course.teacherId === currentUser.id);
-  const pendingSubmissionsCount = submissions.filter(sub => {
+  const teacherCourses = useMemo(() => courses.filter(course => course.teacherId === currentUser.id), [courses, currentUser.id]);
+  
+  const pendingSubmissionsCount = useMemo(() => submissions.filter(sub => {
     const assignment = assignments.find(a => a.id === sub.assignmentId);
-    return assignment && teacherCourses.some(tc => tc.id === assignment.courseId) && !sub.grade;
-  }).length;
+    return assignment && teacherCourses.some(tc => tc.id === assignment.courseId) && sub.grade === undefined; // Check for undefined grade
+  }).length, [submissions, assignments, teacherCourses]);
+
+  const upcomingTeacherAssignments = useMemo(() => {
+    const teacherCourseIds = teacherCourses.map(c => c.id);
+    return assignments
+      .filter(a => teacherCourseIds.includes(a.courseId) && new Date(a.dueDate) >= new Date())
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+      .slice(0, 5) // Show up to 5 upcoming assignments
+      .map(assign => ({
+        ...assign,
+        courseName: courses.find(c => c.id === assign.courseId)?.name || "Unknown Course",
+      }));
+  }, [assignments, teacherCourses, courses]);
+
 
   const quickActions = [
     { name: "Create New Course", queryParam: "?action=create", href: "/teacher/courses", icon: PlusCircle },
     { name: "View My Courses", href: "/teacher/courses", icon: BookOpen },
-    { name: "Grade Submissions", href: "/teacher/grading", icon: Edit3 }, // Assuming a central grading page
+    { name: "Grade Submissions", href: "/teacher/grading", icon: Edit3 }, // This page doesn't exist yet
     { name: "Manage Attendance", href: "/teacher/attendance", icon: CalendarCheck },
   ];
 
@@ -84,7 +100,7 @@ export default function TeacherDashboardPage() {
               <action.icon className="mr-3 h-5 w-5 text-primary" />
               <span className="flex flex-col">
                 <span className="font-semibold">{action.name}</span>
-                <span className="text-xs text-muted-foreground">Quick access</span>
+                {/* <span className="text-xs text-muted-foreground">Quick access</span> */}
               </span>
             </Button>
           ))}
@@ -97,20 +113,28 @@ export default function TeacherDashboardPage() {
           <CardDescription>Assignments from your courses that are due soon.</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Placeholder: List upcoming assignment deadlines */}
-          <p className="text-muted-foreground">No upcoming deadlines in the next 7 days. This section will show assignments due soon.</p>
-          {/* 
-            Example structure for later:
-            <ul className="space-y-2">
+          {isLoading && upcomingTeacherAssignments.length === 0 ? (
+             <p className="text-muted-foreground">Loading deadlines...</p>
+          ) : upcomingTeacherAssignments.length > 0 ? (
+            <ul className="space-y-3">
               {upcomingTeacherAssignments.map(assign => (
-                <li key={assign.id} className="text-sm">
-                  <Link href={`/teacher/courses/${assign.courseId}/assignments/${assign.id}`} className="font-medium hover:underline">
-                    {assign.title}
-                  </Link> ({courses.find(c => c.id === assign.courseId)?.name}) - Due {new Date(assign.dueDate).toLocaleDateString()}
+                <li key={assign.id} className="p-3 border rounded-md hover:bg-muted/50 transition-colors">
+                  <Link href={`/teacher/courses/${assign.courseId}`} className="block"> {/* Consider linking to assignment detail/grading later */}
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">{assign.title}</span>
+                      <Badge variant="secondary" className="text-xs">
+                        <Clock className="mr-1 h-3 w-3" />
+                        Due: {format(new Date(assign.dueDate), "MMM d, p")}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{assign.courseName}</p>
+                  </Link>
                 </li>
               ))}
             </ul>
-          */}
+          ) : (
+            <p className="text-muted-foreground">No upcoming deadlines in the next 7 days for your courses.</p>
+          )}
         </CardContent>
       </Card>
     </div>

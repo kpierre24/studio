@@ -15,10 +15,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
 import Link from "next/link";
-import { BookOpen, Edit3, Users, ArrowLeft, FileText, CheckSquare, Clock, ExternalLink, ArrowRight, UploadCloud, Paperclip, DownloadCloud, Loader2 } from "lucide-react";
+import { BookOpen, Edit3, Users, ArrowLeft, FileText, CheckSquare, Clock, ExternalLink, ArrowRight, UploadCloud, Paperclip, DownloadCloud, Loader2, CheckCircle, AlertCircle, Send } from "lucide-react";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { Badge } from "@/components/ui/badge";
 
 export default function StudentCourseDetailPage() {
   const { courseId } = useParams() as { courseId: string };
@@ -106,7 +107,12 @@ export default function StudentCourseDetailPage() {
         setSubmissionFile(null);
     }
     setIsSubmissionModalOpen(true);
+    // Clear query param to prevent re-opening if modal is closed and reopened
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('assignment');
+    router.replace(`${pathname}?${params.toString()}`, {scroll: false});
   };
+  const pathname = usePathname(); // Get current pathname
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -263,10 +269,23 @@ export default function StudentCourseDetailPage() {
                             <h3 className="text-lg font-semibold hover:text-primary cursor-pointer" onClick={() => handleOpenSubmissionModal(assignment)}>
                                 {assignment.title}
                             </h3>
-                            <p className="text-sm text-muted-foreground capitalize flex items-center gap-1">
-                              {isQuiz ? <CheckSquare className="h-4 w-4"/> : <Edit3 className="h-4 w-4"/>} 
-                              {assignment.type} ({assignment.totalPoints} pts)
-                            </p>
+                            <div className="flex items-center gap-2">
+                                <p className="text-sm text-muted-foreground capitalize flex items-center gap-1">
+                                {isQuiz ? <CheckSquare className="h-4 w-4"/> : <Edit3 className="h-4 w-4"/>} 
+                                {assignment.type} ({assignment.totalPoints} pts)
+                                </p>
+                                {existingSubmission && (
+                                    existingSubmission.grade !== undefined ? (
+                                    <Badge variant="default" className="bg-green-500 hover:bg-green-600 text-xs">
+                                        <CheckCircle className="mr-1 h-3 w-3"/>Graded: {existingSubmission.grade}/{assignment.totalPoints}
+                                    </Badge>
+                                    ) : (
+                                    <Badge variant="secondary" className="text-xs">
+                                        <Send className="mr-1 h-3 w-3"/>Submitted
+                                    </Badge>
+                                    )
+                                )}
+                            </div>
                           </div>
                           <div className="mt-2 sm:mt-0 text-sm text-muted-foreground flex items-center gap-1">
                             <Clock className="h-4 w-4"/> Due: {format(new Date(assignment.dueDate), "PPP p")}
@@ -286,7 +305,7 @@ export default function StudentCourseDetailPage() {
                         )}
                          <div className="mt-3 text-right">
                             <Button variant="outline" size="sm" onClick={() => handleOpenSubmissionModal(assignment)} disabled={isLoading}>
-                              {existingSubmission ? 'View Submission' : 'Submit Assignment'}
+                              {existingSubmission ? (existingSubmission.grade !==undefined ? 'View Graded Submission' : 'View Submission') : 'Submit Assignment'}
                             </Button>
                          </div>
                       </li>
@@ -342,7 +361,7 @@ export default function StudentCourseDetailPage() {
                             {submission.grade !== undefined ? (
                                 <>
                                 <p className="font-semibold">Grade: <span className="text-primary">{submission.grade} / {selectedAssignment.totalPoints}</span></p>
-                                {submission.feedback && <p><strong>Feedback:</strong> {submission.feedback}</p>}
+                                {submission.feedback && <div className="space-y-1"><Label>Feedback:</Label><pre className="mt-1 p-3 text-sm bg-muted rounded-md whitespace-pre-wrap font-body">{submission.feedback}</pre></div>}
                                 </>
                             ) : (
                                 <p className="text-muted-foreground italic">Awaiting grading.</p>
@@ -357,7 +376,7 @@ export default function StudentCourseDetailPage() {
                     return (
                         <form className="space-y-4 py-4" onSubmit={(e) => { e.preventDefault(); handleSubmitAssignment(); }}>
                             <div>
-                                <Label htmlFor="submissionContent">Your Response (Optional)</Label>
+                                <Label htmlFor="submissionContent">Your Response (Optional if uploading file)</Label>
                                 <Textarea 
                                     id="submissionContent" value={submissionContent} 
                                     onChange={(e) => setSubmissionContent(e.target.value)}
@@ -366,7 +385,7 @@ export default function StudentCourseDetailPage() {
                                 />
                             </div>
                             <div>
-                                <Label htmlFor="submissionFile">Upload File (Optional)</Label>
+                                <Label htmlFor="submissionFile">Upload File (Optional if providing text response)</Label>
                                 <Input 
                                     id="submissionFile" type="file" onChange={handleFileChange}
                                     className="mt-1" disabled={isLoading || isSubmittingFile}
@@ -383,7 +402,7 @@ export default function StudentCourseDetailPage() {
                         </form>
                     );
                 } else if (selectedAssignment.type === AssignmentType.QUIZ) {
-                    return <p className="py-4 text-muted-foreground">Quiz submissions are not yet implemented in this view.</p>;
+                    return <p className="py-4 text-muted-foreground">Quiz submissions are not yet implemented in this view. Please check back later.</p>;
                 }
                 return null; 
             })()}

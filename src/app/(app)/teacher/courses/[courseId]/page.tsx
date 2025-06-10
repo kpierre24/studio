@@ -189,7 +189,7 @@ export default function TeacherCourseDetailPage() {
     if (assignment) {
       setAssignmentFormData({ 
         id: assignment.id, title: assignment.title, description: assignment.description, 
-        dueDate: assignment.dueDate ? format(new Date(assignment.dueDate), "yyyy-MM-dd") : '',
+        dueDate: assignment.dueDate ? format(new Date(assignment.dueDate), "yyyy-MM-dd'T'HH:mm") : '', // For datetime-local
         type: assignment.type, questions: assignment.questions || [],
         manualTotalPoints: assignment.type === AssignmentType.STANDARD ? assignment.totalPoints : assignment.manualTotalPoints,
         assignmentFileUrl: assignment.assignmentFileUrl, assignmentFileName: assignment.assignmentFileName,
@@ -302,6 +302,9 @@ export default function TeacherCourseDetailPage() {
 
     const payload: GradeSubmissionPayload = { submissionId, grade, feedback: formData.feedback };
     await handleTeacherGradeSubmission(payload);
+     // Optionally, keep modal open and update specific submission's status if needed, or rely on global state update
+    // If you want to close it after every grade:
+    // if (!state.error) { setIsGradingModalOpen(false); } 
   };
 
   const getAssignmentSubmissions = (assignmentId: string) => {
@@ -527,8 +530,8 @@ export default function TeacherCourseDetailPage() {
                           <Textarea id="assign-desc" name="description" value={assignmentFormData.description} onChange={handleAssignmentFormChange} className="col-span-3" disabled={isLoading}/>
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
-                          <Label htmlFor="assign-due" className="text-right">Due Date</Label>
-                          <Input id="assign-due" name="dueDate" type="date" value={assignmentFormData.dueDate} onChange={handleAssignmentFormChange} className="col-span-3" disabled={isLoading}/>
+                          <Label htmlFor="assign-due" className="text-right">Due Date & Time</Label>
+                          <Input id="assign-due" name="dueDate" type="datetime-local" value={assignmentFormData.dueDate} onChange={handleAssignmentFormChange} className="col-span-3" disabled={isLoading}/>
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
                           <Label htmlFor="assign-type" className="text-right">Type</Label>
@@ -542,12 +545,17 @@ export default function TeacherCourseDetailPage() {
                           <Label htmlFor="assignment-file" className="text-right col-span-1 pt-2">Attach File (Optional)</Label>
                           <div className="col-span-3 space-y-1">
                               <Input id="assignment-file" type="file" onChange={handleAssignmentFileChange} className="flex-grow" disabled={isLoading}/>
+                              {assignmentFormData.id && assignmentFormData.assignmentFileUrl?.startsWith("simulated-storage/") && (
+                                <div className="p-2 my-1 text-xs bg-yellow-100 border border-yellow-300 text-yellow-700 rounded-md">
+                                    This assignment has a mock file: <span className="font-semibold">{assignmentFormData.assignmentFileName}</span>. Please re-upload the actual file.
+                                </div>
+                               )}
                               {assignmentFormData.assignmentFileName && (
                                   <p className="text-xs text-muted-foreground mt-1">
                                       Current file: 
-                                      {assignmentFormData.assignmentFileUrl ? 
+                                      {assignmentFormData.assignmentFileUrl && !assignmentFormData.assignmentFileUrl.startsWith("simulated-storage/") ? 
                                       <a href={assignmentFormData.assignmentFileUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">{assignmentFormData.assignmentFileName}</a> : 
-                                      <span className="ml-1">{assignmentFormData.assignmentFileName} (New)</span>
+                                      <span className="ml-1">{assignmentFormData.assignmentFileName} {assignmentFormData.assignmentFileUrl?.startsWith("simulated-storage/") ? "(Mock)" : "(New)"}</span>
                                       }
                                       {assignmentFormData.id && assignmentFormData.assignmentFileUrl && <Button variant="link" size="sm" className="p-0 h-auto ml-2 text-xs text-red-500" onClick={() => setAssignmentFormData(prev => ({...prev, assignmentFile:null, assignmentFileName: undefined, assignmentFileUrl: undefined}))} disabled={isLoading}>Remove</Button>}
                                   </p>

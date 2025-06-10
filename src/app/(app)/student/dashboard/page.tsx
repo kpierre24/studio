@@ -1,37 +1,56 @@
 
 "use client";
 
+import { useMemo } from 'react';
 import { useAppContext } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { BookOpen, Edit3, CalendarDays, GraduationCap, FileText, DollarSign, CalendarCheck } from "lucide-react";
+import { BookOpen, Edit3, CalendarDays, GraduationCap, FileText, DollarSign, CalendarCheck, CheckCircle } from "lucide-react";
+import { format } from 'date-fns';
 
 export default function StudentDashboardPage() {
   const { state } = useAppContext();
-  const { currentUser, courses, assignments, enrollments, announcements } = state;
+  const { currentUser, courses, assignments, submissions, enrollments, announcements, isLoading } = state;
 
-  if (!currentUser) return <p>Loading...</p>;
+  if (!currentUser && !isLoading) return <p>Redirecting to login...</p>;
+  if (isLoading || !currentUser) return <p>Loading dashboard...</p>;
 
-  const studentEnrollments = enrollments.filter(e => e.studentId === currentUser.id);
-  const enrolledCourseIds = studentEnrollments.map(e => e.courseId);
-  const enrolledCourses = courses.filter(c => enrolledCourseIds.includes(c.id));
+  const studentEnrollments = useMemo(() => enrollments.filter(e => e.studentId === currentUser.id), [enrollments, currentUser.id]);
+  const enrolledCourseIds = useMemo(() => studentEnrollments.map(e => e.courseId), [studentEnrollments]);
+  const enrolledCourses = useMemo(() => courses.filter(c => enrolledCourseIds.includes(c.id)), [courses, enrolledCourseIds]);
 
-  const upcomingAssignments = assignments
+  const upcomingAssignments = useMemo(() => assignments
     .filter(a => enrolledCourseIds.includes(a.courseId) && new Date(a.dueDate) >= new Date())
     .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-    .slice(0, 3);
+    .slice(0, 3), [assignments, enrolledCourseIds]);
 
-  const recentAnnouncements = (announcements || [])
+  const recentAnnouncements = useMemo(() => (announcements || [])
     .filter(ann => ann.userId === currentUser.id || (ann.courseId && enrolledCourseIds.includes(ann.courseId)) || (ann.type === 'announcement' && ann.userId === undefined && !ann.courseId))
     .sort((a,b) => b.timestamp - a.timestamp)
-    .slice(0,3);
+    .slice(0,3), [announcements, currentUser.id, enrolledCourseIds]);
 
+  const recentlyGradedSubmissions = useMemo(() => {
+    return submissions
+      .filter(sub => sub.studentId === currentUser.id && sub.grade !== undefined)
+      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()) // Assuming grading happens around submission time, or use a gradedAt timestamp if available
+      .slice(0, 3)
+      .map(sub => {
+        const assignment = assignments.find(a => a.id === sub.assignmentId);
+        const course = courses.find(c => c.id === assignment?.courseId);
+        return {
+          ...sub,
+          assignmentTitle: assignment?.title || "Unknown Assignment",
+          courseName: course?.name || "Unknown Course",
+          totalPoints: assignment?.totalPoints,
+        };
+      });
+  }, [submissions, assignments, courses, currentUser.id]);
 
   const quickLinks = [
     { name: "My Courses", href: "/student/courses", icon: BookOpen },
-    { name: "My Assignments", href: "/student/assignments", icon: Edit3 },
-    { name: "My Grades", href: "/student/grades", icon: GraduationCap },
+    { name: "My Assignments", href: "/student/assignments", icon: Edit3 }, // This page doesn't exist yet, but is a good target
+    { name: "My Grades", href: "/student/grades", icon: GraduationCap }, // This page doesn't exist yet
     { name: "My Attendance", href: "/student/attendance", icon: CalendarCheck },
     { name: "My Payments", href: "/student/payments", icon: DollarSign },
     { name: "View Calendar", href: "/calendar", icon: CalendarDays },
@@ -60,7 +79,7 @@ export default function StudentDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{upcomingAssignments.length}</div>
-            <Link href="/student/assignments" className="text-xs text-primary hover:underline">View all assignments</Link>
+            <Link href={`/student/courses/${upcomingAssignments[0]?.courseId}?assignment=${upcomingAssignments[0]?.id}`} className="text-xs text-primary hover:underline">View assignments</Link>
           </CardContent>
         </Card>
          <Card>
@@ -69,8 +88,22 @@ export default function StudentDashboardPage() {
             <GraduationCap className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">-</div>
-            <Link href="/student/grades" className="text-xs text-primary hover:underline">View all grades</Link>
+            {recentlyGradedSubmissions.length > 0 ? (
+              <div className="space-y-1">
+                {recentlyGradedSubmissions.map(sub => (
+                  <Link key={sub.id} href={`/student/courses/${assignments.find(a=>a.id === sub.assignmentId)?.courseId}?assignment=${sub.assignmentId}`} className="text-xs text-primary hover:underline block">
+                     <div className="flex justify-between items-center">
+                        <span className="truncate w-3/4" title={sub.assignmentTitle}>{sub.assignmentTitle}</span> 
+                        <span className="font-semibold">{sub.grade}/{sub.totalPoints}</span>
+                     </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="text-2xl font-bold">-</div>
+            )}
+            {recentlyGradedSubmissions.length > 0 && <Link href="/student/grades" className="text-xs text-primary hover:underline mt-1 block">View all grades</Link>}
+            {recentlyGradedSubmissions.length === 0 && <p className="text-xs text-muted-foreground">No grades posted yet.</p>}
           </CardContent>
         </Card>
       </div>
