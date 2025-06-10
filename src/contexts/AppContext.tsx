@@ -31,7 +31,7 @@ import {
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 import { 
   SAMPLE_USERS, 
@@ -50,7 +50,7 @@ import { useToast } from '@/hooks/use-toast';
 
 const initialState: AppState = {
   currentUser: undefined, 
-  users: [], // Initialize users as an empty array
+  users: [], 
   courses: [],
   lessons: [],
   assignments: [],
@@ -94,8 +94,6 @@ const autoGradeQuizAnswer = (question: QuizQuestion, studentAnswer: string | str
 const appReducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
     case ActionType.LOAD_DATA: {
-      // This action loads initial sample data for OTHER entities.
-      // Users will be fetched from Firestore and should not be overwritten by sample data here.
       const loadedSubmissions = (action.payload.submissions || (state.submissions.length === 0 ? SAMPLE_SUBMISSIONS : state.submissions)).map(submission => {
         if (submission.assignmentId) {
           const assignment = (action.payload.assignments || (state.assignments.length === 0 ? SAMPLE_ASSIGNMENTS : state.assignments)).find(a => a.id === submission.assignmentId);
@@ -118,7 +116,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
       return {
         ...state,
-        // users: state.users, // Users are handled by FETCH_USERS_SUCCESS
         courses: action.payload.courses || (state.courses.length === 0 && !state.currentUser ? SAMPLE_COURSES : state.courses),
         lessons: action.payload.lessons || (state.lessons.length === 0 && !state.currentUser ? SAMPLE_LESSONS : state.lessons),
         assignments: action.payload.assignments || (state.assignments.length === 0 && !state.currentUser ? SAMPLE_ASSIGNMENTS : state.assignments),
@@ -160,11 +157,11 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case ActionType.LOGIN_USER_SUCCESS:
     case ActionType.REGISTER_STUDENT_SUCCESS:
-    case ActionType.FETCH_USER_PROFILE_SUCCESS: // This is for current user, not the full list
+    case ActionType.FETCH_USER_PROFILE_SUCCESS: 
       return { 
         ...state, 
         currentUser: action.payload, 
-        isLoading: false, // Main auth loading done, list fetching might start
+        isLoading: false, 
         error: null, 
         successMessage: action.type === ActionType.LOGIN_USER_SUCCESS ? 'Login successful!' : (action.type === ActionType.REGISTER_STUDENT_SUCCESS ? 'Registration successful!' : null ) 
       };
@@ -194,16 +191,16 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case ActionType.LOGOUT_USER_SUCCESS:
       return { 
-        ...initialState, // Reset to initial state but keep some data if needed, or fetch fresh.
-        users: [], // Clear user list on logout
-        courses: state.courses, // Potentially clear or refetch these too
+        ...initialState, 
+        users: [], 
+        courses: state.courses, 
         lessons: state.lessons,
         assignments: state.assignments,
         submissions: state.submissions,
         enrollments: state.enrollments,
         attendanceRecords: state.attendanceRecords,
         payments: state.payments,
-        announcements: state.announcements, // Keep general announcements?
+        announcements: state.announcements, 
         currentUser: null, 
         isLoading: false, 
         successMessage: 'Logged out successfully.' 
@@ -211,7 +208,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     
     case ActionType.CREATE_USER_SUCCESS: { 
       const newUserDoc = action.payload as User;
-      // Ensure no duplicate if already fetched by FETCH_USERS_SUCCESS
       const userExists = state.users.some(u => u.id === newUserDoc.id);
       return {
         ...state,
@@ -594,7 +590,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const { toast } = useToast();
 
   useEffect(() => {
-    dispatch({ type: ActionType.LOAD_DATA, payload: {} }); // Loads other sample data
+    dispatch({ type: ActionType.LOAD_DATA, payload: {} }); 
   }, [dispatch]);
 
   const fetchAllUsers = useCallback(async () => {
@@ -631,7 +627,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const unsubscribe = onAuthStateChanged(authInstance, async (firebaseUser: FirebaseUser | null) => {
-      dispatch({ type: ActionType.SET_LOADING, payload: true }); // Overall loading starts
+      dispatch({ type: ActionType.SET_LOADING, payload: true }); 
       if (firebaseUser) {
         if (!dbInstance) {
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
@@ -646,28 +642,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (userDocSnap.exists()) {
             const userProfile = { id: userDocSnap.id, ...userDocSnap.data() } as User;
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
-            // Fetch all users only after current user is confirmed and set
-            if (userProfile) { // Check if userProfile is valid
-                await fetchAllUsers(); // This will handle its own loading states internally
+            if (userProfile) { 
+                await fetchAllUsers(); 
             } else {
-                dispatch({ type: ActionType.SET_LOADING, payload: false }); // No profile, stop loading
+                dispatch({ type: ActionType.SET_LOADING, payload: false }); 
             }
           } else {
             await signOut(authInstance); 
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-            dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); // Clear users list
+            dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
             dispatch({ type: ActionType.SET_ERROR, payload: "User profile not found in database. Signed out." });
             dispatch({ type: ActionType.SET_LOADING, payload: false });
           }
         } catch (error: any) {
           dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-          dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); // Clear users list
+          dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
           dispatch({ type: ActionType.SET_ERROR, payload: error.message || "Failed to load user profile." });
           dispatch({ type: ActionType.SET_LOADING, payload: false });
         }
-      } else { // No Firebase user
+      } else { 
         dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-        dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); // Clear users list if logged out
+        dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
         dispatch({ type: ActionType.SET_LOADING, payload: false });
       }
     });
@@ -694,9 +689,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       if (!payload.password) throw new Error("Password is required.");
-      // onAuthStateChanged will handle success and profile fetching
       await signInWithEmailAndPassword(authInstance, payload.email, payload.password);
-      // Success message is set by reducer on LOGIN_USER_SUCCESS if needed, but auth flow handles user set
     } catch (error: any) {
       dispatch({ type: ActionType.LOGIN_USER_FAILURE, payload: error.message || "Failed to login." });
     }
@@ -723,13 +716,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png?text=${payload.name.substring(0,2).toUpperCase()}`,
       };
       await setDoc(doc(dbInstance, "users", firebaseUser.uid), newUserForFirestore);
-      // onAuthStateChanged will handle setting current user and fetching all users.
-      // dispatch({ type: ActionType.REGISTER_STUDENT_SUCCESS, payload: newUserForFirestore }); // Redundant if onAuthStateChanged handles it
       dispatch({ type: ActionType.ADD_NOTIFICATION, payload: {
         userId: firebaseUser.uid, type: 'success',
         message: `Welcome to ${APP_NAME}, ${newUserForFirestore.name}! Account created.`
       }});
-      // The success toast is implicitly handled by the LOGIN_USER_SUCCESS path via onAuthStateChanged.
     } catch (error: any) {
       dispatch({ type: ActionType.REGISTER_STUDENT_FAILURE, payload: error.message || "Failed to register." });
     }
@@ -790,7 +780,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const successfullyCreatedUsers: User[] = [];
     for (const studentData of studentsToCreate) {
       try {
-        // Check against already fetched users, not just local state during loop
         const usersCol = collection(dbInstance, "users");
         const q = query(usersCol, where("email", "==", studentData.email));
         const querySnapshot = await getDocs(q);
@@ -842,7 +831,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
-      // Check if email already exists in Firestore
       const usersCol = collection(db, "users");
       const q = query(usersCol, where("email", "==", payload.email));
       const querySnapshot = await getDocs(q);
@@ -851,7 +839,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
 
-      const newUserId = doc(collection(db, "users")).id; // Firestore auto-generated ID
+      const newUserId = doc(collection(db, "users")).id; 
       const newUserDoc: User = {
         id: newUserId,
         name: payload.name,
@@ -907,13 +895,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleCreateCourse = useCallback(async (payload: CreateCoursePayload) => {
     dispatch({ type: ActionType.CREATE_COURSE_REQUEST });
     const db = getFirebaseDb();
-    if (!db || !state.currentUser) {
-      dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: "Firestore or current user not available." });
+
+    if (!db) {
+      console.error("handleCreateCourse: Firestore DB instance is not available.");
+      dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: "Database service not available. Please try again later." });
       return;
     }
+    if (!state.currentUser) {
+      console.error("handleCreateCourse: Current user is not available.");
+      dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: "User authentication issue. Please re-login and try again." });
+      return;
+    }
+
     try {
-      const courseId = payload.id || doc(collection(db, "courses")).id;
-      const teacherId = state.currentUser.role === UserRole.TEACHER ? state.currentUser.id : (payload.teacherId || 'unassigned');
+      const courseId = payload.id && typeof payload.id === 'string' && payload.id.trim() !== '' ? payload.id : doc(collection(db, "courses")).id;
+      const teacherId = state.currentUser.role === UserRole.TEACHER 
+        ? state.currentUser.id 
+        : (payload.teacherId || 'unassigned');
       
       const courseToAdd: Course = {
         name: payload.name,
@@ -925,10 +923,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         studentIds: payload.studentIds || [],
         cost: payload.cost || 0,
       };
+
+      console.log("Attempting to save course to Firestore:", JSON.stringify(courseToAdd, null, 2));
       await setDoc(doc(db, "courses", courseId), courseToAdd);
+      console.log("Course saved successfully to Firestore with ID:", courseId);
+
       dispatch({ type: ActionType.CREATE_COURSE_SUCCESS, payload: courseToAdd });
     } catch (error: any) {
-      dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: error.message || "Failed to create course."});
+      console.error("Firestore Error - Failed to create course:", error.code, error.message, error);
+      let errorMessage = "Failed to create course. Please check console for details.";
+      if (error.code === 'permission-denied') {
+        errorMessage = "Permission denied. Please check Firestore security rules to allow course creation.";
+      } else if (error.message) {
+        errorMessage = `Failed to create course: ${error.message}`;
+      }
+      dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: errorMessage });
     }
   }, [dispatch, state.currentUser]);
 
@@ -943,7 +952,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const courseRef = doc(db, "courses", payload.id);
       const updateData: Partial<Course> = { ...payload };
       delete updateData.id; 
-      await updateDoc(courseRef, updateData as any); // Cast to any to bypass strict type checks for partial update
+      await updateDoc(courseRef, updateData as any); 
       dispatch({ type: ActionType.UPDATE_COURSE_SUCCESS, payload });
     } catch (error: any) {
       dispatch({ type: ActionType.UPDATE_COURSE_FAILURE, payload: error.message || "Failed to update course."});
@@ -1044,7 +1053,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         totalPoints,
         questions: payload.questions?.map(q => ({...q, id: q.id || doc(collection(db, "temp")).id , assignmentId: assignmentId})),
       };
-      delete (newAssignment as any).assignmentFile; // Remove file object before Firestore save
+      delete (newAssignment as any).assignmentFile; 
       delete (newAssignment as any).manualTotalPoints;
 
       await setDoc(doc(db, "courses", payload.courseId, "assignments", assignmentId), newAssignment);
