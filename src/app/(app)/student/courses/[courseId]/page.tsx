@@ -24,15 +24,15 @@ export default function StudentCourseDetailPage() {
   const { courseId } = useParams() as { courseId: string };
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { state, dispatch, handleStudentSubmissionUpload } = useAppContext();
-  const { currentUser, courses, lessons, assignments, submissions, users, enrollments } = state; // Added enrollments
+  const { state, handleStudentSubmissionUpload, handleStudentSubmitAssignment } = useAppContext();
+  const { currentUser, courses, lessons, assignments, submissions, users, enrollments, isLoading } = state; 
   const { toast } = useToast();
 
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
   const [submissionContent, setSubmissionContent] = useState('');
   const [submissionFile, setSubmissionFile] = useState<File | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmittingFile, setIsSubmittingFile] = useState(false); // For file upload specifically
 
 
   useEffect(() => {
@@ -46,16 +46,23 @@ export default function StudentCourseDetailPage() {
   }, [searchParams, assignments, courseId]);
 
 
-  if (!currentUser) {
-    return <p className="text-center text-muted-foreground">Loading user data...</p>;
+  if (!currentUser && !isLoading) { // If done loading and no user
+    router.push('/auth'); // Or some other appropriate action
+    return <p className="text-center text-muted-foreground">Redirecting...</p>;
+  }
+  if (isLoading && currentUser === undefined) { // Still initially loading auth state
+     return <p className="text-center text-muted-foreground">Loading user data...</p>;
+  }
+  if (!currentUser) { // Should be caught by above, but as a fallback
+    return <p className="text-center text-muted-foreground">Please log in to view this page.</p>;
   }
 
+
   const course = courses.find(c => c.id === courseId);
-  // Ensure enrollments is initialized before using .some
   const isEnrolled = enrollments && enrollments.some(e => e.studentId === currentUser.id && e.courseId === courseId);
 
 
-  if (!course) {
+  if (!course && !isLoading) { // Course not found and not loading
     return (
       <div className="text-center py-10">
         <h2 className="text-2xl font-semibold">Course Not Found</h2>
@@ -64,8 +71,10 @@ export default function StudentCourseDetailPage() {
       </div>
     );
   }
-
-  if (!isEnrolled) {
+  if (!course && isLoading) {
+    return <p className="text-center text-muted-foreground">Loading course details...</p>;
+  }
+  if (!isEnrolled && !isLoading) {
     return (
       <div className="text-center py-10">
         <h2 className="text-2xl font-semibold">Access Denied</h2>
@@ -74,10 +83,15 @@ export default function StudentCourseDetailPage() {
       </div>
     );
   }
+  // If still loading and either course or enrollment status is unknown, show generic loader
+  if (isLoading && (!course || isEnrolled === undefined)) {
+    return <p className="text-center text-muted-foreground">Loading...</p>;
+  }
+
 
   const courseLessons = lessons.filter(l => l.courseId === courseId).sort((a, b) => a.order - b.order);
   const courseAssignments = assignments.filter(a => a.courseId === courseId).sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
-  const teacher = users.find(u => u.id === course.teacherId);
+  const teacher = users.find(u => u.id === course?.teacherId); // Added optional chaining for course
 
   const getStudentSubmission = (assignmentId: string): Submission | undefined => {
     return submissions.find(s => s.assignmentId === assignmentId && s.studentId === currentUser.id);
@@ -88,7 +102,6 @@ export default function StudentCourseDetailPage() {
     const existingSubmission = getStudentSubmission(assignment.id);
     if (existingSubmission) {
         setSubmissionContent(existingSubmission.content || '');
-        // Cannot pre-fill file input, but can show existing file info
     } else {
         setSubmissionContent('');
         setSubmissionFile(null);
@@ -105,13 +118,13 @@ export default function StudentCourseDetailPage() {
   };
 
   const handleSubmitAssignment = async () => {
-    if (!selectedAssignment || !currentUser) return;
+    if (!selectedAssignment || !currentUser || !course) return;
 
     if (selectedAssignment.type === AssignmentType.STANDARD && !submissionContent.trim() && !submissionFile) {
-        toast({ title: "Submission Error", description: "Please provide text content or upload a file for your submission.", variant: "destructive"});
+        toast({ title: "Submission Error", description: "Please provide text content or upload a file.", variant: "destructive"});
         return;
     }
-    setIsSubmitting(true);
+    setIsSubmittingFile(true); // Generic submitting state for the whole operation
 
     let uploadedFileUrl: string | undefined;
     let uploadedFileName: string | undefined;
@@ -121,44 +134,44 @@ export default function StudentCourseDetailPage() {
             const { fileUrl, fileName } = await handleStudentSubmissionUpload(course.id, selectedAssignment.id, currentUser.id, submissionFile);
             uploadedFileUrl = fileUrl;
             uploadedFileName = fileName;
-            toast({ title: "File Uploaded", description: `${fileName} ready for submission.`});
         } catch (error: any) {
-            toast({ title: "Upload Failed", description: error.message || "Could not upload your file.", variant: "destructive" });
-            setIsSubmitting(false);
+            // Toast is handled by AppContext
+            setIsSubmittingFile(false);
             return;
         }
     }
 
-    // Dispatch action with file URL and name if upload was successful
-    dispatch({
-      type: ActionType.SUBMIT_ASSIGNMENT,
-      payload: { // This payload type needs to match the AppContext definition, expecting Submission type
-        id: '', // Will be generated by reducer
-        assignmentId: selectedAssignment.id,
-        studentId: currentUser.id,
-        submittedAt: '', // Will be generated by reducer
-        content: submissionContent,
-        fileUrl: uploadedFileUrl, 
-        fileName: uploadedFileName,
-      } as Submission 
-    });
-    setIsSubmitting(false);
-    setIsSubmissionModalOpen(false);
-    setSubmissionFile(null); 
-    setSubmissionContent('');
+    const submissionPayload: Submission = {
+      id: `temp-sub-${Date.now()}`, // Firestore will generate actual ID if not provided or use this
+      assignmentId: selectedAssignment.id,
+      studentId: currentUser.id,
+      submittedAt: new Date().toISOString(), 
+      content: submissionContent,
+      fileUrl: uploadedFileUrl, 
+      fileName: uploadedFileName,
+    };
+    
+    await handleStudentSubmitAssignment(submissionPayload);
+    
+    setIsSubmittingFile(false);
+    if(!state.error) { // Only close modal if no error during submission
+      setIsSubmissionModalOpen(false);
+      setSubmissionFile(null); 
+      setSubmissionContent('');
+    }
   };
 
   return (
     <div className="space-y-8">
-      <Button variant="outline" onClick={() => router.back()} className="mb-6">
+      <Button variant="outline" onClick={() => router.back()} className="mb-6" disabled={isLoading}>
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Courses
       </Button>
 
       <Card className="overflow-hidden shadow-lg">
         <div className="aspect-[16/9] md:aspect-[21/9] relative w-full">
           <Image
-            src={`https://placehold.co/1200x400.png?text=${encodeURIComponent(course.name)}`}
-            alt={course.name}
+            src={`https://placehold.co/1200x400.png?text=${encodeURIComponent(course!.name)}`}
+            alt={course!.name}
             fill
             style={{objectFit:"cover"}}
             className="bg-muted"
@@ -166,8 +179,8 @@ export default function StudentCourseDetailPage() {
           />
         </div>
         <CardHeader className="pt-6">
-          <CardTitle className="text-3xl font-headline">{course.name}</CardTitle>
-          <CardDescription className="text-lg">{course.description}</CardDescription>
+          <CardTitle className="text-3xl font-headline">{course!.name}</CardTitle>
+          <CardDescription className="text-lg">{course!.description}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid md:grid-cols-3 gap-4 text-sm">
@@ -177,7 +190,7 @@ export default function StudentCourseDetailPage() {
             </div>
             <div className="flex items-center gap-2">
               <BookOpen className="h-5 w-5 text-primary" />
-              <span>Category: {course.category || "General"}</span>
+              <span>Category: {course!.category || "General"}</span>
             </div>
             <div className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-primary" />
@@ -215,7 +228,7 @@ export default function StudentCourseDetailPage() {
                       <AccordionContent className="p-4 space-y-3 bg-muted/30 rounded-md">
                         <p className="text-sm text-muted-foreground">{lesson.contentMarkdown.substring(0, 150)}{lesson.contentMarkdown.length > 150 ? "..." : ""}</p>
                         {lesson.videoUrl && <p className="text-xs text-blue-500 hover:underline"><ExternalLink className="inline mr-1 h-3 w-3" />Video available</p>}
-                        <Button asChild size="sm">
+                        <Button asChild size="sm" disabled={isLoading}>
                           <Link href={`/student/courses/${courseId}/lessons/${lesson.id}`}>
                             Start Lesson <ArrowRight className="ml-2 h-4 w-4" />
                           </Link>
@@ -264,7 +277,7 @@ export default function StudentCourseDetailPage() {
                         </p>
                         {assignment.assignmentFileName && assignment.assignmentFileUrl && (
                             <div className="mt-2">
-                                <Button variant="outline" size="sm" asChild>
+                                <Button variant="outline" size="sm" asChild disabled={isLoading}>
                                     <a href={assignment.assignmentFileUrl} target="_blank" rel="noopener noreferrer" download={assignment.assignmentFileName}>
                                         <DownloadCloud className="mr-2 h-4 w-4" /> Download Attachment: {assignment.assignmentFileName}
                                     </a>
@@ -272,7 +285,7 @@ export default function StudentCourseDetailPage() {
                             </div>
                         )}
                          <div className="mt-3 text-right">
-                            <Button variant="outline" size="sm" onClick={() => handleOpenSubmissionModal(assignment)}>
+                            <Button variant="outline" size="sm" onClick={() => handleOpenSubmissionModal(assignment)} disabled={isLoading}>
                               {existingSubmission ? 'View Submission' : 'Submit Assignment'}
                             </Button>
                          </div>
@@ -286,7 +299,6 @@ export default function StudentCourseDetailPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Submission Dialog */}
       {selectedAssignment && (
         <Dialog open={isSubmissionModalOpen} onOpenChange={setIsSubmissionModalOpen}>
           <DialogContent className="sm:max-w-[600px]">
@@ -298,7 +310,7 @@ export default function StudentCourseDetailPage() {
               <p className="text-sm text-muted-foreground pt-2">{selectedAssignment.description}</p>
                {selectedAssignment.assignmentFileName && selectedAssignment.assignmentFileUrl && (
                     <div className="mt-2">
-                        <Button variant="outline" size="sm" asChild className="w-full justify-start">
+                        <Button variant="outline" size="sm" asChild className="w-full justify-start" disabled={isLoading || isSubmittingFile}>
                             <a href={selectedAssignment.assignmentFileUrl} target="_blank" rel="noopener noreferrer" download={selectedAssignment.assignmentFileName}>
                                 <DownloadCloud className="mr-2 h-4 w-4" /> Download Assignment File: {selectedAssignment.assignmentFileName}
                             </a>
@@ -336,7 +348,7 @@ export default function StudentCourseDetailPage() {
                                 <p className="text-muted-foreground italic">Awaiting grading.</p>
                             )}
                              <DialogFooter>
-                                <DialogClose asChild><Button variant="outline">Close</Button></DialogClose>
+                                <DialogClose asChild><Button variant="outline" disabled={isLoading || isSubmittingFile}>Close</Button></DialogClose>
                             </DialogFooter>
                         </div>
                         
@@ -347,37 +359,31 @@ export default function StudentCourseDetailPage() {
                             <div>
                                 <Label htmlFor="submissionContent">Your Response (Optional)</Label>
                                 <Textarea 
-                                    id="submissionContent" 
-                                    value={submissionContent} 
+                                    id="submissionContent" value={submissionContent} 
                                     onChange={(e) => setSubmissionContent(e.target.value)}
                                     placeholder="Type your response here..."
-                                    rows={5}
-                                    className="mt-1"
-                                    disabled={isSubmitting}
+                                    rows={5} className="mt-1" disabled={isLoading || isSubmittingFile}
                                 />
                             </div>
                             <div>
                                 <Label htmlFor="submissionFile">Upload File (Optional)</Label>
                                 <Input 
-                                    id="submissionFile" 
-                                    type="file" 
-                                    onChange={handleFileChange}
-                                    className="mt-1"
-                                    disabled={isSubmitting}
+                                    id="submissionFile" type="file" onChange={handleFileChange}
+                                    className="mt-1" disabled={isLoading || isSubmittingFile}
                                 />
                                 {submissionFile && <p className="text-xs text-muted-foreground mt-1">Selected: {submissionFile.name}</p>}
                             </div>
                             <DialogFooter>
-                                <DialogClose asChild><Button variant="outline" disabled={isSubmitting}>Cancel</Button></DialogClose>
-                                <Button type="submit" disabled={isSubmitting}>
-                                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-                                    {isSubmitting ? "Submitting..." : "Submit Assignment"}
+                                <DialogClose asChild><Button variant="outline" disabled={isLoading || isSubmittingFile}>Cancel</Button></DialogClose>
+                                <Button type="submit" disabled={isLoading || isSubmittingFile}>
+                                    {(isLoading || isSubmittingFile) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                                    {(isLoading || isSubmittingFile) ? "Submitting..." : "Submit Assignment"}
                                 </Button>
                             </DialogFooter>
                         </form>
                     );
                 } else if (selectedAssignment.type === AssignmentType.QUIZ) {
-                    return <p className="py-4 text-muted-foreground">Quiz submissions are not yet implemented in this view. Please check the specific quiz interface.</p>;
+                    return <p className="py-4 text-muted-foreground">Quiz submissions are not yet implemented in this view.</p>;
                 }
                 return null; 
             })()}

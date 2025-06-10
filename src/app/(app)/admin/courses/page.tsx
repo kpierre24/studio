@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
-import type { Course, User, CreateCoursePayload } from '@/types'; // Assuming CreateCoursePayload is defined or Course can be used.
+import type { Course, User, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload } from '@/types'; 
 import { ActionType, UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,7 +45,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PlusCircle, Edit, Trash2, BookOpen } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, BookOpen, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
@@ -55,7 +55,7 @@ interface AdminCourseFormData {
   description: string;
   category: string;
   cost: number;
-  teacherId: string; // Can be actual teacher ID or 'unassigned'
+  teacherId: string; 
   prerequisites?: string[];
 }
 
@@ -69,8 +69,8 @@ const initialCourseFormData: AdminCourseFormData = {
 };
 
 export default function AdminCoursesPage() {
-  const { state, dispatch } = useAppContext();
-  const { courses, users, currentUser } = state;
+  const { state, handleCreateCourse, handleUpdateCourse, handleDeleteCourse } = useAppContext();
+  const { courses, users, currentUser, isLoading } = state;
   const { toast } = useToast();
 
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
@@ -113,27 +113,29 @@ export default function AdminCoursesPage() {
     return true;
   };
 
-  const handleCourseSubmit = () => {
+  const handleCourseSubmit = async () => {
     if (!validateForm()) return;
 
-    const payload: Course = {
-      id: courseFormData.id || `course-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      name: courseFormData.name,
-      description: courseFormData.description,
-      teacherId: courseFormData.teacherId, // Directly from form
-      studentIds: courseFormData.id ? (courses.find(c => c.id === courseFormData.id)?.studentIds || []) : [],
-      category: courseFormData.category,
-      cost: courseFormData.cost,
-      prerequisites: courseFormData.prerequisites,
+    const payload: CreateCoursePayload | UpdateCoursePayload = {
+      ...courseFormData,
+      // id is already in courseFormData if editing
     };
+    
+    if (courseFormData.id) {
+        await handleUpdateCourse(payload as UpdateCoursePayload);
+    } else {
+        await handleCreateCourse(payload as CreateCoursePayload);
+    }
 
-    dispatch({ type: courseFormData.id ? ActionType.UPDATE_COURSE : ActionType.CREATE_COURSE, payload });
-    setIsCourseModalOpen(false);
+    if (!state.error) { // Check if context operation set an error
+        setIsCourseModalOpen(false);
+    }
   };
 
-  const handleDeleteCourse = (courseId: string) => {
-    // In a real app, check for enrollments before deleting or handle cascading deletes
-    const course = courses.find(c => c.id === courseId);
+  const confirmDeleteCourse = async () => {
+    if (!courseToDelete) return;
+    
+    const course = courses.find(c => c.id === courseToDelete.id);
     if (course && course.studentIds.length > 0) {
         toast({
             title: "Cannot Delete Course",
@@ -143,8 +145,10 @@ export default function AdminCoursesPage() {
         setCourseToDelete(null);
         return;
     }
-    dispatch({ type: ActionType.DELETE_COURSE, payload: { id: courseId } });
-    setCourseToDelete(null); 
+    await handleDeleteCourse({ id: courseToDelete.id });
+    if (!state.error) {
+        setCourseToDelete(null); 
+    }
   };
 
   const getTeacherName = (teacherId: string) => {
@@ -160,7 +164,7 @@ export default function AdminCoursesPage() {
         <h1 className="text-3xl font-headline font-bold">Manage All Courses</h1>
         <Dialog open={isCourseModalOpen} onOpenChange={setIsCourseModalOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => handleOpenCourseModal()}>
+            <Button onClick={() => handleOpenCourseModal()} disabled={isLoading}>
               <PlusCircle className="mr-2 h-5 w-5" /> Add New Course
             </Button>
           </DialogTrigger>
@@ -174,23 +178,23 @@ export default function AdminCoursesPage() {
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="name" className="text-right">Name</Label>
-                <Input id="name" name="name" value={courseFormData.name} onChange={handleFormChange} className="col-span-3" />
+                <Input id="name" name="name" value={courseFormData.name} onChange={handleFormChange} className="col-span-3" disabled={isLoading}/>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="description" className="text-right">Description</Label>
-                <Textarea id="description" name="description" value={courseFormData.description} onChange={handleFormChange} className="col-span-3" />
+                <Textarea id="description" name="description" value={courseFormData.description} onChange={handleFormChange} className="col-span-3" disabled={isLoading}/>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="category" className="text-right">Category</Label>
-                <Input id="category" name="category" value={courseFormData.category} onChange={handleFormChange} className="col-span-3" />
+                <Input id="category" name="category" value={courseFormData.category} onChange={handleFormChange} className="col-span-3" disabled={isLoading}/>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="cost" className="text-right">Cost ($)</Label>
-                <Input id="cost" name="cost" type="number" value={courseFormData.cost} onChange={handleFormChange} className="col-span-3" />
+                <Input id="cost" name="cost" type="number" value={courseFormData.cost} onChange={handleFormChange} className="col-span-3" disabled={isLoading}/>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="teacherId" className="text-right">Teacher</Label>
-                <Select value={courseFormData.teacherId} onValueChange={handleTeacherChange}>
+                <Select value={courseFormData.teacherId} onValueChange={handleTeacherChange} disabled={isLoading}>
                   <SelectTrigger className="col-span-3">
                     <SelectValue placeholder="Select a teacher" />
                   </SelectTrigger>
@@ -204,8 +208,11 @@ export default function AdminCoursesPage() {
               </div>
             </div>
             <DialogFooter>
-              <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-              <Button type="submit" onClick={handleCourseSubmit}>Save Course</Button>
+              <DialogClose asChild><Button variant="outline" disabled={isLoading}>Cancel</Button></DialogClose>
+              <Button type="submit" onClick={handleCourseSubmit} disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                Save Course
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -235,12 +242,12 @@ export default function AdminCoursesPage() {
               <TableCell>{course.studentIds.length}</TableCell>
               <TableCell>${course.cost || 0}</TableCell>
               <TableCell className="text-right space-x-2">
-                <Button variant="outline" size="sm" onClick={() => handleOpenCourseModal(course)}>
+                <Button variant="outline" size="sm" onClick={() => handleOpenCourseModal(course)} disabled={isLoading}>
                   <Edit className="mr-1 h-4 w-4" /> Edit
                 </Button>
                 <AlertDialog open={!!courseToDelete && courseToDelete.id === course.id} onOpenChange={(isOpen) => !isOpen && setCourseToDelete(null)}>
                     <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" onClick={() => setCourseToDelete(course)}>
+                        <Button variant="destructive" size="sm" onClick={() => setCourseToDelete(course)} disabled={isLoading}>
                             <Trash2 className="mr-1 h-4 w-4" /> Delete
                         </Button>
                     </AlertDialogTrigger>
@@ -250,14 +257,16 @@ export default function AdminCoursesPage() {
                         <AlertDialogDescription>
                             This action cannot be undone. This will permanently delete the course: {courseToDelete?.name}. 
                             {courseToDelete && courseToDelete.studentIds.length > 0 && <strong className="block mt-2 text-destructive-foreground bg-destructive p-2 rounded-md">Warning: This course has {courseToDelete.studentIds.length} student(s) enrolled. Deletion is blocked. Unenroll students first.</strong>}
+                            Associated lessons and assignments will also be removed. Submissions will remain in the database unless manually cleaned up.
                         </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                         <AlertDialogCancel onClick={() => setCourseToDelete(null)}>Cancel</AlertDialogCancel>
                         <AlertDialogAction 
-                            onClick={() => courseToDelete && handleDeleteCourse(courseToDelete.id)}
-                            disabled={courseToDelete && courseToDelete.studentIds.length > 0}
+                            onClick={confirmDeleteCourse}
+                            disabled={(courseToDelete && courseToDelete.studentIds.length > 0) || isLoading}
                         >
+                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                             Yes, delete course
                         </AlertDialogAction>
                         </AlertDialogFooter>
@@ -280,4 +289,3 @@ export default function AdminCoursesPage() {
     </div>
   );
 }
-

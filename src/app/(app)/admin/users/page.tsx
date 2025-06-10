@@ -54,14 +54,14 @@ const initialUserFormData: UserFormData = {
   id: undefined,
   name: '',
   email: '',
-  password: '',
+  password: '', // For admin creation, this is advisory
   confirmPassword: '',
   role: UserRole.STUDENT,
 };
 
 export default function AdminUsersPage() {
-  const { state, dispatch, handleBulkCreateStudents } = useAppContext();
-  const { users, currentUser } = state;
+  const { state, dispatch, handleBulkCreateStudents, handleAdminCreateUser, handleAdminUpdateUser, handleAdminDeleteUser } = useAppContext();
+  const { users, currentUser, isLoading } = state;
   const { toast } = useToast();
 
   const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
@@ -108,15 +108,11 @@ export default function AdminUsersPage() {
       toast({ title: "Validation Error", description: "Name and Email are required.", variant: "destructive" });
       return false;
     }
-    if (!userFormData.id) { 
-        if (!userFormData.password) {
-            toast({ title: "Validation Error", description: "Password is required for new users.", variant: "destructive" });
-            return false;
+    if (!userFormData.id) { // Creating new user
+        if (!userFormData.password) { // Password field in form is for admin's reference or to communicate
+            toast({ title: "Info", description: "Password field is for your reference if communicating to the user.", variant: "default" });
         }
-        if (userFormData.password !== userFormData.confirmPassword) {
-            toast({ title: "Validation Error", description: "Passwords do not match.", variant: "destructive" });
-            return false;
-        }
+        // No password match validation needed here as it's not creating an Auth user directly
     }
     if (!/\S+@\S+\.\S+/.test(userFormData.email)) {
         toast({ title: "Validation Error", description: "Please enter a valid email address.", variant: "destructive" });
@@ -125,24 +121,27 @@ export default function AdminUsersPage() {
     return true;
   };
 
-  const handleAddUserSubmit = () => {
+  const handleAddUserSubmit = async () => {
     if (!validateForm()) return;
 
     const payload: CreateUserPayload = {
       name: userFormData.name,
       email: userFormData.email,
-      password: userFormData.password,
+      password: userFormData.password, // This password is not used for Firebase Auth creation here
       role: userFormData.role,
     };
-    dispatch({ type: ActionType.CREATE_USER, payload });
-    setIsAddUserModalOpen(false);
+    await handleAdminCreateUser(payload);
+    // Assuming success/error is handled by global toast via AppContext
+    if (!state.error) { // Check if handleAdminCreateUser set an error
+        setIsAddUserModalOpen(false);
+    }
   };
 
-  const handleEditUserSubmit = () => {
+  const handleEditUserSubmit = async () => {
     if (!userFormData.id) return;
     if (!userFormData.name.trim()) {
          toast({ title: "Validation Error", description: "Name cannot be empty.", variant: "destructive" });
-         return; // Changed from false to void
+         return; 
     }
     
     const payload: UpdateUserPayload = {
@@ -150,18 +149,22 @@ export default function AdminUsersPage() {
       name: userFormData.name,
       role: userFormData.role,
     };
-    dispatch({ type: ActionType.UPDATE_USER, payload });
-    setIsEditUserModalOpen(false);
+    await handleAdminUpdateUser(payload);
+    if (!state.error) {
+        setIsEditUserModalOpen(false);
+    }
   };
 
-  const handleDeleteUser = (userId: string) => {
+  const handleDeleteUser = async (userId: string) => {
     if (currentUser?.id === userId) {
       toast({ title: "Error", description: "You cannot delete your own account.", variant: "destructive" });
       setUserToDelete(null);
       return;
     }
-    dispatch({ type: ActionType.DELETE_USER, payload: { id: userId } });
-    setUserToDelete(null); 
+    await handleAdminDeleteUser({ id: userId });
+    if (!state.error) {
+        setUserToDelete(null); 
+    }
   };
 
   const handleCsvFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -186,7 +189,7 @@ export default function AdminUsersPage() {
         setIsBulkCreating(false);
         return;
       }
-      const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== ''); // Filter out empty lines
+      const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== ''); 
       if (lines.length < 2) {
         toast({ title: "Invalid CSV", description: "CSV file must have a header and at least one data row.", variant: "destructive" });
         setIsBulkCreating(false);
@@ -206,29 +209,22 @@ export default function AdminUsersPage() {
         return;
       }
       if (nameIndex === -1 && (firstNameIndex === -1 || lastNameIndex === -1)) {
-        toast({ title: "Invalid CSV Header", description: "CSV must contain either a 'name' column or both 'firstname' and 'lastname' columns.", variant: "destructive" });
+        toast({ title: "Invalid CSV Header", description: "CSV must contain 'name' or both 'firstname' & 'lastname'.", variant: "destructive" });
         setIsBulkCreating(false);
         return;
       }
-
 
       const studentsToCreate: BulkCreateStudentData[] = [];
       for (let i = 1; i < lines.length; i++) {
         const data = lines[i].split(',').map(d => d.trim());
         const email = data[emailIndex];
         const password = data[passwordIndex];
-        let name: string | undefined; // Changed to undefined initially
+        let name: string | undefined;
 
-        if (nameIndex !== -1) {
+        if (nameIndex !== -1 && data[nameIndex]) {
           name = data[nameIndex];
-        } else if (firstNameIndex !== -1 && lastNameIndex !== -1) {
-          const firstName = data[firstNameIndex];
-          const lastName = data[lastNameIndex];
-          if (!firstName || !lastName) {
-             toast({ title: "Row Error", description: `Row ${i + 1}: Missing firstname or lastname when 'name' column is absent. Skipping.`, variant: "destructive" });
-             continue;
-          }
-          name = `${firstName} ${lastName}`;
+        } else if (firstNameIndex !== -1 && lastNameIndex !== -1 && data[firstNameIndex] && data[lastNameIndex]) {
+          name = `${data[firstNameIndex]} ${data[lastNameIndex]}`;
         }
         
         const missingFields = [];
@@ -237,15 +233,14 @@ export default function AdminUsersPage() {
         if (!password) missingFields.push("password");
 
         if (missingFields.length > 0) {
-          toast({ title: "Row Error", description: `Row ${i + 1}: Missing required field(s): ${missingFields.join(', ')}. Skipping.`, variant: "destructive" });
+          toast({ title: "Row Error", description: `Row ${i + 1}: Missing: ${missingFields.join(', ')}. Skipping.`, variant: "destructive" });
           continue;
         }
         
-        if (!/\S+@\S+\.\S+/.test(email!)) { // Added ! to assert email is defined due to above check
-          toast({ title: "Row Error", description: `Row ${i + 1}: Invalid email format for ${email}. Skipping.`, variant: "destructive" });
+        if (!/\S+@\S+\.\S+/.test(email!)) { 
+          toast({ title: "Row Error", description: `Row ${i + 1}: Invalid email: ${email}. Skipping.`, variant: "destructive" });
           continue;
         }
-        // Assert name and password are not undefined here because of the check above
         studentsToCreate.push({ name: name!, email: email!, password: password! });
       }
 
@@ -254,7 +249,7 @@ export default function AdminUsersPage() {
       } else {
         toast({ title: "No Valid Students", description: "No valid student data found in the CSV to process after filtering.", variant: "default" });
       }
-      setCsvFile(null); // Reset file input
+      setCsvFile(null); 
       const fileInput = document.getElementById('csv-upload-input') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       setIsBulkCreating(false);
@@ -273,45 +268,36 @@ export default function AdminUsersPage() {
         <h1 className="text-3xl font-headline font-bold">Manage Users</h1>
         <Dialog open={isAddUserModalOpen} onOpenChange={setIsAddUserModalOpen}>
           <DialogTrigger asChild>
-            <Button onClick={handleOpenAddUserModal}>
+            <Button onClick={handleOpenAddUserModal} disabled={isLoading}>
               <PlusCircle className="mr-2 h-5 w-5" /> Add New User
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[480px]">
             <DialogHeader>
               <DialogTitle>Add New User</DialogTitle>
-              <DialogDescription>Create a new user account and assign a role.</DialogDescription>
+              <DialogDescription>Create a new user document. Auth account must be created separately or by user registration.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="name" className="text-right">Name</Label>
-                <Input id="name" name="name" value={userFormData.name} onChange={handleFormChange} className="col-span-3" />
+                <Input id="name" name="name" value={userFormData.name} onChange={handleFormChange} className="col-span-3" disabled={isLoading}/>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="email" className="text-right">Email</Label>
-                <Input id="email" name="email" type="email" value={userFormData.email} onChange={handleFormChange} className="col-span-3" />
+                <Input id="email" name="email" type="email" value={userFormData.email} onChange={handleFormChange} className="col-span-3" disabled={isLoading}/>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="password_add" className="text-right">Password</Label>
                 <div className="col-span-3 relative">
-                    <Input id="password_add" name="password" type={showPassword ? "text" : "password"} value={userFormData.password || ''} onChange={handleFormChange} />
-                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)}>
+                    <Input id="password_add" name="password" type={showPassword ? "text" : "password"} value={userFormData.password || ''} onChange={handleFormChange} placeholder="Advise user of this password" disabled={isLoading}/>
+                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowPassword(!showPassword)} disabled={isLoading}>
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                 </div>
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="confirmPassword_add" className="text-right">Confirm Pwd</Label>
-                 <div className="col-span-3 relative">
-                    <Input id="confirmPassword_add" name="confirmPassword" type={showConfirmPassword ? "text" : "password"} value={userFormData.confirmPassword || ''} onChange={handleFormChange} />
-                    <Button type="button" variant="ghost" size="icon" className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7" onClick={() => setShowConfirmPassword(!showConfirmPassword)}>
-                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                </div>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
                 <Label htmlFor="role_add" className="text-right">Role</Label>
-                <Select value={userFormData.role} onValueChange={handleRoleChange}>
+                <Select value={userFormData.role} onValueChange={handleRoleChange} disabled={isLoading}>
                   <SelectTrigger className="col-span-3">
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>
@@ -324,8 +310,11 @@ export default function AdminUsersPage() {
               </div>
             </div>
             <DialogFooter>
-              <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-              <Button type="submit" onClick={handleAddUserSubmit}>Add User</Button>
+              <DialogClose asChild><Button variant="outline" disabled={isLoading}>Cancel</Button></DialogClose>
+              <Button type="submit" onClick={handleAddUserSubmit} disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                Add User Document
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -335,7 +324,7 @@ export default function AdminUsersPage() {
         <CardHeader>
             <CardTitle>Bulk Add Students via CSV</CardTitle>
             <CardDescription>
-                Upload a CSV file with student data. Columns must include a header row with 'email', 'password', and either 'name' or both 'firstname' and 'lastname'. All users will be created with the 'Student' role.
+                Upload a CSV file with student data. Columns must include: 'email', 'password', and ('name' OR 'firstname' & 'lastname'). All users will be created with 'Student' role and Firebase Auth accounts.
             </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -347,12 +336,12 @@ export default function AdminUsersPage() {
                     accept=".csv" 
                     onChange={handleCsvFileChange} 
                     className="mt-1"
-                    disabled={isBulkCreating}
+                    disabled={isBulkCreating || isLoading}
                 />
             </div>
-            <Button onClick={handleProcessCsvUpload} disabled={!csvFile || isBulkCreating} className="w-full sm:w-auto">
-                {isBulkCreating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-                {isBulkCreating ? "Processing..." : "Upload & Create Students"}
+            <Button onClick={handleProcessCsvUpload} disabled={!csvFile || isBulkCreating || isLoading} className="w-full sm:w-auto">
+                {(isBulkCreating || isLoading) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                {(isBulkCreating || isLoading) ? "Processing..." : "Upload & Create Students"}
             </Button>
         </CardContent>
       </Card>
@@ -371,7 +360,7 @@ export default function AdminUsersPage() {
           {users.map((user) => (
             <TableRow key={user.id}>
               <TableCell className="font-medium flex items-center gap-2">
-                <img src={user.avatarUrl || `https://placehold.co/32x32.png?text=${user.name.substring(0,1)}`} alt={user.name} className="h-8 w-8 rounded-full" data-ai-hint="user avatar" />
+                <img src={user.avatarUrl || `https://placehold.co/32x32.png?text=${user.name.substring(0,1)}`} alt={user.name} className="h-8 w-8 rounded-full" data-ai-hint="user avatar"/>
                 {user.name}
               </TableCell>
               <TableCell>{user.email}</TableCell>
@@ -389,7 +378,7 @@ export default function AdminUsersPage() {
                     if (!isOpen) setIsEditUserModalOpen(false); else handleOpenEditUserModal(user);
                 }}>
                   <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" onClick={() => handleOpenEditUserModal(user)}>
+                    <Button variant="outline" size="sm" onClick={() => handleOpenEditUserModal(user)} disabled={isLoading}>
                       <Edit className="mr-1 h-4 w-4" /> Edit
                     </Button>
                   </DialogTrigger>
@@ -401,7 +390,7 @@ export default function AdminUsersPage() {
                     <div className="grid gap-4 py-4">
                       <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="edit-name" className="text-right">Name</Label>
-                        <Input id="edit-name" name="name" value={userFormData.name} onChange={handleFormChange} className="col-span-3" />
+                        <Input id="edit-name" name="name" value={userFormData.name} onChange={handleFormChange} className="col-span-3" disabled={isLoading}/>
                       </div>
                       <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="edit-email" className="text-right">Email</Label>
@@ -409,7 +398,7 @@ export default function AdminUsersPage() {
                       </div>
                        <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="edit-role" className="text-right">Role</Label>
-                        <Select value={userFormData.role} onValueChange={handleRoleChange}>
+                        <Select value={userFormData.role} onValueChange={handleRoleChange} disabled={isLoading || (currentUser?.id === user.id && user.role === UserRole.SUPER_ADMIN)}>
                           <SelectTrigger className="col-span-3">
                             <SelectValue placeholder="Select a role" />
                           </SelectTrigger>
@@ -417,7 +406,7 @@ export default function AdminUsersPage() {
                             {Object.values(UserRole).map(role => (
                               <SelectItem key={role} value={role} disabled={currentUser?.id === user.id && role !== UserRole.SUPER_ADMIN && user.role === UserRole.SUPER_ADMIN}>
                                 {role}
-                                {currentUser?.id === user.id && role !== UserRole.SUPER_ADMIN && user.role === UserRole.SUPER_ADMIN && " (Cannot change own role from Super Admin)"}
+                                {currentUser?.id === user.id && role !== UserRole.SUPER_ADMIN && user.role === UserRole.SUPER_ADMIN && " (Cannot change own role)"}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -425,15 +414,18 @@ export default function AdminUsersPage() {
                       </div>
                     </div>
                     <DialogFooter>
-                        <DialogClose asChild><Button variant="outline" onClick={() => setIsEditUserModalOpen(false)}>Cancel</Button></DialogClose>
-                        <Button type="submit" onClick={handleEditUserSubmit} disabled={currentUser?.id === user.id && userFormData.role !== UserRole.SUPER_ADMIN && user.role === UserRole.SUPER_ADMIN}>Save Changes</Button>
+                        <DialogClose asChild><Button variant="outline" onClick={() => setIsEditUserModalOpen(false)} disabled={isLoading}>Cancel</Button></DialogClose>
+                        <Button type="submit" onClick={handleEditUserSubmit} disabled={isLoading || (currentUser?.id === user.id && userFormData.role !== UserRole.SUPER_ADMIN && user.role === UserRole.SUPER_ADMIN)}>
+                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
+                            Save Changes
+                        </Button>
                     </DialogFooter>
                   </DialogContent>
                 </Dialog>
 
                 <AlertDialog open={!!userToDelete && userToDelete.id === user.id} onOpenChange={(isOpen) => !isOpen && setUserToDelete(null)}>
                     <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" onClick={() => setUserToDelete(user)} disabled={currentUser?.id === user.id}>
+                        <Button variant="destructive" size="sm" onClick={() => setUserToDelete(user)} disabled={currentUser?.id === user.id || isLoading}>
                             <Trash2 className="mr-1 h-4 w-4" /> Delete
                         </Button>
                     </AlertDialogTrigger>
@@ -441,13 +433,14 @@ export default function AdminUsersPage() {
                         <AlertDialogHeader>
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the user account for {userToDelete?.name}.
+                            This action cannot be undone. This will permanently delete the user document for {userToDelete?.name}. 
+                            Firebase Auth account will not be deleted by this action.
                         </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                         <AlertDialogCancel onClick={() => setUserToDelete(null)}>Cancel</AlertDialogCancel>
                         <AlertDialogAction onClick={() => userToDelete && handleDeleteUser(userToDelete.id)}>
-                            Yes, delete user
+                            Yes, delete user document
                         </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
@@ -463,4 +456,3 @@ export default function AdminUsersPage() {
     </div>
   );
 }
-
