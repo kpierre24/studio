@@ -98,8 +98,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.LOAD_DATA: {
       return {
         ...state,
-        courses: action.payload.courses || state.courses, 
-        lessons: action.payload.lessons || state.lessons, 
+        // courses: action.payload.courses || state.courses, // Now handled by fetchAllCourses
+        // lessons: action.payload.lessons || state.lessons, // Now handled by fetchAllLessons
         assignments: action.payload.assignments || state.assignments,
         submissions: (action.payload.submissions || state.submissions).map(submission => {
           if (submission.assignmentId) {
@@ -703,15 +703,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     dispatch({ type: ActionType.LOAD_DATA, payload: {
-      courses: SAMPLE_COURSES, // Initialize with sample data
-      // lessons: SAMPLE_LESSONS, // Let fetchAllLessons handle this
-      assignments: SAMPLE_ASSIGNMENTS,
-      submissions: SAMPLE_SUBMISSIONS,
-      enrollments: INITIAL_ENROLLMENTS,
-      attendanceRecords: SAMPLE_ATTENDANCE,
-      payments: SAMPLE_PAYMENTS,
-      notifications: SAMPLE_NOTIFICATIONS,
-      announcements: SAMPLE_ANNOUNCEMENTS,
+      // courses: SAMPLE_COURSES, // Now handled by fetchAllCourses
+      // lessons: SAMPLE_LESSONS, // Now handled by fetchAllLessons
+      assignments: SAMPLE_ASSIGNMENTS, // TODO: Fetch from Firestore
+      submissions: SAMPLE_SUBMISSIONS, // TODO: Fetch from Firestore
+      enrollments: INITIAL_ENROLLMENTS, // TODO: Fetch or derive from Firestore
+      attendanceRecords: SAMPLE_ATTENDANCE, // TODO: Fetch from Firestore
+      payments: SAMPLE_PAYMENTS, // TODO: Fetch from Firestore
+      notifications: SAMPLE_NOTIFICATIONS, // TODO: Fetch from Firestore or manage dynamically
+      announcements: SAMPLE_ANNOUNCEMENTS, // TODO: Fetch from Firestore
     } }); 
   }, [dispatch]);
 
@@ -759,9 +759,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     if (state.courses.length === 0) {
-        // No courses loaded yet, so can't fetch lessons.
-        // This could happen if fetchAllCourses hasn't completed or returned no courses.
-        dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] }); // Dispatch success with empty array
+        dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] }); 
         return;
     }
     try {
@@ -820,18 +818,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (userProfile) { 
                 await fetchAllUsers(); 
                 await fetchAllCourses(); 
+                // fetchAllLessons is now called in its own useEffect dependent on courses
             } else {
                 dispatch({ type: ActionType.SET_LOADING, payload: false }); 
             }
           } else {
-            // TODO: This scenario (auth user exists, but no Firestore doc) might need graceful handling.
-            // For now, sign out and clear.
             await signOut(authInstance); 
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
             dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
             dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
             dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
-            // TODO: Consider clearing other data arrays (assignments, etc.) on logout.
             dispatch({ type: ActionType.SET_ERROR, payload: "User profile not found in database. Signed out." });
             dispatch({ type: ActionType.SET_LOADING, payload: false });
           }
@@ -840,7 +836,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
           dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
           dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
-          // TODO: Consider clearing other data arrays (assignments, etc.) on logout.
           dispatch({ type: ActionType.SET_ERROR, payload: error.message || "Failed to load user profile." });
           dispatch({ type: ActionType.SET_LOADING, payload: false });
         }
@@ -849,8 +844,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
         dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
-        // TODO: Consider clearing other data arrays (lessons, assignments, etc.) on logout,
-        // or ensure they are re-fetched correctly on next login if not cleared.
         dispatch({ type: ActionType.SET_LOADING, payload: false });
       }
     });
@@ -1152,8 +1145,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
-      // TODO: Consider using a Firebase Function to delete subcollections (lessons, assignments, submissions) associated with the course.
-      // For now, this only deletes the course document itself.
       await deleteDoc(doc(db, "courses", payload.id));
       dispatch({ type: ActionType.DELETE_COURSE_SUCCESS, payload });
     } catch (error: any) {
@@ -1191,7 +1182,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       dispatch({ type: ActionType.ENROLL_STUDENT_SUCCESS, payload: { course: updatedCourse, enrollment: newEnrollment } });
 
-    } catch (error: any) {
+    } catch (error: any) { 
       dispatch({ type: ActionType.ENROLL_STUDENT_FAILURE, payload: error.message || "Failed to enroll student." });
     }
   }, [dispatch]);
@@ -1358,28 +1349,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     try {
       const assignmentId = payload.id || doc(collection(db, "courses", payload.courseId, "assignments")).id;
+      
       let totalPoints = 0;
-      if (payload.type === AssignmentType.QUIZ && payload.questions) {
+      if (payload.type === AssignmentType.QUIZ && payload.questions && payload.questions.length > 0) {
         totalPoints = payload.questions.reduce((sum, q) => sum + q.points, 0);
-      } else if (payload.type === AssignmentType.STANDARD && payload.rubric) {
+      } else if (payload.type === AssignmentType.STANDARD && payload.rubric && payload.rubric.length > 0) {
         totalPoints = payload.rubric.reduce((sum, r) => sum + r.points, 0);
       } else if (payload.manualTotalPoints !== undefined) {
         totalPoints = payload.manualTotalPoints;
       }
-      const newAssignment: Assignment = {
-        ...payload,
-        id: assignmentId,
-        totalPoints,
-        questions: payload.questions?.map(q => ({...q, id: q.id || doc(collection(db, "temp")).id , assignmentId: assignmentId})),
-        assignmentFileUrl: uploadedFileUrl,
-        assignmentFileName: uploadedFileName,
-        externalLink: payload.externalLink,
-      };
-      delete (newAssignment as any).assignmentFile; 
-      delete (newAssignment as any).manualTotalPoints;
 
-      await setDoc(doc(db, "courses", payload.courseId, "assignments", assignmentId), newAssignment);
-      dispatch({ type: ActionType.CREATE_ASSIGNMENT_SUCCESS, payload: newAssignment });
+      const firestoreData: any = {
+        id: assignmentId,
+        courseId: payload.courseId,
+        title: payload.title,
+        description: payload.description,
+        dueDate: payload.dueDate,
+        type: payload.type,
+        totalPoints,
+      };
+      // Conditionally add optional fields to the object being sent to Firestore
+      if (payload.rubric && payload.rubric.length > 0) {
+        firestoreData.rubric = payload.rubric;
+      }
+      if (uploadedFileUrl) {
+        firestoreData.assignmentFileUrl = uploadedFileUrl;
+      }
+      if (uploadedFileName) {
+        firestoreData.assignmentFileName = uploadedFileName;
+      }
+      if (payload.externalLink) {
+        firestoreData.externalLink = payload.externalLink;
+      }
+
+      if (payload.type === AssignmentType.QUIZ) {
+        firestoreData.questions = (payload.questions && payload.questions.length > 0)
+          ? payload.questions.map(q => ({
+              ...q,
+              id: q.id || doc(collection(db, "temp")).id,
+              assignmentId: assignmentId
+            }))
+          : []; 
+      }
+      // If type is STANDARD, 'questions' field is omitted from firestoreData
+
+      await setDoc(doc(db, "courses", payload.courseId, "assignments", assignmentId), firestoreData);
+      
+      // Construct the full assignment object for state, ensuring 'questions' is undefined for standard
+      const newAssignmentForState: Assignment = {
+        id: firestoreData.id,
+        courseId: firestoreData.courseId,
+        title: firestoreData.title,
+        description: firestoreData.description,
+        dueDate: firestoreData.dueDate,
+        type: firestoreData.type,
+        totalPoints: firestoreData.totalPoints,
+        questions: payload.type === AssignmentType.QUIZ ? (firestoreData.questions || []) : undefined,
+        rubric: firestoreData.rubric, // Will be undefined if not set in firestoreData
+        assignmentFileUrl: firestoreData.assignmentFileUrl, // Will be undefined if not set
+        assignmentFileName: firestoreData.assignmentFileName, // Will be undefined if not set
+        externalLink: firestoreData.externalLink, // Will be undefined if not set
+      };
+
+      dispatch({ type: ActionType.CREATE_ASSIGNMENT_SUCCESS, payload: newAssignmentForState });
     } catch (error: any) {
       dispatch({ type: ActionType.CREATE_ASSIGNMENT_FAILURE, payload: error.message || "Failed to create assignment."});
     }
@@ -1388,7 +1420,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleUpdateAssignment = useCallback(async (payload: UpdateAssignmentPayload & { assignmentFile?: File | null }) => {
     dispatch({ type: ActionType.UPDATE_ASSIGNMENT_REQUEST });
     const db = getFirebaseDb();
-    if (!db || !payload.courseId) {
+    if (!db || !payload.courseId) { // courseId is now mandatory in UpdateAssignmentPayload
       dispatch({ type: ActionType.UPDATE_ASSIGNMENT_FAILURE, payload: "Firestore or courseId not available." });
       return;
     }
@@ -1406,34 +1438,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return;
         }
     } else if (payload.assignmentFile === null && payload.assignmentFileUrl === undefined) { 
-        uploadedFileUrl = undefined;
-        uploadedFileName = undefined;
+        // This means the file is being explicitly removed
+        uploadedFileUrl = undefined; // Will be set to null for Firestore later
+        uploadedFileName = undefined; // Will be set to null for Firestore later
     }
 
     try {
       const assignmentRef = doc(db, "courses", payload.courseId, "assignments", payload.id);
-      let totalPoints = payload.totalPoints; 
+      
+      let totalPoints = payload.totalPoints || 0; 
       if (payload.manualTotalPoints !== undefined) {
           totalPoints = payload.manualTotalPoints;
-      } else if (payload.type === AssignmentType.QUIZ && payload.questions) {
+      } else if (payload.type === AssignmentType.QUIZ && payload.questions && payload.questions.length > 0) {
           totalPoints = payload.questions.reduce((sum, q) => sum + q.points, 0);
-      } else if (payload.type === AssignmentType.STANDARD && payload.rubric) {
+      } else if (payload.type === AssignmentType.STANDARD && payload.rubric && payload.rubric.length > 0) {
           totalPoints = payload.rubric.reduce((sum, r) => sum + r.points, 0);
       }
-      const updateData: Partial<Assignment> = { 
-        ...payload, 
-        totalPoints,
-        assignmentFileUrl: uploadedFileUrl,
-        assignmentFileName: uploadedFileName,
-        externalLink: payload.externalLink,
-       };
-      delete updateData.id;
-      delete updateData.courseId;
-      delete (updateData as any).assignmentFile;
-      delete (updateData as any).manualTotalPoints;
 
-      await updateDoc(assignmentRef, updateData as any);
-      dispatch({ type: ActionType.UPDATE_ASSIGNMENT_SUCCESS, payload: { ...payload, assignmentFileUrl: uploadedFileUrl, assignmentFileName: uploadedFileName, totalPoints: totalPoints } });
+      const firestoreUpdateData: Partial<Assignment> = {
+        title: payload.title,
+        description: payload.description,
+        dueDate: payload.dueDate,
+        type: payload.type,
+        totalPoints,
+      };
+
+      // Handle optional fields explicitly for update (set to null if clearing)
+      firestoreUpdateData.rubric = (payload.rubric && payload.rubric.length > 0) ? payload.rubric : null;
+      firestoreUpdateData.externalLink = payload.externalLink || null;
+      
+      if (uploadedFileUrl !== undefined) {
+        firestoreUpdateData.assignmentFileUrl = uploadedFileUrl;
+        firestoreUpdateData.assignmentFileName = uploadedFileName;
+      } else if (payload.assignmentFile === null && payload.assignmentFileUrl === undefined) {
+        // Explicitly removing the file
+        firestoreUpdateData.assignmentFileUrl = null;
+        firestoreUpdateData.assignmentFileName = null;
+      }
+
+
+      if (payload.type === AssignmentType.QUIZ) {
+        firestoreUpdateData.questions = (payload.questions && payload.questions.length > 0)
+          ? payload.questions.map(q_1 => ({
+              ...q_1,
+              id: q_1.id || doc(collection(db, "temp")).id,
+              assignmentId: payload.id
+            }))
+          : [];
+      } else { // Type is STANDARD
+        firestoreUpdateData.questions = null; // Set to null to clear out questions if it was a quiz
+      }
+      
+      // Firestore's updateDoc only updates fields provided. Undefined fields are ignored.
+      // Explicit null values will update the field to null in Firestore.
+      await updateDoc(assignmentRef, firestoreUpdateData as any); 
+      
+      const updatedAssignmentForState: UpdateAssignmentPayload = {
+        ...payload, // Original payload from UI
+        courseId: payload.courseId,
+        assignmentFileUrl: uploadedFileUrl, // Reflects current state of file
+        assignmentFileName: uploadedFileName, // Reflects current state of file
+        totalPoints: totalPoints,
+        questions: payload.type === AssignmentType.QUIZ ? (firestoreUpdateData.questions || []) : undefined,
+        rubric: firestoreUpdateData.rubric === null ? undefined : firestoreUpdateData.rubric,
+        externalLink: firestoreUpdateData.externalLink === null ? undefined : firestoreUpdateData.externalLink,
+      };
+      dispatch({ type: ActionType.UPDATE_ASSIGNMENT_SUCCESS, payload: updatedAssignmentForState });
     } catch (error: any) {
       dispatch({ type: ActionType.UPDATE_ASSIGNMENT_FAILURE, payload: error.message || "Failed to update assignment."});
     }
@@ -1620,6 +1690,3 @@ export const useAppContext = () => {
   }
   return context;
 };
-
-
-

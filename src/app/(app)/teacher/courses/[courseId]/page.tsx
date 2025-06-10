@@ -162,6 +162,7 @@ export default function TeacherCourseDetailPage() {
       toast({ title: "Validation Error", description: "Lesson title is required.", variant: "destructive" });
       return;
     }
+    if (!course) return; // Should not happen given checks above
 
     const payload: CreateLessonPayload | UpdateLessonPayload = {
       courseId: course.id, title: lessonFormData.title, contentMarkdown: lessonFormData.contentMarkdown,
@@ -180,7 +181,7 @@ export default function TeacherCourseDetailPage() {
   };
 
   const confirmDeleteLesson = async () => {
-    if (lessonToDelete) {
+    if (lessonToDelete && course) {
       const payload: DeleteLessonPayload = { id: lessonToDelete.id, courseId: course.id };
       await handleDeleteLesson(payload);
       if (!state.error) setLessonToDelete(null);
@@ -193,7 +194,7 @@ export default function TeacherCourseDetailPage() {
         id: assignment.id, title: assignment.title, description: assignment.description,
         dueDate: assignment.dueDate ? format(new Date(assignment.dueDate), "yyyy-MM-dd'T'HH:mm") : '', // For datetime-local
         type: assignment.type, questions: assignment.questions || [],
-        manualTotalPoints: assignment.type === AssignmentType.STANDARD ? assignment.totalPoints : assignment.manualTotalPoints,
+        manualTotalPoints: assignment.type === AssignmentType.STANDARD ? assignment.totalPoints : assignment.manualTotalPoints, // Use manualTotalPoints to preserve UI if set
         assignmentFileUrl: assignment.assignmentFileUrl, assignmentFileName: assignment.assignmentFileName,
         externalLink: assignment.externalLink || '',
         assignmentFile: null,
@@ -233,27 +234,33 @@ export default function TeacherCourseDetailPage() {
       toast({ title: "Validation Error", description: "Assignment title and due date are required.", variant: "destructive" });
       return;
     }
+    if (!course) return; // Should not happen
 
     const payloadBase = {
-      courseId: course.id, title: assignmentFormData.title, description: assignmentFormData.description,
-      dueDate: new Date(assignmentFormData.dueDate).toISOString(), type: assignmentFormData.type,
-      questions: assignmentFormData.type === AssignmentType.QUIZ ? assignmentFormData.questions : undefined,
+      courseId: course.id, 
+      title: assignmentFormData.title, 
+      description: assignmentFormData.description,
+      dueDate: new Date(assignmentFormData.dueDate).toISOString(), 
+      type: assignmentFormData.type,
+      questions: assignmentFormData.type === AssignmentType.QUIZ ? (assignmentFormData.questions || []) : undefined, // Ensure empty array if quiz and no questions
       manualTotalPoints: assignmentFormData.type === AssignmentType.STANDARD ? assignmentFormData.manualTotalPoints : undefined,
-      assignmentFileUrl: assignmentFormData.assignmentFileUrl, assignmentFileName: assignmentFormData.assignmentFileName,
+      assignmentFileUrl: assignmentFormData.assignmentFileUrl, 
+      assignmentFileName: assignmentFormData.assignmentFileName,
       externalLink: assignmentFormData.externalLink || undefined,
+      rubric: assignmentFormData.type === AssignmentType.STANDARD ? (assignmentFormData.rubric || []) : undefined, // Add rubric
     };
 
     if (assignmentFormData.id) {
-        await handleUpdateAssignment({ ...payloadBase, id: assignmentFormData.id, assignmentFile: assignmentFormData.assignmentFile });
+        await handleUpdateAssignment({ ...payloadBase, id: assignmentFormData.id, courseId: course.id, assignmentFile: assignmentFormData.assignmentFile });
     } else {
-        await handleCreateAssignment({ ...payloadBase, assignmentFile: assignmentFormData.assignmentFile });
+        await handleCreateAssignment({ ...payloadBase, courseId: course.id, assignmentFile: assignmentFormData.assignmentFile });
     }
 
     if(!state.error) setIsAssignmentModalOpen(false);
   };
 
   const confirmDeleteAssignment = async () => {
-    if (assignmentToDelete) {
+    if (assignmentToDelete && course) {
       const payload: DeleteAssignmentPayload = { id: assignmentToDelete.id, courseId: course.id };
       await handleDeleteAssignment(payload);
       if (!state.error) setAssignmentToDelete(null);
@@ -261,6 +268,7 @@ export default function TeacherCourseDetailPage() {
   };
 
   const getLessonContentForCourse = (): string => {
+    if (!course) return "";
     return lessons.filter(l => l.courseId === course.id).map(l => `Lesson: ${l.title}\n${l.contentMarkdown}`).join('\n\n---\n\n');
   };
 
@@ -575,7 +583,7 @@ export default function TeacherCourseDetailPage() {
         <Dialog open={isAssignmentModalOpen} onOpenChange={setIsAssignmentModalOpen}>
             <DialogContent className="sm:max-w-[625px] md:max-w-[750px] lg:max-w-[900px]">
                 <DialogHeader>
-                    <DialogTitle>{assignmentFormData.id ? 'Edit Assignment' : 'Create New Assignment'} for {course.name}</DialogTitle>
+                    <DialogTitle>{assignmentFormData.id ? 'Edit Assignment' : 'Create New Assignment'} for {course?.name}</DialogTitle>
                 </DialogHeader>
                 <ScrollArea className="max-h-[70vh] p-1 pr-6">
                   <div className="grid gap-6 py-4">
@@ -641,7 +649,7 @@ export default function TeacherCourseDetailPage() {
                                   </div>
                               )}
                               <QuizGenerator
-                                  assignmentId={assignmentFormData.id || `${course.id}-${Date.now()}`}
+                                  assignmentId={assignmentFormData.id || `${course?.id}-${Date.now()}`}
                                   onQuestionsGenerated={handleGeneratedQuestions}
                                   existingLessonContent={getLessonContentForCourse()}
                               />
