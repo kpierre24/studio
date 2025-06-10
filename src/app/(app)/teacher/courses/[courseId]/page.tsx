@@ -34,7 +34,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare, UploadCloud, Eye, FileArchive, CheckCircle, AlertCircle, Send, Paperclip, Loader2, Settings } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare, UploadCloud, Eye, FileArchive, CheckCircle, AlertCircle, Send, Paperclip, Loader2, Settings, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { QuizGenerator } from '@/components/features/QuizGenerator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -58,8 +58,9 @@ interface AssignmentFormData extends Omit<CreateAssignmentPayload, 'courseId' | 
   assignmentFile?: File | null;
   assignmentFileName?: string;
   assignmentFileUrl?: string;
+  externalLink?: string;
 }
-const initialAssignmentFormData: AssignmentFormData = { title: '', description: '', dueDate: '', type: AssignmentType.STANDARD, questions: [], assignmentFile: null, assignmentFileName: '', assignmentFileUrl: '', manualTotalPoints: 0 };
+const initialAssignmentFormData: AssignmentFormData = { title: '', description: '', dueDate: '', type: AssignmentType.STANDARD, questions: [], assignmentFile: null, assignmentFileName: '', assignmentFileUrl: '', manualTotalPoints: 0, externalLink: '' };
 
 
 interface GradingFormData {
@@ -194,6 +195,7 @@ export default function TeacherCourseDetailPage() {
         type: assignment.type, questions: assignment.questions || [],
         manualTotalPoints: assignment.type === AssignmentType.STANDARD ? assignment.totalPoints : assignment.manualTotalPoints,
         assignmentFileUrl: assignment.assignmentFileUrl, assignmentFileName: assignment.assignmentFileName,
+        externalLink: assignment.externalLink || '',
         assignmentFile: null,
       });
     } else {
@@ -238,6 +240,7 @@ export default function TeacherCourseDetailPage() {
       questions: assignmentFormData.type === AssignmentType.QUIZ ? assignmentFormData.questions : undefined,
       manualTotalPoints: assignmentFormData.type === AssignmentType.STANDARD ? assignmentFormData.manualTotalPoints : undefined,
       assignmentFileUrl: assignmentFormData.assignmentFileUrl, assignmentFileName: assignmentFormData.assignmentFileName,
+      externalLink: assignmentFormData.externalLink || undefined,
     };
 
     if (assignmentFormData.id) {
@@ -414,6 +417,13 @@ export default function TeacherCourseDetailPage() {
                                 <Paperclip className="h-3 w-3"/> {assignment.assignmentFileName}
                            </a>
                         )}
+                        {assignment.externalLink && (
+                            <Button variant="link" size="sm" asChild className="p-0 h-auto mt-1 text-xs ml-0 pl-0">
+                              <a href={assignment.externalLink} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="mr-1 h-3 w-3" /> View External Link
+                              </a>
+                            </Button>
+                          )}
                       </div>
                       <div className="space-x-2">
                         <Button variant="outline" size="sm" onClick={() => handleOpenGradingModal(assignment)} title="View Submissions & Grade" disabled={isLoading}>
@@ -609,6 +619,10 @@ export default function TeacherCourseDetailPage() {
                                   </p>
                               )}
                           </div>
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4">
+                          <Label htmlFor="assign-link" className="text-right">External Link (Optional)</Label>
+                          <Input id="assign-link" name="externalLink" placeholder="https://example.com/resource" value={assignmentFormData.externalLink || ''} onChange={handleAssignmentFormChange} className="col-span-3" disabled={isLoading} />
                       </div>
 
                       {assignmentFormData.type === AssignmentType.QUIZ && (

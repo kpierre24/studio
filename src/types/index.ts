@@ -127,6 +127,11 @@ export enum ActionType {
   GRADE_SUBMISSION_REQUEST = 'GRADE_SUBMISSION_REQUEST',
   GRADE_SUBMISSION_SUCCESS = 'GRADE_SUBMISSION_SUCCESS',
   GRADE_SUBMISSION_FAILURE = 'GRADE_SUBMISSION_FAILURE',
+  
+  ADMIN_UPDATE_OR_CREATE_SUBMISSION_REQUEST = 'ADMIN_UPDATE_OR_CREATE_SUBMISSION_REQUEST',
+  ADMIN_UPDATE_OR_CREATE_SUBMISSION_SUCCESS = 'ADMIN_UPDATE_OR_CREATE_SUBMISSION_SUCCESS',
+  ADMIN_UPDATE_OR_CREATE_SUBMISSION_FAILURE = 'ADMIN_UPDATE_OR_CREATE_SUBMISSION_FAILURE',
+
   // Attendance
   TAKE_ATTENDANCE = 'TAKE_ATTENDANCE', 
   UPDATE_ATTENDANCE_RECORD = 'UPDATE_ATTENDANCE_RECORD', 
@@ -210,6 +215,7 @@ export interface Assignment {
   questions?: QuizQuestion[]; 
   assignmentFileUrl?: string; 
   assignmentFileName?: string; 
+  externalLink?: string;
 }
 
 export interface QuizAnswer {
@@ -335,12 +341,22 @@ export type CreateAssignmentPayload = Omit<Assignment, 'id'| 'totalPoints'> & { 
 export type UpdateAssignmentPayload = Partial<Omit<Assignment, 'id' | 'courseId'>> & { id: string; courseId?: string; assignmentFile?: File | null; manualTotalPoints?:number; };
 export type DeleteAssignmentPayload = { id: string; courseId: string };
 
-// Submission type itself is used as payload for SUBMIT_ASSIGNMENT_SUCCESS
+export type SubmitAssignmentPayload = Submission; // Submission type itself is used as payload
 export type GradeSubmissionPayload = {
   submissionId: string;
   grade: number;
   feedback?: string;
 };
+
+export type AdminUpdateOrCreateSubmissionPayload = {
+  studentId: string;
+  assignmentId: string;
+  courseId: string; // Needed to find the assignment in subcollection
+  grade: number;
+  feedback?: string;
+  assignmentTotalPoints: number; // Needed for validation
+};
+
 
 export type TakeAttendancePayload = {
   courseId: string;
@@ -436,11 +452,15 @@ export type AppAction =
   | { type: ActionType.GRADE_SUBMISSION_SUCCESS; payload: GradeSubmissionPayload }
   | { type: ActionType.GRADE_SUBMISSION_FAILURE; payload: string }
 
+  | { type: ActionType.ADMIN_UPDATE_OR_CREATE_SUBMISSION_REQUEST }
+  | { type: ActionType.ADMIN_UPDATE_OR_CREATE_SUBMISSION_SUCCESS; payload: Submission }
+  | { type: ActionType.ADMIN_UPDATE_OR_CREATE_SUBMISSION_FAILURE; payload: string }
+
   | { type: ActionType.TAKE_ATTENDANCE; payload: TakeAttendancePayload }
   | { type: ActionType.UPDATE_ATTENDANCE_RECORD; payload: UpdateAttendanceRecordPayload }
   | { type: ActionType.RECORD_PAYMENT; payload: RecordPaymentPayload }
   | { type: ActionType.UPDATE_PAYMENT; payload: UpdatePaymentPayload }
-  | { type: ActionType.LOAD_DATA; payload: Partial<AppState> } // This will primarily load other sample data for now
+  | { type: ActionType.LOAD_DATA; payload: Partial<AppState> } 
   | { type: ActionType.SET_LOADING; payload: boolean }
   | { type: ActionType.SET_ERROR; payload: string | null }
   | { type: ActionType.CLEAR_ERROR }
@@ -466,6 +486,7 @@ export interface GenerateQuizQuestionsOutput {
         correctAnswer: string;
     }>;
 }
+
 
 
 

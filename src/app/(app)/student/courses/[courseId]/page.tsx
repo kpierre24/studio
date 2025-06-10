@@ -303,9 +303,18 @@ export default function StudentCourseDetailPage() {
                                 </Button>
                             </div>
                         )}
+                        {assignment.externalLink && (
+                            <div className="mt-2">
+                                <Button variant="outline" size="sm" asChild className="w-full justify-start sm:w-auto" disabled={isLoading}>
+                                    <a href={assignment.externalLink} target="_blank" rel="noopener noreferrer">
+                                        <ExternalLink className="mr-2 h-4 w-4" /> View External Resource
+                                    </a>
+                                </Button>
+                            </div>
+                        )}
                          <div className="mt-3 text-right">
                             <Button variant="outline" size="sm" onClick={() => handleOpenSubmissionModal(assignment)} disabled={isLoading}>
-                              {existingSubmission ? (existingSubmission.grade !==undefined ? 'View Graded Submission' : 'View Submission') : 'Submit Assignment'}
+                              {existingSubmission ? (existingSubmission.grade !==undefined ? 'View Graded Submission' : 'View Submission') : (isQuiz ? 'Start Quiz' : 'Submit Assignment')}
                             </Button>
                          </div>
                       </li>
@@ -332,6 +341,15 @@ export default function StudentCourseDetailPage() {
                         <Button variant="outline" size="sm" asChild className="w-full justify-start" disabled={isLoading || isSubmittingFile}>
                             <a href={selectedAssignment.assignmentFileUrl} target="_blank" rel="noopener noreferrer" download={selectedAssignment.assignmentFileName}>
                                 <DownloadCloud className="mr-2 h-4 w-4" /> Download Assignment File: {selectedAssignment.assignmentFileName}
+                            </a>
+                        </Button>
+                    </div>
+                )}
+                {selectedAssignment.externalLink && (
+                    <div className="mt-2">
+                        <Button variant="outline" size="sm" asChild className="w-full justify-start" disabled={isLoading || isSubmittingFile}>
+                            <a href={selectedAssignment.externalLink} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="mr-2 h-4 w-4" /> View External Assignment Resource
                             </a>
                         </Button>
                     </div>
