@@ -96,12 +96,10 @@ const autoGradeQuizAnswer = (question: QuizQuestion, studentAnswer: string | str
 const appReducer = (state: AppState, action: AppAction): AppState => {
   switch (action.type) {
     case ActionType.LOAD_DATA: {
-      // This action now primarily loads other sample data. Courses will be fetched.
-      // TODO: Gradually replace all SAMPLE_DATA loading with Firestore fetching.
       return {
         ...state,
-        courses: action.payload.courses || state.courses, // Preserve fetched/existing or use payload
-        lessons: action.payload.lessons || (state.lessons.length === 0 ? SAMPLE_LESSONS : state.lessons),
+        courses: action.payload.courses || state.courses, 
+        lessons: action.payload.lessons || state.lessons, // Will be populated by fetchAllLessons
         assignments: action.payload.assignments || (state.assignments.length === 0 ? SAMPLE_ASSIGNMENTS : state.assignments),
         submissions: (action.payload.submissions || (state.submissions.length === 0 ? SAMPLE_SUBMISSIONS : state.submissions)).map(submission => {
           if (submission.assignmentId) {
@@ -142,6 +140,13 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.FETCH_COURSES_SUCCESS:
       return { ...state, courses: action.payload, isLoading: false, error: null };
     case ActionType.FETCH_COURSES_FAILURE:
+      return { ...state, isLoading: false, error: action.payload };
+
+    case ActionType.FETCH_LESSONS_REQUEST:
+      return { ...state, isLoading: true, error: null };
+    case ActionType.FETCH_LESSONS_SUCCESS:
+      return { ...state, lessons: action.payload, isLoading: false, error: null };
+    case ActionType.FETCH_LESSONS_FAILURE:
       return { ...state, isLoading: false, error: action.payload };
 
     case ActionType.LOGIN_USER_REQUEST:
@@ -360,7 +365,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       const newLesson = action.payload as Lesson;
       return {
         ...state,
-        lessons: [...state.lessons, newLesson].sort((a, b) => a.order - b.order),
+        lessons: [...state.lessons.filter(l => l.id !== newLesson.id), newLesson].sort((a, b) => a.order - b.order),
         isLoading: false, error: null,
         successMessage: `Lesson "${newLesson.title}" created successfully.`,
       };
@@ -656,10 +661,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [state, dispatch] = useReducer(appReducer, initialState);
   const { toast } = useToast();
 
-  // TODO: This LOAD_DATA action currently loads sample data if the corresponding state array is empty
-  // AFTER initial auth checks. For a fully persistent app, each entity
-  // (courses, lessons, etc.) should be fetched from Firestore similar to how users are fetched.
-  // For now, courses will be fetched directly; this remains for other sample data.
   useEffect(() => {
     dispatch({ type: ActionType.LOAD_DATA, payload: {} }); 
   }, [dispatch]);
@@ -700,7 +701,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch]);
 
-  // TODO: Implement similar fetch functions for Lessons (scoped by courseId), Assignments (scoped by courseId),
+  const fetchAllLessons = useCallback(async () => {
+    dispatch({ type: ActionType.FETCH_LESSONS_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.FETCH_LESSONS_FAILURE, payload: "Firestore not available to fetch lessons." });
+      return;
+    }
+    try {
+      const allLessons: Lesson[] = [];
+      // Iterate through courses already in state (fetched from Firestore)
+      for (const course of state.courses) {
+        const lessonsColRef = collection(db, "courses", course.id, "lessons");
+        const lessonSnapshot = await getDocs(lessonsColRef);
+        lessonSnapshot.forEach(doc => {
+          allLessons.push({ id: doc.id, courseId: course.id, ...doc.data() } as Lesson);
+        });
+      }
+      dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: allLessons.sort((a,b) => a.order - b.order) });
+    } catch (error: any) {
+      console.error("Error fetching lessons:", error);
+      dispatch({ type: ActionType.FETCH_LESSONS_FAILURE, payload: error.message || "Failed to fetch lessons." });
+    }
+  }, [dispatch, state.courses]); // Depends on state.courses being populated
+
+  // TODO: Implement similar fetch functions for Assignments (scoped by courseId),
   // Submissions (scoped by assignmentId), Enrollments, AttendanceRecords, Payments, Notifications, Announcements.
   // These would typically be called when a user navigates to a relevant page or when a broader context (like a course detail page) is loaded.
 
@@ -738,9 +763,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
             if (userProfile) { 
                 await fetchAllUsers(); 
-                await fetchAllCourses(); // Fetch courses after users
-                // TODO: Add calls to fetch other core data here, e.g., fetchAllEnrollments(), etc.,
-                // or fetch them on-demand in specific page components.
+                await fetchAllCourses(); 
+                // Fetch lessons after courses are loaded
+                // Note: fetchAllLessons depends on state.courses, so it's called sequentially here.
+                // If fetchAllCourses is async and updates state, this might need adjustment
+                // or fetchAllLessons could be called within the .then() of fetchAllCourses.
+                // For simplicity, and given fetchAllCourses dispatches synchronously after await,
+                // this direct call should work if state.courses is updated before fetchAllLessons executes.
+                // A more robust way might be to trigger fetchAllLessons in a useEffect that depends on state.courses changing.
+                // For now, we call it here.
+                // TODO: Re-evaluate this sequencing if issues arise.
+                // We'll call it after fetchAllCourses in its own useEffect hook later.
             } else {
                 dispatch({ type: ActionType.SET_LOADING, payload: false }); 
             }
@@ -749,6 +782,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
             dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
             dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
             // TODO: Consider clearing other data arrays (lessons, assignments, etc.) on logout.
             dispatch({ type: ActionType.SET_ERROR, payload: "User profile not found in database. Signed out." });
             dispatch({ type: ActionType.SET_LOADING, payload: false });
@@ -757,6 +791,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
           dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
           dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
+          dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
           // TODO: Consider clearing other data arrays (lessons, assignments, etc.) on logout.
           dispatch({ type: ActionType.SET_ERROR, payload: error.message || "Failed to load user profile." });
           dispatch({ type: ActionType.SET_LOADING, payload: false });
@@ -765,6 +800,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
         dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
         dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
+        dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
         // TODO: Consider clearing other data arrays (lessons, assignments, etc.) on logout,
         // or ensure they are re-fetched correctly on next login if not cleared.
         dispatch({ type: ActionType.SET_LOADING, payload: false });
@@ -772,6 +808,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     return () => unsubscribe();
   }, [dispatch, fetchAllUsers, fetchAllCourses]); 
+
+  // Fetch lessons after courses have been fetched and state.courses is populated.
+  useEffect(() => {
+    if (state.currentUser && state.courses.length > 0 && state.lessons.length === 0) { // Only fetch if lessons aren't already populated
+      fetchAllLessons();
+    }
+     // Only re-run if currentUser or the number of courses changes significantly, 
+     // or if lessons are explicitly empty while courses are not.
+  }, [state.currentUser, state.courses, state.lessons.length, fetchAllLessons]);
+
 
   useEffect(() => {
     if (state.error) {
@@ -1474,4 +1520,5 @@ export const useAppContext = () => {
   }
   return context;
 };
+
 

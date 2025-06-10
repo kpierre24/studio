@@ -97,6 +97,9 @@ export enum ActionType {
   UNENROLL_STUDENT_FAILURE = 'UNENROLL_STUDENT_FAILURE',
 
   // Lesson Management
+  FETCH_LESSONS_REQUEST = 'FETCH_LESSONS_REQUEST',
+  FETCH_LESSONS_SUCCESS = 'FETCH_LESSONS_SUCCESS',
+  FETCH_LESSONS_FAILURE = 'FETCH_LESSONS_FAILURE',
   CREATE_LESSON_REQUEST = 'CREATE_LESSON_REQUEST',
   CREATE_LESSON_SUCCESS = 'CREATE_LESSON_SUCCESS',
   CREATE_LESSON_FAILURE = 'CREATE_LESSON_FAILURE',
@@ -402,6 +405,9 @@ export type AppAction =
   | { type: ActionType.UNENROLL_STUDENT_SUCCESS; payload: UnenrollStudentSuccessPayload }
   | { type: ActionType.UNENROLL_STUDENT_FAILURE; payload: string }
 
+  | { type: ActionType.FETCH_LESSONS_REQUEST }
+  | { type: ActionType.FETCH_LESSONS_SUCCESS; payload: Lesson[] }
+  | { type: ActionType.FETCH_LESSONS_FAILURE; payload: string }
   | { type: ActionType.CREATE_LESSON_REQUEST }
   | { type: ActionType.CREATE_LESSON_SUCCESS; payload: Lesson }
   | { type: ActionType.CREATE_LESSON_FAILURE; payload: string }
@@ -460,6 +466,7 @@ export interface GenerateQuizQuestionsOutput {
         correctAnswer: string;
     }>;
 }
+
 
 
 
