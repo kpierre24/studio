@@ -34,7 +34,7 @@ import {
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, AttendanceRecord, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem, Enrollment, EnrollStudentPayload, EnrollStudentSuccessPayload, UnenrollStudentPayload, UnenrollStudentSuccessPayload, AdminUpdateOrCreateSubmissionPayload } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem, Enrollment, EnrollStudentPayload, EnrollStudentSuccessPayload, UnenrollStudentPayload, UnenrollStudentSuccessPayload, AdminUpdateOrCreateSubmissionPayload } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 import { 
   SAMPLE_COURSES, 
@@ -98,8 +98,6 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.LOAD_DATA: {
       return {
         ...state,
-        // courses: action.payload.courses || state.courses, // Now handled by fetchAllCourses
-        // lessons: action.payload.lessons || state.lessons, // Now handled by fetchAllLessons
         assignments: action.payload.assignments || state.assignments,
         submissions: (action.payload.submissions || state.submissions).map(submission => {
           if (submission.assignmentId) {
@@ -122,7 +120,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         }),
         enrollments: action.payload.enrollments || state.enrollments,
         attendanceRecords: action.payload.attendanceRecords || state.attendanceRecords,
-        payments: action.payload.payments || state.payments,
+        payments: action.payload.payments || state.payments, // Keep this for sample data loading if desired
         notifications: action.payload.notifications || state.notifications,
         announcements: action.payload.announcements || state.announcements,
       };
@@ -149,6 +147,13 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.FETCH_LESSONS_FAILURE:
       return { ...state, isLoading: false, error: action.payload };
 
+    case ActionType.FETCH_PAYMENTS_REQUEST:
+      return { ...state, isLoading: true, error: null };
+    case ActionType.FETCH_PAYMENTS_SUCCESS:
+      return { ...state, payments: action.payload, isLoading: false, error: null };
+    case ActionType.FETCH_PAYMENTS_FAILURE:
+      return { ...state, isLoading: false, error: action.payload };
+
     case ActionType.LOGIN_USER_REQUEST:
     case ActionType.REGISTER_STUDENT_REQUEST:
     case ActionType.LOGOUT_USER_REQUEST:
@@ -170,6 +175,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.SUBMIT_ASSIGNMENT_REQUEST:
     case ActionType.GRADE_SUBMISSION_REQUEST:
     case ActionType.ADMIN_UPDATE_OR_CREATE_SUBMISSION_REQUEST:
+    case ActionType.RECORD_PAYMENT_REQUEST:
+    case ActionType.UPDATE_PAYMENT_REQUEST:
       return { ...state, isLoading: true, error: null, successMessage: null };
 
     case ActionType.LOGIN_USER_SUCCESS:
@@ -207,6 +214,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.SUBMIT_ASSIGNMENT_FAILURE:
     case ActionType.GRADE_SUBMISSION_FAILURE:
     case ActionType.ADMIN_UPDATE_OR_CREATE_SUBMISSION_FAILURE:
+    case ActionType.RECORD_PAYMENT_FAILURE:
+    case ActionType.UPDATE_PAYMENT_FAILURE:
       return { ...state, isLoading: false, error: action.payload, currentUser: state.currentUser === undefined ? null : state.currentUser  }; 
 
     case ActionType.LOGOUT_USER_SUCCESS:
@@ -596,28 +605,27 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       };
     }
 
-    case ActionType.RECORD_PAYMENT: {
-      const payload = action.payload as RecordPaymentPayload;
-      const newPayment: Payment = {
-        ...payload,
-        id: `payment-${Date.now()}-${Math.random().toString(36).substring(2,7)}`,
-        paymentDate: payload.paymentDate || new Date().toISOString(),
-      };
+    case ActionType.RECORD_PAYMENT_SUCCESS: {
+      const newPayment = action.payload;
+      const student = state.users.find(u => u.id === newPayment.studentId);
+      const course = state.courses.find(c => c.id === newPayment.courseId);
       return {
         ...state,
         payments: [...state.payments, newPayment],
-        successMessage: `Payment of $${newPayment.amount} for student ${newPayment.studentId} recorded.`,
+        isLoading: false, error: null,
+        successMessage: `Payment of $${newPayment.amount} for student ${student?.name || newPayment.studentId} for course "${course?.name || newPayment.courseId}" recorded.`,
       };
     }
 
-    case ActionType.UPDATE_PAYMENT: {
-      const payload = action.payload as UpdatePaymentPayload;
+    case ActionType.UPDATE_PAYMENT_SUCCESS: {
+      const updatedPayment = action.payload;
       return {
         ...state,
         payments: state.payments.map(p =>
-          p.id === payload.id ? { ...p, ...payload, paymentDate: payload.paymentDate ?? p.paymentDate } : p
+          p.id === updatedPayment.id ? { ...p, ...updatedPayment } : p
         ),
-        successMessage: `Payment ${payload.id} updated to status ${payload.status}.`,
+        isLoading: false, error: null,
+        successMessage: `Payment ${updatedPayment.id} updated. Status: ${updatedPayment.status}, Amount: ${updatedPayment.amount}.`,
       };
     }
 
@@ -693,6 +701,8 @@ const AppContext = createContext<{
   handleStudentSubmitAssignment: (payload: SubmitAssignmentPayload) => Promise<void>; 
   handleTeacherGradeSubmission: (payload: GradeSubmissionPayload) => Promise<void>;
   handleAdminUpdateOrCreateSubmission: (payload: AdminUpdateOrCreateSubmissionPayload) => Promise<void>;
+  handleRecordPayment: (payload: RecordPaymentPayload) => Promise<void>;
+  handleUpdatePayment: (payload: UpdatePaymentPayload) => Promise<void>;
 
 } | undefined>(undefined);
 
@@ -703,15 +713,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     dispatch({ type: ActionType.LOAD_DATA, payload: {
-      // courses: SAMPLE_COURSES, // Now handled by fetchAllCourses
-      // lessons: SAMPLE_LESSONS, // Now handled by fetchAllLessons
-      assignments: SAMPLE_ASSIGNMENTS, // TODO: Fetch from Firestore
-      submissions: SAMPLE_SUBMISSIONS, // TODO: Fetch from Firestore
-      enrollments: INITIAL_ENROLLMENTS, // TODO: Fetch or derive from Firestore
-      attendanceRecords: SAMPLE_ATTENDANCE, // TODO: Fetch from Firestore
-      payments: SAMPLE_PAYMENTS, // TODO: Fetch from Firestore
-      notifications: SAMPLE_NOTIFICATIONS, // TODO: Fetch from Firestore or manage dynamically
-      announcements: SAMPLE_ANNOUNCEMENTS, // TODO: Fetch from Firestore
+      assignments: SAMPLE_ASSIGNMENTS, 
+      submissions: SAMPLE_SUBMISSIONS, 
+      enrollments: INITIAL_ENROLLMENTS, 
+      attendanceRecords: SAMPLE_ATTENDANCE, 
+      payments: SAMPLE_PAYMENTS, 
+      notifications: SAMPLE_NOTIFICATIONS, 
+      announcements: SAMPLE_ANNOUNCEMENTS, 
     } }); 
   }, [dispatch]);
 
@@ -778,10 +786,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch, state.courses]); 
 
-
-  // TODO: Implement similar fetch functions for Assignments (scoped by courseId),
-  // Submissions (scoped by assignmentId), Enrollments, AttendanceRecords, Payments, Notifications, Announcements.
-  // These would typically be called when a user navigates to a relevant page or when a broader context (like a course detail page) is loaded.
+  const fetchAllPayments = useCallback(async () => {
+    dispatch({ type: ActionType.FETCH_PAYMENTS_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.FETCH_PAYMENTS_FAILURE, payload: "Firestore not available to fetch payments." });
+      return;
+    }
+    try {
+      const paymentsCol = collection(db, "payments");
+      const paymentSnapshot = await getDocs(paymentsCol);
+      const paymentsList = paymentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
+      dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: paymentsList });
+    } catch (error: any) {
+      console.error("Error fetching payments:", error);
+      dispatch({ type: ActionType.FETCH_PAYMENTS_FAILURE, payload: error.message || "Failed to fetch payments." });
+    }
+  }, [dispatch]);
 
 
   useEffect(() => {
@@ -818,7 +839,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (userProfile) { 
                 await fetchAllUsers(); 
                 await fetchAllCourses(); 
-                // fetchAllLessons is now called in its own useEffect dependent on courses
+                await fetchAllPayments(); // Fetch payments after courses are loaded
             } else {
                 dispatch({ type: ActionType.SET_LOADING, payload: false }); 
             }
@@ -828,6 +849,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
             dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
             dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
             dispatch({ type: ActionType.SET_ERROR, payload: "User profile not found in database. Signed out." });
             dispatch({ type: ActionType.SET_LOADING, payload: false });
           }
@@ -836,6 +858,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
           dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
           dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
+          dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
           dispatch({ type: ActionType.SET_ERROR, payload: error.message || "Failed to load user profile." });
           dispatch({ type: ActionType.SET_LOADING, payload: false });
         }
@@ -844,11 +867,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
         dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
+        dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.SET_LOADING, payload: false });
       }
     });
     return () => unsubscribe();
-  }, [dispatch, fetchAllUsers, fetchAllCourses]); 
+  }, [dispatch, fetchAllUsers, fetchAllCourses, fetchAllPayments]); 
 
   useEffect(() => {
     if (state.currentUser && state.courses.length > 0) {
@@ -1184,7 +1208,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     } catch (error: any) { 
       dispatch({ type: ActionType.ENROLL_STUDENT_FAILURE, payload: error.message || "Failed to enroll student." });
-    }
+    } 
   }, [dispatch]);
 
   const handleUnenrollStudent = useCallback(async (payload: UnenrollStudentPayload) => {
@@ -1368,7 +1392,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         type: payload.type,
         totalPoints,
       };
-      // Conditionally add optional fields to the object being sent to Firestore
+      
       if (payload.rubric && payload.rubric.length > 0) {
         firestoreData.rubric = payload.rubric;
       }
@@ -1391,11 +1415,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }))
           : []; 
       }
-      // If type is STANDARD, 'questions' field is omitted from firestoreData
+      
 
       await setDoc(doc(db, "courses", payload.courseId, "assignments", assignmentId), firestoreData);
       
-      // Construct the full assignment object for state, ensuring 'questions' is undefined for standard
+      
       const newAssignmentForState: Assignment = {
         id: firestoreData.id,
         courseId: firestoreData.courseId,
@@ -1404,11 +1428,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dueDate: firestoreData.dueDate,
         type: firestoreData.type,
         totalPoints: firestoreData.totalPoints,
-        questions: payload.type === AssignmentType.QUIZ ? (firestoreData.questions || []) : undefined,
-        rubric: firestoreData.rubric, // Will be undefined if not set in firestoreData
-        assignmentFileUrl: firestoreData.assignmentFileUrl, // Will be undefined if not set
-        assignmentFileName: firestoreData.assignmentFileName, // Will be undefined if not set
-        externalLink: firestoreData.externalLink, // Will be undefined if not set
+        questions: payload.type === AssignmentType.QUIZ ? (firestoreData.questions || []) : null,
+        rubric: firestoreData.rubric || null,
+        assignmentFileUrl: firestoreData.assignmentFileUrl || null, 
+        assignmentFileName: firestoreData.assignmentFileName || null, 
+        externalLink: firestoreData.externalLink || null, 
       };
 
       dispatch({ type: ActionType.CREATE_ASSIGNMENT_SUCCESS, payload: newAssignmentForState });
@@ -1420,7 +1444,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleUpdateAssignment = useCallback(async (payload: UpdateAssignmentPayload & { assignmentFile?: File | null }) => {
     dispatch({ type: ActionType.UPDATE_ASSIGNMENT_REQUEST });
     const db = getFirebaseDb();
-    if (!db || !payload.courseId) { // courseId is now mandatory in UpdateAssignmentPayload
+    if (!db || !payload.courseId) { 
       dispatch({ type: ActionType.UPDATE_ASSIGNMENT_FAILURE, payload: "Firestore or courseId not available." });
       return;
     }
@@ -1438,9 +1462,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return;
         }
     } else if (payload.assignmentFile === null && payload.assignmentFileUrl === undefined) { 
-        // This means the file is being explicitly removed
-        uploadedFileUrl = undefined; // Will be set to null for Firestore later
-        uploadedFileName = undefined; // Will be set to null for Firestore later
+        
+        uploadedFileUrl = null; 
+        uploadedFileName = null; 
     }
 
     try {
@@ -1463,15 +1487,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         totalPoints,
       };
 
-      // Handle optional fields explicitly for update (set to null if clearing)
+      
       firestoreUpdateData.rubric = (payload.rubric && payload.rubric.length > 0) ? payload.rubric : null;
       firestoreUpdateData.externalLink = payload.externalLink || null;
       
-      if (uploadedFileUrl !== undefined) {
+      if (uploadedFileUrl !== undefined) { // Check against undefined, as null is a valid value to set
         firestoreUpdateData.assignmentFileUrl = uploadedFileUrl;
         firestoreUpdateData.assignmentFileName = uploadedFileName;
       } else if (payload.assignmentFile === null && payload.assignmentFileUrl === undefined) {
-        // Explicitly removing the file
+        
         firestoreUpdateData.assignmentFileUrl = null;
         firestoreUpdateData.assignmentFileName = null;
       }
@@ -1485,23 +1509,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               assignmentId: payload.id
             }))
           : [];
-      } else { // Type is STANDARD
-        firestoreUpdateData.questions = null; // Set to null to clear out questions if it was a quiz
+      } else { 
+        firestoreUpdateData.questions = null; 
       }
       
-      // Firestore's updateDoc only updates fields provided. Undefined fields are ignored.
-      // Explicit null values will update the field to null in Firestore.
+      
       await updateDoc(assignmentRef, firestoreUpdateData as any); 
       
       const updatedAssignmentForState: UpdateAssignmentPayload = {
-        ...payload, // Original payload from UI
+        ...payload, 
         courseId: payload.courseId,
-        assignmentFileUrl: uploadedFileUrl, // Reflects current state of file
-        assignmentFileName: uploadedFileName, // Reflects current state of file
+        assignmentFileUrl: uploadedFileUrl, 
+        assignmentFileName: uploadedFileName, 
         totalPoints: totalPoints,
-        questions: payload.type === AssignmentType.QUIZ ? (firestoreUpdateData.questions || []) : undefined,
-        rubric: firestoreUpdateData.rubric === null ? undefined : firestoreUpdateData.rubric,
-        externalLink: firestoreUpdateData.externalLink === null ? undefined : firestoreUpdateData.externalLink,
+        questions: payload.type === AssignmentType.QUIZ ? (firestoreUpdateData.questions || []) : null,
+        rubric: firestoreUpdateData.rubric === null ? null : firestoreUpdateData.rubric,
+        externalLink: firestoreUpdateData.externalLink === null ? null : firestoreUpdateData.externalLink,
       };
       dispatch({ type: ActionType.UPDATE_ASSIGNMENT_SUCCESS, payload: updatedAssignmentForState });
     } catch (error: any) {
@@ -1647,6 +1670,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch]);
 
+  const handleRecordPayment = useCallback(async (payload: RecordPaymentPayload) => {
+    dispatch({ type: ActionType.RECORD_PAYMENT_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.RECORD_PAYMENT_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      const paymentId = doc(collection(db, "payments")).id;
+      const newPayment: Payment = {
+        ...payload,
+        id: paymentId,
+        paymentDate: payload.paymentDate || new Date().toISOString(),
+      };
+      await setDoc(doc(db, "payments", paymentId), newPayment);
+      dispatch({ type: ActionType.RECORD_PAYMENT_SUCCESS, payload: newPayment });
+    } catch (error: any) {
+      dispatch({ type: ActionType.RECORD_PAYMENT_FAILURE, payload: error.message || "Failed to record payment." });
+    }
+  }, [dispatch]);
+
+  const handleUpdatePayment = useCallback(async (payload: UpdatePaymentPayload) => {
+    dispatch({ type: ActionType.UPDATE_PAYMENT_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.UPDATE_PAYMENT_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      const paymentRef = doc(db, "payments", payload.id);
+      const updateData: Partial<Payment> = { ...payload };
+      delete updateData.id; // ID is not part of the update payload itself for the doc
+
+      // Ensure paymentDate is only updated if provided in payload
+      if (payload.paymentDate === undefined) {
+        delete updateData.paymentDate;
+      }
+
+      await updateDoc(paymentRef, updateData);
+      // For local state, we need the full updated object to reflect changes
+      const updatedPaymentForState = { ...state.payments.find(p => p.id === payload.id), ...payload } as Payment;
+      dispatch({ type: ActionType.UPDATE_PAYMENT_SUCCESS, payload: updatedPaymentForState });
+    } catch (error: any) {
+      dispatch({ type: ActionType.UPDATE_PAYMENT_FAILURE, payload: error.message || "Failed to update payment." });
+    }
+  }, [dispatch, state.payments]);
+
   const contextValue = {
     state,
     dispatch,
@@ -1674,6 +1744,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     handleStudentSubmitAssignment,
     handleTeacherGradeSubmission,
     handleAdminUpdateOrCreateSubmission,
+    handleRecordPayment,
+    handleUpdatePayment,
   };
 
   return (
@@ -1690,3 +1762,4 @@ export const useAppContext = () => {
   }
   return context;
 };
+

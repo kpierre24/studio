@@ -121,7 +121,7 @@ export default function StudentPaymentsPage() {
                     <p className="font-semibold text-lg text-green-600">${summary.totalPaid.toFixed(2)}</p>
                   </div>
                   <div className={`p-4 rounded-md ${summary.amountOwed > 0 ? 'bg-red-100 dark:bg-red-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
-                    <p className="text-sm ${summary.amountOwed > 0 ? 'text-red-700 dark:text-red-200' : 'text-green-700 dark:text-green-200'}">Amount Owing</p>
+                    <p className={`text-sm ${summary.amountOwed > 0 ? 'text-red-700 dark:text-red-200' : 'text-green-700 dark:text-green-200'}`}>Amount Owing</p>
                     <p className={`font-semibold text-lg ${summary.amountOwed > 0 ? 'text-red-600 dark:text-red-300' : 'text-green-600 dark:text-green-300'}`}>
                       ${summary.amountOwed.toFixed(2)}
                     </p>
@@ -178,3 +178,4 @@ export default function StudentPaymentsPage() {
     </div>
   );
 }
+

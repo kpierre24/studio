@@ -151,8 +151,15 @@ export enum ActionType {
   GENERATE_QUIZ_QUESTIONS_SUCCESS = 'GENERATE_QUIZ_QUESTIONS_SUCCESS',
   GENERATE_QUIZ_QUESTIONS_ERROR = 'GENERATE_QUIZ_QUESTIONS_ERROR',
   // Payment
-  RECORD_PAYMENT = 'RECORD_PAYMENT', 
-  UPDATE_PAYMENT = 'UPDATE_PAYMENT', 
+  FETCH_PAYMENTS_REQUEST = 'FETCH_PAYMENTS_REQUEST',
+  FETCH_PAYMENTS_SUCCESS = 'FETCH_PAYMENTS_SUCCESS',
+  FETCH_PAYMENTS_FAILURE = 'FETCH_PAYMENTS_FAILURE',
+  RECORD_PAYMENT_REQUEST = 'RECORD_PAYMENT_REQUEST',
+  RECORD_PAYMENT_SUCCESS = 'RECORD_PAYMENT_SUCCESS',
+  RECORD_PAYMENT_FAILURE = 'RECORD_PAYMENT_FAILURE',
+  UPDATE_PAYMENT_REQUEST = 'UPDATE_PAYMENT_REQUEST',
+  UPDATE_PAYMENT_SUCCESS = 'UPDATE_PAYMENT_SUCCESS',
+  UPDATE_PAYMENT_FAILURE = 'UPDATE_PAYMENT_FAILURE',
 }
 
 // Interfaces
@@ -174,7 +181,7 @@ export interface Course {
   category?: string;
   cost: number; 
   prerequisites?: string[]; 
-  bannerImageUrl?: string; // Added for custom course banners
+  bannerImageUrl?: string; 
 }
 
 export interface Lesson {
@@ -212,11 +219,11 @@ export interface Assignment {
   dueDate: string; 
   type: AssignmentType;
   totalPoints: number;
-  rubric?: RubricCriterion[]; 
-  questions?: QuizQuestion[]; 
-  assignmentFileUrl?: string; 
-  assignmentFileName?: string; 
-  externalLink?: string;
+  rubric?: RubricCriterion[] | null; 
+  questions?: QuizQuestion[] | null; 
+  assignmentFileUrl?: string | null; 
+  assignmentFileName?: string | null; 
+  externalLink?: string | null;
 }
 
 export interface QuizAnswer {
@@ -334,7 +341,7 @@ export type UnenrollStudentSuccessPayload = { course: Course; studentId: string;
 
 
 export type CreateLessonPayload = Omit<Lesson, 'id'>;
-export type UpdateLessonPayload = Partial<Omit<Lesson, 'id' | 'courseId'>> & { id: string; courseId?: string; }; 
+export type UpdateLessonPayload = Partial<Omit<Lesson, 'id' | 'courseId'>> & { id: string; courseId: string; }; 
 export type DeleteLessonPayload = { id: string; courseId: string };
 
 
@@ -352,10 +359,10 @@ export type GradeSubmissionPayload = {
 export type AdminUpdateOrCreateSubmissionPayload = {
   studentId: string;
   assignmentId: string;
-  courseId: string; // Needed to find the assignment in subcollection
+  courseId: string; 
   grade: number;
   feedback?: string;
-  assignmentTotalPoints: number; // Needed for validation
+  assignmentTotalPoints: number; 
 };
 
 
@@ -367,7 +374,7 @@ export type TakeAttendancePayload = {
 export type UpdateAttendanceRecordPayload = Partial<Omit<AttendanceRecord, 'id' | 'courseId' | 'studentId' | 'date'>> & { id: string };
 
 export type RecordPaymentPayload = Omit<Payment, 'id'>;
-export type UpdatePaymentPayload = Pick<Payment, 'id' | 'status' | 'notes'> & { amount?: number, paymentDate?: string };
+export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id'>>;
 
 
 export type AppAction =
@@ -459,8 +466,17 @@ export type AppAction =
 
   | { type: ActionType.TAKE_ATTENDANCE; payload: TakeAttendancePayload }
   | { type: ActionType.UPDATE_ATTENDANCE_RECORD; payload: UpdateAttendanceRecordPayload }
-  | { type: ActionType.RECORD_PAYMENT; payload: RecordPaymentPayload }
-  | { type: ActionType.UPDATE_PAYMENT; payload: UpdatePaymentPayload }
+  
+  | { type: ActionType.FETCH_PAYMENTS_REQUEST }
+  | { type: ActionType.FETCH_PAYMENTS_SUCCESS; payload: Payment[] }
+  | { type: ActionType.FETCH_PAYMENTS_FAILURE; payload: string }
+  | { type: ActionType.RECORD_PAYMENT_REQUEST }
+  | { type: ActionType.RECORD_PAYMENT_SUCCESS; payload: Payment }
+  | { type: ActionType.RECORD_PAYMENT_FAILURE; payload: string }
+  | { type: ActionType.UPDATE_PAYMENT_REQUEST }
+  | { type: ActionType.UPDATE_PAYMENT_SUCCESS; payload: UpdatePaymentPayload }
+  | { type: ActionType.UPDATE_PAYMENT_FAILURE; payload: string }
+
   | { type: ActionType.LOAD_DATA; payload: Partial<AppState> } 
   | { type: ActionType.SET_LOADING; payload: boolean }
   | { type: ActionType.SET_ERROR; payload: string | null }
@@ -487,4 +503,8 @@ export interface GenerateQuizQuestionsOutput {
         correctAnswer: string;
     }>;
 }
+
+// Ensure payload for UpdatePaymentPayload is specific for what can be updated
+export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id' | 'studentId' | 'courseId'>>;
+
 
