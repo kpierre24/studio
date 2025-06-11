@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { PlusCircle, Edit, DollarSign, Filter, Users, BookOpen, CheckCircle, AlertCircle, Loader2, CalendarIcon, Search } from 'lucide-react';
+import { PlusCircle, Edit, DollarSign, Filter, Users, BookOpen, CheckCircle, AlertCircle, Loader2, CalendarIcon, Search, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
@@ -45,10 +45,18 @@ const initialPaymentFormData: PaymentFormData = {
   courseId: '',
   amount: 0,
   status: PaymentStatus.PENDING,
-  paymentDate: new Date().toISOString().split('T')[0], // Default to today
+  paymentDate: new Date().toISOString().split('T')[0], 
   transactionId: '',
   notes: '',
 };
+
+interface StudentCourseBalanceInfo {
+  courseCost: number;
+  totalPaid: number;
+  amountOwed: number;
+  isFullyPaid: boolean;
+  warningMessage?: string;
+}
 
 export default function AdminPaymentsPage() {
   const { state, handleRecordPayment, handleUpdatePayment } = useAppContext();
@@ -62,11 +70,60 @@ export default function AdminPaymentsPage() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [paymentFormData, setPaymentFormData] = useState<PaymentFormData>(initialPaymentFormData);
+  const [studentCourseBalanceInfo, setStudentCourseBalanceInfo] = useState<StudentCourseBalanceInfo | null>(null);
 
   const studentUsers = useMemo(() => users.filter(u => u.role === UserRole.STUDENT), [users]);
 
   const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'Unknown User';
   const getCourseName = (courseId: string) => courses.find(c => c.id === courseId)?.name || 'Unknown Course';
+
+  useEffect(() => {
+    if (!isPaymentModalOpen) {
+        setStudentCourseBalanceInfo(null);
+        return;
+    }
+
+    if (paymentFormData.studentId && paymentFormData.courseId) {
+        const course = courses.find(c => c.id === paymentFormData.courseId);
+        if (!course) {
+            setStudentCourseBalanceInfo(null);
+            return;
+        }
+
+        const courseCost = course.cost || 0;
+        const paidPayments = payments.filter(p => 
+            p.studentId === paymentFormData.studentId && 
+            p.courseId === paymentFormData.courseId && 
+            p.status === PaymentStatus.PAID &&
+            (!editingPaymentId || p.id !== editingPaymentId) // Exclude current payment if editing
+        );
+        const totalPaid = paidPayments.reduce((sum, p) => sum + p.amount, 0);
+        const amountOwed = Math.max(0, courseCost - totalPaid);
+        const isFullyPaid = amountOwed === 0 && courseCost > 0;
+        
+        let warningMessage = '';
+        const currentPaymentAmount = Number(paymentFormData.amount) || 0;
+
+        if (isFullyPaid && currentPaymentAmount > 0 && editingPaymentId && payments.find(p=>p.id === editingPaymentId)?.amount !== currentPaymentAmount) {
+             warningMessage = "This course is already fully paid. Recording another payment will result in overpayment.";
+        } else if (!isFullyPaid && totalPaid + currentPaymentAmount > courseCost) {
+             warningMessage = `This payment of $${currentPaymentAmount.toFixed(2)} will result in an overpayment of $${((totalPaid + currentPaymentAmount) - courseCost).toFixed(2)}.`;
+        }
+
+
+        setStudentCourseBalanceInfo({
+            courseCost,
+            totalPaid,
+            amountOwed: isFullyPaid && currentPaymentAmount > 0 ? 0 : amountOwed, // Adjust amountOwed if it was fully paid before editing
+            isFullyPaid,
+            warningMessage,
+        });
+
+    } else {
+        setStudentCourseBalanceInfo(null);
+    }
+  }, [paymentFormData.studentId, paymentFormData.courseId, paymentFormData.amount, isPaymentModalOpen, courses, payments, editingPaymentId]);
+
 
   const filteredPayments = useMemo(() => {
     return payments
@@ -136,7 +193,7 @@ export default function AdminPaymentsPage() {
 
   const validateForm = (): boolean => {
     if (!paymentFormData.studentId || !paymentFormData.courseId || paymentFormData.amount <= 0 || !paymentFormData.paymentDate) {
-      toast({ title: "Validation Error", description: "Student, Course, Amount, and Payment Date are required.", variant: "destructive" });
+      toast({ title: "Validation Error", description: "Student, Course, Amount (positive), and Payment Date are required.", variant: "destructive" });
       return false;
     }
     return true;
@@ -147,7 +204,7 @@ export default function AdminPaymentsPage() {
 
     const payload = {
       ...paymentFormData,
-      paymentDate: new Date(paymentFormData.paymentDate!).toISOString(), // Ensure ISO format
+      paymentDate: new Date(paymentFormData.paymentDate!).toISOString(), 
     };
     
     if (editingPaymentId && paymentFormData.id) {
@@ -208,10 +265,32 @@ export default function AdminPaymentsPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {studentCourseBalanceInfo && (
+                <Card className="bg-muted/50 p-3 text-sm">
+                  <CardContent className="p-0 space-y-1">
+                    <p>Course Cost: <span className="font-semibold">${studentCourseBalanceInfo.courseCost.toFixed(2)}</span></p>
+                    <p>Total Paid (excluding this payment if editing): <span className="font-semibold text-green-600">${studentCourseBalanceInfo.totalPaid.toFixed(2)}</span></p>
+                    <p>Amount Currently Owed: <span className={`font-bold ${studentCourseBalanceInfo.amountOwed > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      ${studentCourseBalanceInfo.amountOwed.toFixed(2)}
+                    </span></p>
+                    {studentCourseBalanceInfo.isFullyPaid && !editingPaymentId && (
+                      <Badge className="bg-green-500 mt-1">Course Fully Paid</Badge>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               <div className="space-y-1">
                 <Label htmlFor="amount">Amount Paid</Label>
                 <Input id="amount" name="amount" type="number" value={paymentFormData.amount} onChange={handleFormChange} placeholder="0.00" disabled={isLoading}/>
               </div>
+                {studentCourseBalanceInfo?.warningMessage && (
+                    <div className="p-2 my-1 text-xs bg-yellow-100 border border-yellow-300 text-yellow-700 rounded-md flex items-center gap-1">
+                       <Info className="h-4 w-4 shrink-0"/> {studentCourseBalanceInfo.warningMessage}
+                    </div>
+                )}
+
               <div className="space-y-1">
                 <Label htmlFor="status">Payment Status</Label>
                 <Select value={paymentFormData.status} onValueChange={(value) => handleSelectChange('status', value as PaymentStatus)} disabled={isLoading}>
@@ -335,7 +414,7 @@ export default function AdminPaymentsPage() {
                       <TableCell className="text-right">${payment.amount.toFixed(2)}</TableCell>
                       <TableCell>{getStatusBadge(payment.status)}</TableCell>
                       <TableCell className="text-xs">{payment.transactionId || 'N/A'}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground truncate max-w-[150px]" title={payment.notes}>{payment.notes || 'N/A'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground truncate max-w-[150px]" title={payment.notes || undefined}>{payment.notes || 'N/A'}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="outline" size="sm" onClick={() => handleOpenPaymentModal(payment)} disabled={isLoading}>
                           <Edit className="mr-1 h-4 w-4" /> Edit
@@ -352,5 +431,3 @@ export default function AdminPaymentsPage() {
     </div>
   );
 }
-
-    

@@ -4,13 +4,13 @@
 import { useState, useEffect, useMemo, ChangeEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppContext } from '@/contexts/AppContext';
-import type { Course, Lesson, Assignment, CreateLessonPayload, UpdateLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, QuizQuestion, Submission, GradeSubmissionPayload, DeleteLessonPayload, DeleteAssignmentPayload } from '@/types';
-import { ActionType, UserRole, AssignmentType } from '@/types';
+import type { Course, Lesson, Assignment, CreateLessonPayload, UpdateLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, QuizQuestion, Submission, GradeSubmissionPayload, DeleteLessonPayload, DeleteAssignmentPayload, Payment } from '@/types';
+import { ActionType, UserRole, AssignmentType, PaymentStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import Link from 'next/link';
 import {
@@ -34,13 +34,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare, UploadCloud, Eye, FileArchive, CheckCircle, AlertCircle, Send, Paperclip, Loader2, Settings, ExternalLink } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare, UploadCloud, Eye, FileArchive, CheckCircle, AlertCircle, Send, Paperclip, Loader2, Settings, ExternalLink, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { QuizGenerator } from '@/components/features/QuizGenerator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
 
 interface LessonFormData extends Omit<CreateLessonPayload, 'courseId' | 'order' | 'fileUrl' | 'fileName'> {
   id?: string;
@@ -85,7 +87,7 @@ export default function TeacherCourseDetailPage() {
     handleDeleteAssignment,
     handleTeacherGradeSubmission,
   } = useAppContext();
-  const { currentUser, courses, lessons, assignments, submissions, users, isLoading } = state;
+  const { currentUser, courses, lessons, assignments, submissions, users, payments, isLoading } = state;
   const { toast } = useToast();
 
   const [course, setCourse] = useState<Course | null>(null);
@@ -162,7 +164,7 @@ export default function TeacherCourseDetailPage() {
       toast({ title: "Validation Error", description: "Lesson title is required.", variant: "destructive" });
       return;
     }
-    if (!course) return; // Should not happen given checks above
+    if (!course) return; 
 
     const payload: CreateLessonPayload | UpdateLessonPayload = {
       courseId: course.id, title: lessonFormData.title, contentMarkdown: lessonFormData.contentMarkdown,
@@ -192,9 +194,9 @@ export default function TeacherCourseDetailPage() {
     if (assignment) {
       setAssignmentFormData({
         id: assignment.id, title: assignment.title, description: assignment.description,
-        dueDate: assignment.dueDate ? format(new Date(assignment.dueDate), "yyyy-MM-dd'T'HH:mm") : '', // For datetime-local
+        dueDate: assignment.dueDate ? format(new Date(assignment.dueDate), "yyyy-MM-dd'T'HH:mm") : '', 
         type: assignment.type, questions: assignment.questions || [],
-        manualTotalPoints: assignment.type === AssignmentType.STANDARD ? assignment.totalPoints : assignment.manualTotalPoints, // Use manualTotalPoints to preserve UI if set
+        manualTotalPoints: assignment.type === AssignmentType.STANDARD ? assignment.totalPoints : assignment.manualTotalPoints, 
         assignmentFileUrl: assignment.assignmentFileUrl, assignmentFileName: assignment.assignmentFileName,
         externalLink: assignment.externalLink || '',
         assignmentFile: null,
@@ -234,26 +236,31 @@ export default function TeacherCourseDetailPage() {
       toast({ title: "Validation Error", description: "Assignment title and due date are required.", variant: "destructive" });
       return;
     }
-    if (!course) return; // Should not happen
+    if (!course) return; 
 
-    const payloadBase = {
+    const payloadBase: any = {
       courseId: course.id, 
       title: assignmentFormData.title, 
       description: assignmentFormData.description,
       dueDate: new Date(assignmentFormData.dueDate).toISOString(), 
       type: assignmentFormData.type,
-      questions: assignmentFormData.type === AssignmentType.QUIZ ? (assignmentFormData.questions || []) : undefined, // Ensure empty array if quiz and no questions
-      manualTotalPoints: assignmentFormData.type === AssignmentType.STANDARD ? assignmentFormData.manualTotalPoints : undefined,
       assignmentFileUrl: assignmentFormData.assignmentFileUrl, 
       assignmentFileName: assignmentFormData.assignmentFileName,
       externalLink: assignmentFormData.externalLink || undefined,
-      rubric: assignmentFormData.type === AssignmentType.STANDARD ? (assignmentFormData.rubric || []) : undefined, // Add rubric
     };
+    
+    if (assignmentFormData.type === AssignmentType.QUIZ) {
+      payloadBase.questions = assignmentFormData.questions || [];
+    } else {
+      payloadBase.manualTotalPoints = assignmentFormData.manualTotalPoints;
+      payloadBase.rubric = assignmentFormData.rubric || [];
+    }
+    
 
     if (assignmentFormData.id) {
-        await handleUpdateAssignment({ ...payloadBase, id: assignmentFormData.id, courseId: course.id, assignmentFile: assignmentFormData.assignmentFile });
+        await handleUpdateAssignment({ ...payloadBase, id: assignmentFormData.id, assignmentFile: assignmentFormData.assignmentFile });
     } else {
-        await handleCreateAssignment({ ...payloadBase, courseId: course.id, assignmentFile: assignmentFormData.assignmentFile });
+        await handleCreateAssignment({ ...payloadBase, assignmentFile: assignmentFormData.assignmentFile });
     }
 
     if(!state.error) setIsAssignmentModalOpen(false);
@@ -322,6 +329,44 @@ export default function TeacherCourseDetailPage() {
 
   const courseBannerSrc = course.bannerImageUrl || `https://placehold.co/1200x400.png?text=${encodeURIComponent(course.name)}`;
 
+  const studentPaymentInfo = useMemo(() => {
+    if (!course) return [];
+    return course.studentIds.map(studentId => {
+      const student = users.find(u => u.id === studentId);
+      const studentPaymentsForCourse = payments.filter(p => p.studentId === studentId && p.courseId === course.id && p.status === PaymentStatus.PAID);
+      const totalPaid = studentPaymentsForCourse.reduce((sum, p) => sum + p.amount, 0);
+      const amountOwed = Math.max(0, (course.cost || 0) - totalPaid);
+      let status: string;
+      let statusVariant: "default" | "secondary" | "destructive" | "outline" = "secondary";
+
+      if ((course.cost || 0) === 0) {
+        status = "Free Course";
+        statusVariant = "outline";
+      } else if (totalPaid >= (course.cost || 0)) {
+        status = "Fully Paid";
+        statusVariant = "default";
+        if (totalPaid > (course.cost || 0)) status = "Overpaid";
+      } else if (totalPaid > 0) {
+        status = "Partially Paid";
+        statusVariant = "secondary";
+      } else {
+        status = "Not Paid";
+        statusVariant = "destructive";
+      }
+      
+      return {
+        studentId,
+        studentName: student?.name || "Unknown Student",
+        studentEmail: student?.email || "N/A",
+        totalPaid,
+        amountOwed,
+        status,
+        statusVariant,
+      };
+    });
+  }, [course, users, payments]);
+
+
   return (
     <div className="space-y-6">
       <Button variant="outline" onClick={() => router.back()} disabled={isLoading}>
@@ -337,6 +382,7 @@ export default function TeacherCourseDetailPage() {
             style={{objectFit:"cover"}}
             className="bg-muted"
             priority={course.bannerImageUrl ? true : false}
+            data-ai-hint="course banner"
           />
         </div>
         <CardHeader className="border-b">
@@ -349,10 +395,11 @@ export default function TeacherCourseDetailPage() {
         </CardHeader>
         <CardContent className="p-0">
           <Tabs defaultValue="lessons" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 rounded-none border-b">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 rounded-none border-b">
               <TabsTrigger value="lessons" className="rounded-none py-3"><FileText className="mr-2" />Lessons ({courseLessons.length})</TabsTrigger>
               <TabsTrigger value="assignments" className="rounded-none py-3"><BookOpen className="mr-2" />Assignments ({courseAssignments.length})</TabsTrigger>
               <TabsTrigger value="students" className="rounded-none py-3"><UserSquare className="mr-2" />Students ({course.studentIds.length})</TabsTrigger>
+              <TabsTrigger value="payments" className="rounded-none py-3"><DollarSign className="mr-2" />Payments</TabsTrigger>
               <TabsTrigger value="settings" className="rounded-none py-3"><Settings className="mr-2" />Settings</TabsTrigger>
             </TabsList>
 
@@ -422,7 +469,7 @@ export default function TeacherCourseDetailPage() {
                         <h4 className="font-medium">{assignment.title} <Badge variant="secondary" className="capitalize">{assignment.type}</Badge></h4>
                         <p className="text-xs text-muted-foreground">Due: {format(new Date(assignment.dueDate), "PPP p")} - {assignment.totalPoints} pts</p>
                          {assignment.assignmentFileName && (
-                           <a href={assignment.assignmentFileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1 mt-1">
+                           <a href={assignment.assignmentFileUrl || '#'} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1 mt-1">
                                 <Paperclip className="h-3 w-3"/> {assignment.assignmentFileName}
                            </a>
                         )}
@@ -487,6 +534,51 @@ export default function TeacherCourseDetailPage() {
                     </ul>
                 )}
             </TabsContent>
+
+            <TabsContent value="payments" className="p-6">
+              <h3 className="text-xl font-semibold mb-4">Student Payment Status</h3>
+              {isLoading && studentPaymentInfo.length === 0 && course.studentIds.length > 0 ? (
+                <p className="text-muted-foreground text-center py-4">Loading payment information...</p>
+              ) : course.studentIds.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No students enrolled to display payment information.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Student Name</TableHead>
+                        <TableHead>Email</TableHead>
+                        <TableHead className="text-right">Course Cost</TableHead>
+                        <TableHead className="text-right">Total Paid</TableHead>
+                        <TableHead className="text-right">Amount Owed</TableHead>
+                        <TableHead className="text-center">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {studentPaymentInfo.map(info => (
+                        <TableRow key={info.studentId}>
+                          <TableCell>{info.studentName}</TableCell>
+                          <TableCell className="text-xs">{info.studentEmail}</TableCell>
+                          <TableCell className="text-right">${course.cost.toFixed(2)}</TableCell>
+                          <TableCell className="text-right text-green-600">${info.totalPaid.toFixed(2)}</TableCell>
+                          <TableCell className={`text-right font-semibold ${info.amountOwed > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            ${info.amountOwed.toFixed(2)}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={info.statusVariant} 
+                                   className={info.statusVariant === 'default' ? "bg-green-500 hover:bg-green-600" : 
+                                              info.statusVariant === 'destructive' ? "bg-red-500 text-destructive-foreground hover:bg-red-600" : ""}>
+                                {info.status}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </TabsContent>
+
 
             <TabsContent value="settings" className="p-6">
                 <h3 className="text-xl font-semibold mb-2">Course Settings</h3>
@@ -783,4 +875,3 @@ export default function TeacherCourseDetailPage() {
     </div>
   );
 }
-
