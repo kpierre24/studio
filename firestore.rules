@@ -40,13 +40,16 @@ service cloud.firestore {
 
     function isEnrolledInCourse(courseId, userId) {
       let course = getCourse(courseId);
-      return isSignedIn() && userId in course.studentIds;
+      // Ensure studentIds is a list before checking membership
+      return isSignedIn() && course.studentIds is list && userId in course.studentIds;
     }
 
     // Users Collection
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isSuperAdmin(request.auth.uid) || isOwner(userId); // Allow self-creation on signup
+      // Allow self-creation on signup or creation by SuperAdmin
+      allow create: if isSuperAdmin(request.auth.uid) || 
+                       (request.resource.data.email == request.auth.email && request.resource.data.id == request.auth.uid);
       allow update: if isOwner(userId) || isSuperAdmin(request.auth.uid);
       allow delete: if isSuperAdmin(request.auth.uid);
     }
@@ -126,7 +129,6 @@ service cloud.firestore {
                       isTeacherOfCourse(resource.data.courseId) // Teacher can see payments for their course
                     );
       // For now, only SuperAdmins can create, update, or delete payment records.
-      // Student payment actions (if implemented later via a gateway) would need different rules or Cloud Functions.
       allow create, update, delete: if isSuperAdmin(request.auth.uid);
     }
 
@@ -135,7 +137,7 @@ service cloud.firestore {
       allow read, update: if isSignedIn() && isOwner(resource.data.userId); // User can read/update (mark as read) their own notifications
       // Creation is typically a side effect of other actions or done by privileged roles.
       // Deletion is for the user to manage their own notifications.
-      allow create: if isSignedIn() && (isSuperAdmin(request.auth.uid) || isTeacher(request.auth.uid) || isOwner(request.resource.data.userId) ); // Or allow create if user is creating for self (e.g. a reminder)
+      allow create: if isSignedIn() && (isSuperAdmin(request.auth.uid) || isTeacher(request.auth.uid) || (request.resource.data.userId == request.auth.uid) ); 
       allow delete: if isSignedIn() && (isSuperAdmin(request.auth.uid) || isOwner(resource.data.userId));
     }
 
@@ -147,15 +149,11 @@ service cloud.firestore {
 
     // DirectMessages Collection
     match /directMessages/{messageId} {
-      allow read: if isSignedIn() && (
-                    request.auth.uid == resource.data.senderId || 
-                    request.auth.uid == resource.data.recipientId
-                  );
+      allow read: if isSignedIn() && (request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.recipientId);
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.senderId;
-      allow update: if isSignedIn() && request.auth.uid == resource.data.recipientId && request.resource.data.read == true; // Only allow recipient to mark as read
-      // Deletion can be more complex (soft delete, delete for one user, etc.). For now, no delete.
-      // allow delete: if false; 
+      // Only recipient can mark as read. Only 'read' field can be changed.
+      allow update: if isSignedIn() && request.auth.uid == resource.data.recipientId && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']); 
+      allow delete: if false; // Typically messages are not deleted by users, or soft-deleted.
     }
   }
 }
-
