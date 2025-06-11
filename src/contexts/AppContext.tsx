@@ -34,7 +34,7 @@ import {
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, Payment, RecordPaymentPayload, UpdatePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem, Enrollment, EnrollStudentPayload, EnrollStudentSuccessPayload, UnenrollStudentPayload, UnenrollStudentSuccessPayload, AdminUpdateOrCreateSubmissionPayload } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, Payment, RecordPaymentPayload, UpdatePaymentPayload, DeletePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem, Enrollment, EnrollStudentPayload, EnrollStudentSuccessPayload, UnenrollStudentPayload, UnenrollStudentSuccessPayload, AdminUpdateOrCreateSubmissionPayload } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 import { 
   SAMPLE_COURSES, 
@@ -98,6 +98,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.LOAD_DATA: {
       return {
         ...state,
+        courses: action.payload.courses || state.courses,
+        lessons: action.payload.lessons || state.lessons,
         assignments: action.payload.assignments || state.assignments,
         submissions: (action.payload.submissions || state.submissions).map(submission => {
           if (submission.assignmentId) {
@@ -120,7 +122,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         }),
         enrollments: action.payload.enrollments || state.enrollments,
         attendanceRecords: action.payload.attendanceRecords || state.attendanceRecords,
-        payments: action.payload.payments || state.payments, // Keep this for sample data loading if desired
+        payments: action.payload.payments || state.payments, 
         notifications: action.payload.notifications || state.notifications,
         announcements: action.payload.announcements || state.announcements,
       };
@@ -177,6 +179,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.ADMIN_UPDATE_OR_CREATE_SUBMISSION_REQUEST:
     case ActionType.RECORD_PAYMENT_REQUEST:
     case ActionType.UPDATE_PAYMENT_REQUEST:
+    case ActionType.DELETE_PAYMENT_REQUEST:
       return { ...state, isLoading: true, error: null, successMessage: null };
 
     case ActionType.LOGIN_USER_SUCCESS:
@@ -216,6 +219,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.ADMIN_UPDATE_OR_CREATE_SUBMISSION_FAILURE:
     case ActionType.RECORD_PAYMENT_FAILURE:
     case ActionType.UPDATE_PAYMENT_FAILURE:
+    case ActionType.DELETE_PAYMENT_FAILURE:
       return { ...state, isLoading: false, error: action.payload, currentUser: state.currentUser === undefined ? null : state.currentUser  }; 
 
     case ActionType.LOGOUT_USER_SUCCESS:
@@ -628,6 +632,15 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         successMessage: `Payment ${updatedPayment.id} updated. Status: ${updatedPayment.status}, Amount: ${updatedPayment.amount}.`,
       };
     }
+    case ActionType.DELETE_PAYMENT_SUCCESS: {
+      const { id } = action.payload;
+      return {
+        ...state,
+        payments: state.payments.filter(p => p.id !== id),
+        isLoading: false, error: null,
+        successMessage: `Payment record ${id} deleted successfully.`,
+      };
+    }
 
     case ActionType.ADD_NOTIFICATION: {
       const newNotification: NotificationMessage = {
@@ -703,6 +716,7 @@ const AppContext = createContext<{
   handleAdminUpdateOrCreateSubmission: (payload: AdminUpdateOrCreateSubmissionPayload) => Promise<void>;
   handleRecordPayment: (payload: RecordPaymentPayload) => Promise<void>;
   handleUpdatePayment: (payload: UpdatePaymentPayload) => Promise<void>;
+  handleDeletePayment: (payload: DeletePaymentPayload) => Promise<void>;
 
 } | undefined>(undefined);
 
@@ -713,11 +727,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     dispatch({ type: ActionType.LOAD_DATA, payload: {
+      // courses: SAMPLE_COURSES, // Now fetched
+      lessons: SAMPLE_LESSONS, // Still sample, will be fetched per course
       assignments: SAMPLE_ASSIGNMENTS, 
       submissions: SAMPLE_SUBMISSIONS, 
       enrollments: INITIAL_ENROLLMENTS, 
       attendanceRecords: SAMPLE_ATTENDANCE, 
-      payments: SAMPLE_PAYMENTS, 
+      // payments: SAMPLE_PAYMENTS, // Now fetched
       notifications: SAMPLE_NOTIFICATIONS, 
       announcements: SAMPLE_ANNOUNCEMENTS, 
     } }); 
@@ -839,7 +855,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (userProfile) { 
                 await fetchAllUsers(); 
                 await fetchAllCourses(); 
-                await fetchAllPayments(); // Fetch payments after courses are loaded
+                await fetchAllPayments(); 
             } else {
                 dispatch({ type: ActionType.SET_LOADING, payload: false }); 
             }
@@ -1716,6 +1732,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.UPDATE_PAYMENT_FAILURE, payload: error.message || "Failed to update payment." });
     }
   }, [dispatch, state.payments]);
+  
+  const handleDeletePayment = useCallback(async (payload: DeletePaymentPayload) => {
+    dispatch({ type: ActionType.DELETE_PAYMENT_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.DELETE_PAYMENT_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, "payments", payload.id));
+      dispatch({ type: ActionType.DELETE_PAYMENT_SUCCESS, payload });
+    } catch (error: any) {
+      dispatch({ type: ActionType.DELETE_PAYMENT_FAILURE, payload: error.message || "Failed to delete payment." });
+    }
+  }, [dispatch]);
 
   const contextValue = {
     state,
@@ -1746,6 +1777,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     handleAdminUpdateOrCreateSubmission,
     handleRecordPayment,
     handleUpdatePayment,
+    handleDeletePayment,
   };
 
   return (

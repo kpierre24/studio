@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
-import type { Payment, User, Course, RecordPaymentPayload, UpdatePaymentPayload } from '@/types';
+import type { Payment, User, Course, RecordPaymentPayload, UpdatePaymentPayload, DeletePaymentPayload } from '@/types';
 import { UserRole, PaymentStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,17 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -30,7 +41,7 @@ import {
 } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { PlusCircle, Edit, DollarSign, Filter, Users, BookOpen, CheckCircle, AlertCircle, Loader2, CalendarIcon, Search, Info } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, DollarSign, Filter, Users, BookOpen, CheckCircle, AlertCircle, Loader2, CalendarIcon, Search, Info } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
@@ -59,7 +70,7 @@ interface StudentCourseBalanceInfo {
 }
 
 export default function AdminPaymentsPage() {
-  const { state, handleRecordPayment, handleUpdatePayment } = useAppContext();
+  const { state, handleRecordPayment, handleUpdatePayment, handleDeletePayment } = useAppContext();
   const { payments, users, courses, currentUser, isLoading } = state;
   const { toast } = useToast();
 
@@ -69,6 +80,7 @@ export default function AdminPaymentsPage() {
 
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
   const [paymentFormData, setPaymentFormData] = useState<PaymentFormData>(initialPaymentFormData);
   const [studentCourseBalanceInfo, setStudentCourseBalanceInfo] = useState<StudentCourseBalanceInfo | null>(null);
 
@@ -104,7 +116,7 @@ export default function AdminPaymentsPage() {
         let warningMessage = '';
         const currentPaymentAmount = Number(paymentFormData.amount) || 0;
 
-        if (isFullyPaid && currentPaymentAmount > 0 && editingPaymentId && payments.find(p=>p.id === editingPaymentId)?.amount !== currentPaymentAmount) {
+        if (isFullyPaid && currentPaymentAmount > 0 && (!editingPaymentId || payments.find(p=>p.id === editingPaymentId)?.amount !== currentPaymentAmount)) {
              warningMessage = "This course is already fully paid. Recording another payment will result in overpayment.";
         } else if (!isFullyPaid && totalPaid + currentPaymentAmount > courseCost) {
              warningMessage = `This payment of $${currentPaymentAmount.toFixed(2)} will result in an overpayment of $${((totalPaid + currentPaymentAmount) - courseCost).toFixed(2)}.`;
@@ -114,7 +126,7 @@ export default function AdminPaymentsPage() {
         setStudentCourseBalanceInfo({
             courseCost,
             totalPaid,
-            amountOwed: isFullyPaid && currentPaymentAmount > 0 ? 0 : amountOwed, // Adjust amountOwed if it was fully paid before editing
+            amountOwed: isFullyPaid && currentPaymentAmount > 0 && editingPaymentId && payments.find(p=>p.id === editingPaymentId)?.amount === currentPaymentAmount ? 0 : amountOwed,
             isFullyPaid,
             warningMessage,
         });
@@ -218,6 +230,14 @@ export default function AdminPaymentsPage() {
     }
   };
 
+  const confirmDeletePayment = async () => {
+    if (!paymentToDelete) return;
+    await handleDeletePayment({ id: paymentToDelete.id });
+    if (!state.error) {
+      setPaymentToDelete(null);
+    }
+  };
+
   if (!currentUser || currentUser.role !== UserRole.SUPER_ADMIN) {
     return <p className="text-center text-muted-foreground py-10">Access Denied. You must be a Super Admin to view this page.</p>;
   }
@@ -275,6 +295,9 @@ export default function AdminPaymentsPage() {
                       ${studentCourseBalanceInfo.amountOwed.toFixed(2)}
                     </span></p>
                     {studentCourseBalanceInfo.isFullyPaid && !editingPaymentId && (
+                      <Badge className="bg-green-500 mt-1">Course Fully Paid</Badge>
+                    )}
+                    {studentCourseBalanceInfo.isFullyPaid && editingPaymentId && studentCourseBalanceInfo.amountOwed === 0 && (
                       <Badge className="bg-green-500 mt-1">Course Fully Paid</Badge>
                     )}
                   </CardContent>
@@ -415,10 +438,32 @@ export default function AdminPaymentsPage() {
                       <TableCell>{getStatusBadge(payment.status)}</TableCell>
                       <TableCell className="text-xs">{payment.transactionId || 'N/A'}</TableCell>
                       <TableCell className="text-xs text-muted-foreground truncate max-w-[150px]" title={payment.notes || undefined}>{payment.notes || 'N/A'}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-2">
                         <Button variant="outline" size="sm" onClick={() => handleOpenPaymentModal(payment)} disabled={isLoading}>
                           <Edit className="mr-1 h-4 w-4" /> Edit
                         </Button>
+                        <AlertDialog open={!!paymentToDelete && paymentToDelete.id === payment.id} onOpenChange={(isOpen) => !isOpen && setPaymentToDelete(null)}>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="destructive" size="sm" onClick={() => setPaymentToDelete(payment)} disabled={isLoading}>
+                              <Trash2 className="mr-1 h-4 w-4" /> Delete
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the payment record of ${paymentToDelete?.amount.toFixed(2)} for {getUserName(paymentToDelete?.studentId || '')} in course {getCourseName(paymentToDelete?.courseId || '')}.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel onClick={() => setPaymentToDelete(null)} disabled={isLoading}>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={confirmDeletePayment} disabled={isLoading}>
+                                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                Yes, delete payment
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </TableCell>
                     </TableRow>
                   ))}

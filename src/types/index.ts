@@ -160,6 +160,9 @@ export enum ActionType {
   UPDATE_PAYMENT_REQUEST = 'UPDATE_PAYMENT_REQUEST',
   UPDATE_PAYMENT_SUCCESS = 'UPDATE_PAYMENT_SUCCESS',
   UPDATE_PAYMENT_FAILURE = 'UPDATE_PAYMENT_FAILURE',
+  DELETE_PAYMENT_REQUEST = 'DELETE_PAYMENT_REQUEST',
+  DELETE_PAYMENT_SUCCESS = 'DELETE_PAYMENT_SUCCESS',
+  DELETE_PAYMENT_FAILURE = 'DELETE_PAYMENT_FAILURE',
 }
 
 // Interfaces
@@ -374,7 +377,8 @@ export type TakeAttendancePayload = {
 export type UpdateAttendanceRecordPayload = Partial<Omit<AttendanceRecord, 'id' | 'courseId' | 'studentId' | 'date'>> & { id: string };
 
 export type RecordPaymentPayload = Omit<Payment, 'id'>;
-export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id'>>;
+export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id' | 'studentId' | 'courseId'>>;
+export type DeletePaymentPayload = { id: string };
 
 
 export type AppAction =
@@ -476,6 +480,10 @@ export type AppAction =
   | { type: ActionType.UPDATE_PAYMENT_REQUEST }
   | { type: ActionType.UPDATE_PAYMENT_SUCCESS; payload: UpdatePaymentPayload }
   | { type: ActionType.UPDATE_PAYMENT_FAILURE; payload: string }
+  | { type: ActionType.DELETE_PAYMENT_REQUEST }
+  | { type: ActionType.DELETE_PAYMENT_SUCCESS; payload: DeletePaymentPayload }
+  | { type: ActionType.DELETE_PAYMENT_FAILURE; payload: string }
+
 
   | { type: ActionType.LOAD_DATA; payload: Partial<AppState> } 
   | { type: ActionType.SET_LOADING; payload: boolean }
@@ -505,6 +513,6 @@ export interface GenerateQuizQuestionsOutput {
 }
 
 // Ensure payload for UpdatePaymentPayload is specific for what can be updated
-export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id' | 'studentId' | 'courseId'>>;
+// export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id' | 'studentId' | 'courseId'>>;
 
 
