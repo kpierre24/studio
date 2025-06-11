@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect, type ChangeEvent } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useAppContext } from "@/contexts/AppContext";
 import type { Assignment, Submission, Course, Lesson } from "@/types";
 import { ActionType, AssignmentType } from "@/types";
@@ -28,6 +28,7 @@ export default function StudentCourseDetailPage() {
   const { state, handleStudentSubmissionUpload, handleStudentSubmitAssignment } = useAppContext();
   const { currentUser, courses, lessons, assignments, submissions, users, enrollments, isLoading } = state; 
   const { toast } = useToast();
+  const pathname = usePathname(); // Get current pathname
 
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
@@ -112,7 +113,7 @@ export default function StudentCourseDetailPage() {
     params.delete('assignment');
     router.replace(`${pathname}?${params.toString()}`, {scroll: false});
   };
-  const pathname = usePathname(); // Get current pathname
+  
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
