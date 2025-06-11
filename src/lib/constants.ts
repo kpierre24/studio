@@ -11,7 +11,7 @@ export const SAMPLE_SUPER_ADMIN: User = {
   email: 'superadmin@classroomhq.com',
   password: 'password123',
   role: UserRole.SUPER_ADMIN,
-  avatarUrl: 'https://placehold.co/100x100.png?text=SA',
+  avatarUrl: 'https://placehold.co/100x100.png',
 };
 
 export const SAMPLE_TEACHERS: User[] = [
@@ -21,7 +21,7 @@ export const SAMPLE_TEACHERS: User[] = [
     email: 'alice@classroomhq.com',
     password: 'password123',
     role: UserRole.TEACHER,
-    avatarUrl: 'https://placehold.co/100x100.png?text=AW',
+    avatarUrl: 'https://placehold.co/100x100.png',
   },
   {
     id: 'user-teacher-2',
@@ -29,7 +29,7 @@ export const SAMPLE_TEACHERS: User[] = [
     email: 'bob@classroomhq.com',
     password: 'password123',
     role: UserRole.TEACHER,
-    avatarUrl: 'https://placehold.co/100x100.png?text=BB',
+    avatarUrl: 'https://placehold.co/100x100.png',
   },
 ];
 
@@ -38,25 +38,25 @@ export const SAMPLE_STUDENTS: User[] = [
     id: 'user-student-1',
     name: 'Charlie Brown',
     email: 'charlie@classroomhq.com',
-    password: 'password123',
+    password: '123456', // Updated
     role: UserRole.STUDENT,
-    avatarUrl: 'https://placehold.co/100x100.png?text=CB',
+    avatarUrl: 'https://placehold.co/100x100.png',
   },
   {
     id: 'user-student-2',
     name: 'Diana Prince',
     email: 'diana@classroomhq.com',
-    password: 'password123',
+    password: '123456', // Updated
     role: UserRole.STUDENT,
-    avatarUrl: 'https://placehold.co/100x100.png?text=DP',
+    avatarUrl: 'https://placehold.co/100x100.png',
   },
   {
     id: 'user-student-3',
     name: 'Edward Scissorhands',
     email: 'edward@classroomhq.com',
-    password: 'password123',
+    password: '123456', // Updated
     role: UserRole.STUDENT,
-    avatarUrl: 'https://placehold.co/100x100.png?text=ES',
+    avatarUrl: 'https://placehold.co/100x100.png',
   },
 ];
 
