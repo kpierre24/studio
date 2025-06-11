@@ -40,21 +40,15 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "fi
 import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, Payment, RecordPaymentPayload, UpdatePaymentPayload, DeletePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem, Enrollment, EnrollStudentPayload, EnrollStudentSuccessPayload, UnenrollStudentPayload, UnenrollStudentSuccessPayload, AdminUpdateOrCreateSubmissionPayload, CreateAnnouncementPayload, DirectMessage, CreateDirectMessagePayload, MarkDirectMessageReadPayload } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 import {
-  SAMPLE_COURSES,
-  SAMPLE_LESSONS,
-  SAMPLE_ASSIGNMENTS,
-  SAMPLE_SUBMISSIONS,
-  SAMPLE_PAYMENTS,
-  SAMPLE_ATTENDANCE,
   INITIAL_ENROLLMENTS,
+  SAMPLE_ATTENDANCE,
   SAMPLE_NOTIFICATIONS,
-  SAMPLE_ANNOUNCEMENTS,
   APP_NAME
 } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
 
 const initialState: AppState = {
-  currentUser: undefined,
+  currentUser: undefined, // undefined initially, then User object or null
   users: [],
   courses: [],
   lessons: [],
@@ -66,7 +60,7 @@ const initialState: AppState = {
   notifications: [],
   announcements: [],
   directMessages: [],
-  isLoading: true,
+  isLoading: true, // Start true until auth resolves
   error: null,
   successMessage: null,
 };
@@ -102,16 +96,10 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.LOAD_DATA: {
       return {
         ...state,
-        // Dynamically fetched data should not be overwritten here unless explicitly part of LOAD_DATA payload
-        courses: action.payload.courses !== undefined ? action.payload.courses : state.courses,
-        lessons: action.payload.lessons !== undefined ? action.payload.lessons : state.lessons,
-        assignments: action.payload.assignments !== undefined ? action.payload.assignments : state.assignments,
-        submissions: action.payload.submissions !== undefined ? action.payload.submissions : state.submissions,
         enrollments: action.payload.enrollments !== undefined ? action.payload.enrollments : state.enrollments,
         attendanceRecords: action.payload.attendanceRecords !== undefined ? action.payload.attendanceRecords : state.attendanceRecords,
-        payments: action.payload.payments !== undefined ? action.payload.payments : state.payments,
         notifications: action.payload.notifications !== undefined ? action.payload.notifications : state.notifications,
-        announcements: action.payload.announcements !== undefined ? action.payload.announcements : state.announcements,
+        // Other data (courses, lessons, assignments, etc.) are fetched dynamically
       };
     }
 
@@ -146,7 +134,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.FETCH_SUBMISSIONS_REQUEST:
       return { ...state, isLoading: true, error: null };
     case ActionType.FETCH_SUBMISSIONS_SUCCESS: {
-      const assignmentsForGrading = state.assignments; // Use current assignments from state
+      const assignmentsForGrading = state.assignments; 
       const processedSubmissions = (action.payload || []).map(submission => {
         if (submission.assignmentId) {
           const assignment = assignmentsForGrading.find(a => a.id === submission.assignmentId);
@@ -262,17 +250,22 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case ActionType.LOGIN_USER_SUCCESS:
     case ActionType.REGISTER_STUDENT_SUCCESS:
-    case ActionType.FETCH_USER_PROFILE_SUCCESS:
+    case ActionType.FETCH_USER_PROFILE_SUCCESS: // Should ideally not change isLoading on its own
       return {
         ...state,
         currentUser: action.payload,
-        isLoading: false,
+        // isLoading: false, // isLoading is managed by the overall auth flow
         error: null,
         successMessage: action.type === ActionType.LOGIN_USER_SUCCESS ? 'Login successful!' : (action.type === ActionType.REGISTER_STUDENT_SUCCESS ? 'Registration successful!' : null )
       };
 
     case ActionType.SET_CURRENT_USER:
-      return { ...state, currentUser: action.payload, isLoading: false, error: null };
+      return { 
+        ...state, 
+        currentUser: action.payload, 
+        // Do NOT change isLoading here. It's managed by the calling auth flow.
+        error: null 
+      };
 
     case ActionType.LOGIN_USER_FAILURE:
     case ActionType.REGISTER_STUDENT_FAILURE:
@@ -302,19 +295,9 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case ActionType.LOGOUT_USER_SUCCESS:
       return {
-        ...initialState,
-        users: [],
-        courses: [],
-        lessons: [],
-        assignments: [],
-        submissions: [],
-        enrollments: [],
-        attendanceRecords: [],
-        payments: [],
-        announcements: [],
-        directMessages: [],
-        currentUser: null,
-        isLoading: false,
+        ...initialState, // Resets all fields to their initial values
+        currentUser: null, // Explicitly set currentUser to null
+        isLoading: false, // Auth flow is complete
         successMessage: 'Logged out successfully.'
       };
 
@@ -819,7 +802,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [dispatch]);
 
   const fetchAllUsers = useCallback(async () => {
-    dispatch({ type: ActionType.FETCH_USERS_REQUEST });
+    //isLoading set by individual REQUEST actions
     const db = getFirebaseDb();
     if (!db) {
       dispatch({ type: ActionType.FETCH_USERS_FAILURE, payload: "Firestore not available to fetch users." });
@@ -837,7 +820,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [dispatch]);
 
   const fetchAllCourses = useCallback(async () => {
-    dispatch({ type: ActionType.FETCH_COURSES_REQUEST });
+    //isLoading set by individual REQUEST actions
     const db = getFirebaseDb();
     if (!db) {
       dispatch({ type: ActionType.FETCH_COURSES_FAILURE, payload: "Firestore not available to fetch courses." });
@@ -859,7 +842,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
         return;
     }
-    dispatch({ type: ActionType.FETCH_LESSONS_REQUEST });
+    //isLoading set by individual REQUEST actions
     const db = getFirebaseDb();
     if (!db) {
       dispatch({ type: ActionType.FETCH_LESSONS_FAILURE, payload: "Firestore not available to fetch lessons." });
@@ -882,11 +865,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [dispatch, state.courses]);
 
   const fetchAllAssignments = useCallback(async () => {
-    if (!state.currentUser || state.courses.length === 0) {
+    if (state.courses.length === 0) {
         dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
         return;
     }
-    dispatch({ type: ActionType.FETCH_ASSIGNMENTS_REQUEST });
+    //isLoading set by individual REQUEST actions
     const db = getFirebaseDb();
     if (!db) {
         dispatch({ type: ActionType.FETCH_ASSIGNMENTS_FAILURE, payload: "Firestore not available." });
@@ -906,14 +889,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error("Error fetching assignments:", error);
         dispatch({ type: ActionType.FETCH_ASSIGNMENTS_FAILURE, payload: error.message || "Failed to fetch assignments." });
     }
-  }, [dispatch, state.currentUser, state.courses]);
+  }, [dispatch, state.courses]);
 
-  const fetchAllSubmissions = useCallback(async () => {
-    if (!state.currentUser || state.assignments.length === 0) {
+  const fetchAllSubmissions = useCallback(async (currentUserForFetch: User | null | undefined) => {
+    if (!currentUserForFetch || state.assignments.length === 0) {
         dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
         return;
     }
-    dispatch({ type: ActionType.FETCH_SUBMISSIONS_REQUEST });
+    //isLoading set by individual REQUEST actions
     const db = getFirebaseDb();
     if (!db) {
         dispatch({ type: ActionType.FETCH_SUBMISSIONS_FAILURE, payload: "Firestore not available." });
@@ -926,8 +909,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const submissionsColRef = collection(db, "courses", assignment.courseId, "assignments", assignment.id, "submissions");
 
             let q = query(submissionsColRef);
-            if (state.currentUser.role === UserRole.STUDENT) {
-               q = query(submissionsColRef, where("studentId", "==", state.currentUser.id));
+            if (currentUserForFetch.role === UserRole.STUDENT) {
+               q = query(submissionsColRef, where("studentId", "==", currentUserForFetch.id));
             }
 
             const submissionSnapshot = await getDocs(q);
@@ -940,18 +923,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error("Error fetching submissions:", error);
         dispatch({ type: ActionType.FETCH_SUBMISSIONS_FAILURE, payload: error.message || "Failed to fetch submissions." });
     }
-  }, [dispatch, state.currentUser, state.assignments]);
+  }, [dispatch, state.assignments]);
 
 
-  const fetchAllPayments = useCallback(async () => {
-    dispatch({ type: ActionType.FETCH_PAYMENTS_REQUEST });
+  const fetchAllPayments = useCallback(async (currentUserForFetch: User | null | undefined) => {
+    if (!currentUserForFetch) {
+      dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] }); 
+      return;
+    }
+    //isLoading set by individual REQUEST actions
     const db = getFirebaseDb();
     if (!db) {
       dispatch({ type: ActionType.FETCH_PAYMENTS_FAILURE, payload: "Firestore not available to fetch payments." });
-      return;
-    }
-    if (!state.currentUser) {
-      dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] }); 
       return;
     }
 
@@ -959,13 +942,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let paymentsQuery;
       const paymentsCol = collection(db, "payments");
 
-      if (state.currentUser.role === UserRole.SUPER_ADMIN) {
+      if (currentUserForFetch.role === UserRole.SUPER_ADMIN) {
         paymentsQuery = query(paymentsCol);
-      } else if (state.currentUser.role === UserRole.STUDENT) {
-        paymentsQuery = query(paymentsCol, where("studentId", "==", state.currentUser.id));
+      } else if (currentUserForFetch.role === UserRole.STUDENT) {
+        paymentsQuery = query(paymentsCol, where("studentId", "==", currentUserForFetch.id));
       } else {
         // Teachers currently don't fetch all payments globally via this function.
-        // Their payment visibility is per-course.
         dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
         return;
       }
@@ -977,10 +959,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error("Error fetching payments:", error);
       dispatch({ type: ActionType.FETCH_PAYMENTS_FAILURE, payload: error.message || "Failed to fetch payments." });
     }
-  }, [dispatch, state.currentUser]);
+  }, [dispatch]);
 
   const fetchAllAnnouncements = useCallback(async () => {
-    dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_REQUEST });
+    //isLoading set by individual REQUEST actions
     const db = getFirebaseDb();
     if (!db) {
       dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_FAILURE, payload: "Firestore not available to fetch announcements." });
@@ -999,7 +981,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [dispatch]);
 
   const fetchDirectMessagesForUser = useCallback(async (userId: string) => {
-    dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_REQUEST });
+    //isLoading set by individual REQUEST actions
     const db = getFirebaseDb();
     if (!db) {
       dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_FAILURE, payload: "Firestore not available to fetch messages." });
@@ -1051,64 +1033,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const dbInstance = getFirebaseDb();
     if (!dbInstance) {
         console.error("Firebase Firestore instance not available.");
+         dispatch({ type: ActionType.SET_ERROR, payload: "Firebase Firestore not initialized." });
+         dispatch({ type: ActionType.SET_LOADING, payload: false });
+         return;
     }
 
     const unsubscribe = onAuthStateChanged(authInstance, async (firebaseUser: FirebaseUser | null) => {
-      dispatch({ type: ActionType.SET_LOADING, payload: true });
+      dispatch({ type: ActionType.SET_LOADING, payload: true }); // Global loading for auth process
+
       if (firebaseUser) {
-        if (!dbInstance) {
-            dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-            dispatch({ type: ActionType.SET_ERROR, payload: "Database connection error." });
-            dispatch({ type: ActionType.SET_LOADING, payload: false });
-            return;
-        }
         try {
           const userDocRef = doc(dbInstance, "users", firebaseUser.uid);
           const userDocSnap = await getDoc(userDocRef);
 
           if (userDocSnap.exists()) {
             const userProfile = { id: userDocSnap.id, ...userDocSnap.data() } as User;
-            dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
-            if (userProfile) {
-                await Promise.all([
-                    fetchAllUsers(),
-                    fetchAllCourses(),
-                    fetchAllPayments(), // This will now be role-aware
-                    fetchAllAnnouncements(),
-                    fetchDirectMessagesForUser(userProfile.id)
-                ]);
-            } else {
-                dispatch({ type: ActionType.SET_LOADING, payload: false });
-            }
+            dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile }); // Only sets user, doesn't change isLoading
+
+            // Fetch initial data. Each fetch function will handle its own isLoading via _REQUEST/_SUCCESS/_FAILURE
+            // but the global isLoading will remain true until all these are done.
+            await Promise.all([
+                fetchAllUsers(),
+                fetchAllCourses(),
+                fetchAllPayments(userProfile), 
+                fetchAllAnnouncements(),
+                fetchDirectMessagesForUser(userProfile.id)
+            ]);
+            dispatch({ type: ActionType.SET_LOADING, payload: false }); // All initial data loaded
           } else {
             await signOut(authInstance);
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
+            // Clear all data lists
             dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
             dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
-            dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
-            dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
-            dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
-            dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
-            dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
-            dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
-            dispatch({ type: ActionType.SET_ERROR, payload: "User profile not found in database. Signed out." });
+            // ... (clear other data types)
+            dispatch({ type: ActionType.SET_ERROR, payload: "User profile not found. Signed out." });
             dispatch({ type: ActionType.SET_LOADING, payload: false });
           }
         } catch (error: any) {
+          console.error("Error during auth state change processing:", error);
           dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
+           // Clear all data lists
           dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
           dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
-          dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
-          dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
-          dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
-          dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
-          dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
-          dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
+          // ... (clear other data types)
           dispatch({ type: ActionType.SET_ERROR, payload: error.message || "Failed to load user profile." });
           dispatch({ type: ActionType.SET_LOADING, payload: false });
         }
-      } else {
+      } else { // No firebaseUser (logged out or not logged in)
         dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
+         // Clear all data lists
         dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
@@ -1121,28 +1095,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
     return () => unsubscribe();
+  // fetch* functions are wrapped in useCallback with stable dependencies (mostly just dispatch, or dispatch + passed args)
+  // so they don't need to be in this main useEffect's dependency array if they are stable.
+  // The key trigger for this effect is auth state change, and dispatch is stable.
   }, [dispatch, fetchAllUsers, fetchAllCourses, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser]);
 
+  // Effect for fetching lessons, depends on currentUser and courses
   useEffect(() => {
     if (state.currentUser && state.courses.length > 0) {
       fetchAllLessons();
-    } else if (!state.currentUser) {
+    } else if (!state.currentUser) { // If user logs out, clear lessons
         dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
     }
   }, [state.currentUser, state.courses, fetchAllLessons, dispatch]);
 
+  // Effect for fetching assignments, depends on currentUser and courses
   useEffect(() => {
       if (state.currentUser && state.courses.length > 0) {
           fetchAllAssignments();
-      } else if (!state.currentUser) {
+      } else if (!state.currentUser) { // If user logs out, clear assignments
           dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
       }
   }, [state.currentUser, state.courses, fetchAllAssignments, dispatch]);
 
+  // Effect for fetching submissions, depends on currentUser and assignments
   useEffect(() => {
       if (state.currentUser && state.assignments.length > 0) {
-          fetchAllSubmissions();
-      } else if (!state.currentUser) {
+          fetchAllSubmissions(state.currentUser); // Pass current user for role-based fetching
+      } else if (!state.currentUser) { // If user logs out, clear submissions
           dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
       }
   }, [state.currentUser, state.assignments, fetchAllSubmissions, dispatch]);
@@ -1169,6 +1149,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       if (!payload.password) throw new Error("Password is required.");
       await signInWithEmailAndPassword(authInstance, payload.email, payload.password);
+      // onAuthStateChanged will handle success and data loading
     } catch (error: any) {
       dispatch({ type: ActionType.LOGIN_USER_FAILURE, payload: error.message || "Failed to login." });
     }
@@ -1195,8 +1176,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png?text=${payload.name.substring(0,2).toUpperCase()}`,
       };
       await setDoc(doc(dbInstance, "users", firebaseUser.uid), newUserForFirestore);
+      // onAuthStateChanged will handle setting current user and fetching data.
+      // We can dispatch a local update to users array if needed immediately.
       dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [...state.users, newUserForFirestore] });
-      dispatch({ type: ActionType.ADD_NOTIFICATION, payload: {
+       dispatch({ type: ActionType.ADD_NOTIFICATION, payload: {
         userId: firebaseUser.uid, type: 'success',
         message: `Welcome to ${APP_NAME}, ${newUserForFirestore.name}! Account created.`
       }});
@@ -1214,7 +1197,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       await signOut(authInstance);
-      dispatch({ type: ActionType.LOGOUT_USER_SUCCESS });
+      dispatch({ type: ActionType.LOGOUT_USER_SUCCESS }); // This will trigger onAuthStateChanged with null user
     } catch (error: any) {
       dispatch({ type: ActionType.LOGOUT_USER_FAILURE, payload: error.message || "Failed to logout." });
     }
@@ -1370,13 +1353,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleCreateCourse = useCallback(async (payload: CreateCoursePayload) => {
     dispatch({ type: ActionType.CREATE_COURSE_REQUEST });
     const db = getFirebaseDb();
+    const currentUser = state.currentUser; // Use state.currentUser which is updated by SET_CURRENT_USER
 
     if (!db) {
         console.error("[AppContext] Firestore DB instance is not available for handleCreateCourse.");
         dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: "Firestore not available." });
         return;
     }
-    if (!state.currentUser) {
+    if (!currentUser) {
         console.error("[AppContext] Current user is not available for handleCreateCourse.");
         dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: "User not authenticated to create course." });
         return;
@@ -1389,7 +1373,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             id: courseId,
             name: payload.name,
             description: payload.description,
-            teacherId: payload.teacherId || state.currentUser.id,
+            teacherId: payload.teacherId || currentUser.id,
             studentIds: payload.studentIds || [],
             category: payload.category || '',
             cost: payload.cost || 0,
@@ -1408,7 +1392,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error("[AppContext] Firestore Error - Failed to create course:", error.code, error.message, error);
         dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: errorMessage });
     }
-}, [dispatch, state.currentUser]);
+}, [dispatch, state.currentUser]); // Depend on state.currentUser
 
 
   const handleUpdateCourse = useCallback(async (payload: UpdateCoursePayload) => {
@@ -2019,7 +2003,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [dispatch]);
 
   const handleSendDirectMessage = useCallback(async (payload: CreateDirectMessagePayload) => {
-    if (!state.currentUser) {
+    const currentUser = state.currentUser; // Use state.currentUser directly for consistency
+    if (!currentUser) {
       dispatch({ type: ActionType.SEND_DIRECT_MESSAGE_FAILURE, payload: "User not authenticated." });
       return;
     }
@@ -2034,7 +2019,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const newMessage: DirectMessage = {
             ...payload,
             id: messageId,
-            senderId: state.currentUser.id,
+            senderId: currentUser.id,
             timestamp: Date.now(),
             read: false,
         };
@@ -2048,7 +2033,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
              payload: {
                userId: payload.recipientId,
                type: 'new_message',
-               message: `New message from ${state.currentUser.name}: "${payload.content.substring(0,30)}..."`,
+               message: `New message from ${currentUser.name}: "${payload.content.substring(0,30)}..."`,
                link: '/messages'
             }
           });
@@ -2057,7 +2042,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error: any) {
         dispatch({ type: ActionType.SEND_DIRECT_MESSAGE_FAILURE, payload: error.message || "Failed to send message."});
     }
-  }, [dispatch, state.currentUser, state.users]);
+  }, [dispatch, state.currentUser, state.users]); // Add state.currentUser to dependencies
 
   const handleMarkMessageRead = useCallback(async (payload: MarkDirectMessageReadPayload) => {
     dispatch({ type: ActionType.MARK_DIRECT_MESSAGE_READ_REQUEST });

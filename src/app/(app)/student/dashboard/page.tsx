@@ -11,23 +11,24 @@ import { format } from 'date-fns';
 
 export default function StudentDashboardPage() {
   const { state } = useAppContext();
+  // Ensure all state values are destructured after useAppContext is called.
   const { currentUser, courses, assignments, submissions, enrollments, announcements, isLoading } = state;
 
   // ALL HOOKS MUST BE CALLED AT THE TOP LEVEL, BEFORE ANY CONDITIONAL RETURNS.
   const studentEnrollments = useMemo(() => {
     if (!currentUser) return [];
     return enrollments.filter(e => e.studentId === currentUser.id);
-  }, [enrollments, currentUser]);
+  }, [enrollments, currentUser]); // Depend on currentUser directly
 
   const enrolledCourseIds = useMemo(() => {
-    if (!currentUser) return []; // Guard based on currentUser for consistency
+    // No need to check currentUser here if studentEnrollments handles it
     return studentEnrollments.map(e => e.courseId);
-  }, [studentEnrollments, currentUser]); 
+  }, [studentEnrollments]); 
 
   const enrolledCourses = useMemo(() => {
-    if (!currentUser) return []; 
+    // No need to check currentUser here if enrolledCourseIds is derived correctly
     return courses.filter(c => enrolledCourseIds.includes(c.id));
-  }, [courses, enrolledCourseIds, currentUser]);
+  }, [courses, enrolledCourseIds]);
 
   const upcomingAssignments = useMemo(() => {
     if (!currentUser) return []; 
@@ -35,7 +36,7 @@ export default function StudentDashboardPage() {
       .filter(a => enrolledCourseIds.includes(a.courseId) && new Date(a.dueDate) >= new Date())
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
       .slice(0, 3);
-  }, [assignments, enrolledCourseIds, currentUser]); 
+  }, [assignments, enrolledCourseIds, currentUser]); // Depend on currentUser
 
   const recentAnnouncements = useMemo(() => {
     if (!currentUser) return []; 
@@ -43,7 +44,7 @@ export default function StudentDashboardPage() {
       .filter(ann => ann.userId === currentUser.id || (ann.courseId && enrolledCourseIds.includes(ann.courseId)) || (ann.type === 'announcement' && ann.userId === undefined && !ann.courseId))
       .sort((a,b) => b.timestamp - a.timestamp)
       .slice(0,3);
-  }, [announcements, currentUser, enrolledCourseIds]);
+  }, [announcements, currentUser, enrolledCourseIds]); // Depend on currentUser
 
   const recentlyGradedSubmissions = useMemo(() => {
     if (!currentUser) return []; 
@@ -61,22 +62,22 @@ export default function StudentDashboardPage() {
           totalPoints: assignment?.totalPoints,
         };
       });
-  }, [submissions, assignments, courses, currentUser]);
+  }, [submissions, assignments, courses, currentUser]); // Depend on currentUser
 
 
   // Conditional returns now come AFTER all hook calls.
-  if (!currentUser && !isLoading) {
-    return <p>Verifying authentication...</p>;
+  if (isLoading || currentUser === undefined) { // Check if currentUser is undefined (still resolving) or isLoading is true
+    return <p className="text-center text-muted-foreground py-10">Loading dashboard...</p>;
   }
 
-  if (isLoading || !currentUser) { // This will catch currentUser being null after loading attempted
-    return <p>Loading dashboard...</p>;
+  if (!currentUser) { // currentUser is null, meaning not logged in (or auth failed)
+    return <p className="text-center text-muted-foreground py-10">Verifying authentication... Please ensure you are logged in.</p>;
   }
   
   const quickLinks = [
     { name: "My Courses", href: "/student/courses", icon: BookOpen },
-    { name: "My Assignments", href: "/student/courses", icon: Edit3 }, // Point to courses page, can filter later
-    { name: "My Grades", href: "/student/courses", icon: GraduationCap }, // Point to courses page for now
+    { name: "My Assignments", href: "/student/courses", icon: Edit3 }, 
+    { name: "My Grades", href: "/student/courses", icon: GraduationCap }, 
     { name: "My Attendance", href: "/student/attendance", icon: CalendarCheck },
     { name: "My Payments", href: "/student/payments", icon: DollarSign },
     { name: "View Calendar", href: "/calendar", icon: CalendarDays },
@@ -105,7 +106,7 @@ export default function StudentDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{upcomingAssignments.length}</div>
-            <Link href={`/student/courses/${upcomingAssignments[0]?.courseId}?assignment=${upcomingAssignments[0]?.id}`} className="text-xs text-primary hover:underline">View assignments</Link>
+            <Link href={upcomingAssignments.length > 0 ? `/student/courses/${upcomingAssignments[0]?.courseId}?assignment=${upcomingAssignments[0]?.id}` : "/student/courses"} className="text-xs text-primary hover:underline">View assignments</Link>
           </CardContent>
         </Card>
          <Card>
@@ -116,14 +117,17 @@ export default function StudentDashboardPage() {
           <CardContent>
             {recentlyGradedSubmissions.length > 0 ? (
               <div className="space-y-1">
-                {recentlyGradedSubmissions.map(sub => (
-                  <Link key={sub.id} href={`/student/courses/${assignments.find(a=>a.id === sub.assignmentId)?.courseId}?assignment=${sub.assignmentId}`} className="text-xs text-primary hover:underline block">
+                {recentlyGradedSubmissions.map(sub => {
+                  const assignmentForLink = assignments.find(a=>a.id === sub.assignmentId);
+                  return (
+                  <Link key={sub.id} href={assignmentForLink ? `/student/courses/${assignmentForLink.courseId}?assignment=${sub.assignmentId}` : "/student/courses"} className="text-xs text-primary hover:underline block">
                      <div className="flex justify-between items-center">
                         <span className="truncate w-3/4" title={sub.assignmentTitle}>{sub.assignmentTitle}</span>
                         <span className="font-semibold">{sub.grade}/{sub.totalPoints}</span>
                      </div>
                   </Link>
-                ))}
+                );
+              })}
               </div>
             ) : (
               <div className="text-2xl font-bold">-</div>
