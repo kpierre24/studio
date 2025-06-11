@@ -1,127 +1,111 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check user role
-    function getUserRole(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data.role;
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
     }
 
-    // Helper function to check if user is SuperAdmin
-    function isSuperAdmin(userId) {
-      return getUserRole(userId) == 'SuperAdmin';
+    function isSuperAdmin() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SuperAdmin';
     }
 
-    // Helper function to check if user is Teacher
-    function isTeacher(userId) {
-      return getUserRole(userId) == 'Teacher';
+    function isTeacher() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
     }
 
-    // Helper function to check if user is Student
-    function isStudent(userId) {
-      return getUserRole(userId) == 'Student';
+    function isStudent() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Student';
     }
 
-    // Helper function to check if user is enrolled in a course
-    function isEnrolled(userId, courseId) {
-      return exists(/databases/$(database)/documents/enrollments/enroll-$(courseId)-$(userId));
-      // Or, if checking studentIds array on course doc (less efficient for rules):
-      // return courseId in get(/databases/$(database)/documents/courses/$(courseId)).data.studentIds;
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Helper function to check if user is the teacher of a specific course
-    function isCourseTeacher(userId, courseId) {
-      return get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == userId;
-    }
-
+    // Users Collection
     match /users/{userId} {
-      allow read: if request.auth != null; // All authenticated users can read user profiles (e.g., for names, avatars)
-      allow create: if request.auth.uid == userId || isSuperAdmin(request.auth.uid); // User can create their own profile, or SuperAdmin can
-      allow update: if request.auth.uid == userId || isSuperAdmin(request.auth.uid); // User can update their own profile, or SuperAdmin can
-      allow delete: if isSuperAdmin(request.auth.uid); // Only SuperAdmin can delete user profiles
+      allow read: if isAuthenticated(); // All authenticated users can read user profiles (e.g., for names, avatars)
+      allow create: if isSuperAdmin(); // Only SuperAdmin can create new user documents directly (students register via auth)
+      allow update: if isSuperAdmin() || isOwner(userId); // SuperAdmin or the user themselves can update
+      allow delete: if isSuperAdmin(); // Only SuperAdmin can delete user documents
     }
 
+    // Courses Collection
     match /courses/{courseId} {
-      allow read: if request.auth != null; // All authenticated users can read course listings
-      allow create: if isSuperAdmin(request.auth.uid) || isTeacher(request.auth.uid); // Teachers and SuperAdmins can create courses
-      allow update: if isSuperAdmin(request.auth.uid) || (isTeacher(request.auth.uid) && isCourseTeacher(request.auth.uid, courseId)); // SuperAdmin or the course's assigned teacher can update
-      allow delete: if isSuperAdmin(request.auth.uid); // Only SuperAdmin can delete courses (after unenrolling students)
+      allow read: if isAuthenticated(); // All authenticated users can read course details
+      allow create: if isSuperAdmin() || isTeacher(); // SuperAdmin or Teacher can create courses
+      allow update: if isSuperAdmin() || (isTeacher() && resource.data.teacherId == request.auth.uid); // SuperAdmin or the assigned teacher can update
+      allow delete: if isSuperAdmin(); // Only SuperAdmin can delete courses
 
+      // Lessons Subcollection
       match /lessons/{lessonId} {
-        allow read: if request.auth != null && (isEnrolled(request.auth.uid, courseId) || isCourseTeacher(request.auth.uid, courseId) || isSuperAdmin(request.auth.uid));
-        allow create, update: if isSuperAdmin(request.auth.uid) || (isTeacher(request.auth.uid) && isCourseTeacher(request.auth.uid, courseId));
-        allow delete: if isSuperAdmin(request.auth.uid) || (isTeacher(request.auth.uid) && isCourseTeacher(request.auth.uid, courseId));
+        allow read: if isAuthenticated(); // Or more specific: if user is enrolled or teacher
+        allow create, update, delete: if isSuperAdmin() || (isTeacher() && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid);
       }
 
+      // Assignments Subcollection
       match /assignments/{assignmentId} {
-        allow read: if request.auth != null && (isEnrolled(request.auth.uid, courseId) || isCourseTeacher(request.auth.uid, courseId) || isSuperAdmin(request.auth.uid));
-        allow create, update: if isSuperAdmin(request.auth.uid) || (isTeacher(request.auth.uid) && isCourseTeacher(request.auth.uid, courseId));
-        allow delete: if isSuperAdmin(request.auth.uid) || (isTeacher(request.auth.uid) && isCourseTeacher(request.auth.uid, courseId));
+        allow read: if isAuthenticated(); // Or more specific: if user is enrolled or teacher
+        allow create, update, delete: if isSuperAdmin() || (isTeacher() && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid);
 
+        // Submissions Subcollection (under Assignments)
         match /submissions/{submissionId} {
-          allow read: if request.auth != null && (resource.data.studentId == request.auth.uid || isCourseTeacher(request.auth.uid, courseId) || isSuperAdmin(request.auth.uid));
-          allow create: if request.auth != null && resource.data.studentId == request.auth.uid && isEnrolled(request.auth.uid, courseId); // Student can create their own submission if enrolled
-          allow update: if request.auth != null && (isCourseTeacher(request.auth.uid, courseId) || isSuperAdmin(request.auth.uid)); // Teacher or SuperAdmin can update (e.g., grade)
-          // Delete might be restricted or allowed for admins/teachers
-          allow delete: if isSuperAdmin(request.auth.uid) || (isTeacher(request.auth.uid) && isCourseTeacher(request.auth.uid, courseId));
+          allow read: if isSuperAdmin() || (isTeacher() && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid) || (isStudent() && resource.data.studentId == request.auth.uid);
+          allow create: if isStudent() && request.resource.data.studentId == request.auth.uid; // Students can create their own submissions
+          allow update: if isSuperAdmin() || (isTeacher() && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid); // Teachers/Admins can update (e.g., grade)
+          // allow delete: if isSuperAdmin(); // Or teacher of the course
         }
       }
     }
 
+    // Enrollments Collection
     match /enrollments/{enrollmentId} {
-      // Student can read their own enrollment document
-      allow read: if request.auth.uid == resource.data.studentId;
-      // Authenticated users (e.g., admins via app logic) can create, update, delete
-      // For direct client write, you'd need more specific rules e.g. checking admin role or if user is teacher of the course.
-      // Current app logic implies admins or teachers initiate enroll/unenroll which updates course.studentIds AND manages enrollment docs.
-      allow write: if request.auth != null;
-      // Listing enrollments
-      // SuperAdmins can list all. Teachers can list enrollments for their courses.
-      // Students can list their own enrollments (covered by the read rule on individual docs when queried by studentId).
-      allow list: if request.auth != null &&
-                    (isSuperAdmin(request.auth.uid) ||
-                     (isTeacher(request.auth.uid) && get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.teacherId == request.auth.uid));
+      allow read: if isAuthenticated() && (isSuperAdmin() || isTeacher() || request.auth.uid == resource.data.studentId);
+      // Teachers might need a more specific rule to only read enrollments for their courses, if listing all enrollments directly.
+      // Example: isTeacher() && get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.teacherId == request.auth.uid
+      allow list: if isAuthenticated(); // Admins or specific logic for teachers
+      allow create, update, delete: if isSuperAdmin() || isTeacher(); // Admin/Teacher managed enrollments
     }
 
-    match /attendanceRecords/{recordId} {
-      allow read: if request.auth != null && (resource.data.studentId == request.auth.uid || isCourseTeacher(request.auth.uid, resource.data.courseId) || isSuperAdmin(request.auth.uid));
-      allow create, update, delete: if request.auth != null && (isCourseTeacher(request.auth.uid, resource.data.courseId) || isSuperAdmin(request.auth.uid));
-      allow list: if request.auth != null && (isSuperAdmin(request.auth.uid) || isTeacher(request.auth.uid)); // Teachers can list to find records for their courses.
+    // AttendanceRecords Collection
+    match /attendanceRecords/{attendanceRecordId} {
+      allow read: if isAuthenticated(); // Students can read their own, teachers their courses, admin all
+      // More specific read: isSuperAdmin() || (isTeacher() && get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.teacherId == request.auth.uid) || (isStudent() && resource.data.studentId == request.auth.uid)
+      allow create, update, delete: if isSuperAdmin() || isTeacher(); // Teachers manage attendance for their courses
     }
 
+    // Payments Collection
     match /payments/{paymentId} {
-      allow read: if request.auth != null && (resource.data.studentId == request.auth.uid || isSuperAdmin(request.auth.uid) || (isTeacher(request.auth.uid) && isCourseTeacher(request.auth.uid, resource.data.courseId)));
-      // Payments are typically recorded/managed by SuperAdmins
-      allow create, update, delete: if request.auth != null && isSuperAdmin(request.auth.uid);
-      allow list: if request.auth != null && (isSuperAdmin(request.auth.uid) || isTeacher(request.auth.uid)); // For teachers to see their course payments
+      allow read: if isSuperAdmin() || (isStudent() && resource.data.studentId == request.auth.uid);
+      // Teachers could potentially view payments for students in their courses if needed.
+      // Example: (isTeacher() && get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.teacherId == request.auth.uid && get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.studentIds.hasAny([resource.data.studentId]))
+      allow list: if isSuperAdmin(); // Only SuperAdmins list all payments directly
+      allow create, update, delete: if isSuperAdmin(); // Only SuperAdmins manage payment records directly
     }
 
+    // Notifications Collection (Consider user-specific subcollections or strict query rules if sensitive)
     match /notifications/{notificationId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow list: if request.auth != null; // User lists their own notifications via query `where('userId', '==', request.auth.uid)`
-      // Notifications are typically created by the system/admins/teachers, not directly by users marking their own as read.
-      // Updates (e.g., mark as read) are handled by app logic for the authenticated user.
-      allow create: if request.auth != null && (isSuperAdmin(request.auth.uid) || isTeacher(request.auth.uid)); // System/Admin/Teacher creates
-      allow update(markRead): if request.auth != null && resource.data.userId == request.auth.uid && request.resource.data.read == true && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-      allow delete: if request.auth != null && resource.data.userId == request.auth.uid; // User can delete their own notifications
+      allow read: if isOwner(resource.data.userId); // Users can only read their own notifications
+      allow create: if isAuthenticated(); // System or other users can create notifications (e.g., teacher notifying student)
+      allow update: if isOwner(resource.data.userId); // User can update their own (e.g., mark as read)
+      allow delete: if isOwner(resource.data.userId); // User can delete their own
     }
 
+    // Announcements Collection
     match /announcements/{announcementId} {
-      allow read: if request.auth != null; // All authenticated users can read announcements
-      // Site-wide announcements by SuperAdmin. Course announcements by course teacher or SuperAdmin.
-      allow create: if request.auth != null && isSuperAdmin(request.auth.uid);
-      // Allow update/delete by creator or SuperAdmin (assuming creator's ID might be stored if needed)
-      // For simplicity, only SuperAdmin can modify/delete for now.
-      allow update, delete: if request.auth != null && isSuperAdmin(request.auth.uid);
+      allow read: if isAuthenticated(); // All authenticated users can read announcements
+      allow create, update, delete: if isSuperAdmin() || isTeacher(); // Only SuperAdmin or teachers can manage announcements
     }
 
+    // DirectMessages Collection
     match /directMessages/{messageId} {
-      allow read: if request.auth != null && (request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.recipientId);
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.senderId; // Can only send as self
-      allow update: if request.auth != null && request.auth.uid == resource.data.recipientId && request.resource.data.read == true && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']); // Only recipient can mark as read
-      // Deletion can be complex (soft delete, delete for one user, etc.). Disallow direct client delete for now.
-      allow delete: if false;
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.recipientId);
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.senderId; // Can only send as yourself
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.recipientId && request.resource.data.read == true && resource.data.read == false; // Only recipient can mark as read
+      // allow delete: if false; // Typically, messages are not deleted or soft-deleted
     }
   }
 }
