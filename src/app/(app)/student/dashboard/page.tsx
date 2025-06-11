@@ -20,25 +20,25 @@ export default function StudentDashboardPage() {
   }, [enrollments, currentUser]);
 
   const enrolledCourseIds = useMemo(() => {
-    if (!currentUser) return [];
+    if (!currentUser) return []; // Guard based on currentUser for consistency
     return studentEnrollments.map(e => e.courseId);
-  }, [studentEnrollments, currentUser]);
+  }, [studentEnrollments, currentUser]); 
 
   const enrolledCourses = useMemo(() => {
-    if (!currentUser) return [];
+    if (!currentUser) return []; 
     return courses.filter(c => enrolledCourseIds.includes(c.id));
   }, [courses, enrolledCourseIds, currentUser]);
 
   const upcomingAssignments = useMemo(() => {
-    if (!currentUser) return [];
+    if (!currentUser) return []; 
     return assignments
       .filter(a => enrolledCourseIds.includes(a.courseId) && new Date(a.dueDate) >= new Date())
       .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
       .slice(0, 3);
-  }, [assignments, enrolledCourseIds, currentUser]);
+  }, [assignments, enrolledCourseIds, currentUser]); 
 
   const recentAnnouncements = useMemo(() => {
-    if (!currentUser) return [];
+    if (!currentUser) return []; 
     return (announcements || [])
       .filter(ann => ann.userId === currentUser.id || (ann.courseId && enrolledCourseIds.includes(ann.courseId)) || (ann.type === 'announcement' && ann.userId === undefined && !ann.courseId))
       .sort((a,b) => b.timestamp - a.timestamp)
@@ -46,10 +46,10 @@ export default function StudentDashboardPage() {
   }, [announcements, currentUser, enrolledCourseIds]);
 
   const recentlyGradedSubmissions = useMemo(() => {
-    if (!currentUser) return [];
+    if (!currentUser) return []; 
     return submissions
       .filter(sub => sub.studentId === currentUser.id && sub.grade !== undefined)
-      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()) // Assuming grading happens around submission time, or use a gradedAt timestamp if available
+      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()) 
       .slice(0, 3)
       .map(sub => {
         const assignment = assignments.find(a => a.id === sub.assignmentId);
@@ -63,24 +63,20 @@ export default function StudentDashboardPage() {
       });
   }, [submissions, assignments, courses, currentUser]);
 
+
   // Conditional returns now come AFTER all hook calls.
-  // ProtectedLayout should ideally handle redirection if !currentUser before this page renders.
   if (!currentUser && !isLoading) {
-    // This state indicates auth might be resolved, but no user. ProtectedLayout should redirect.
-    // Displaying a generic message here as direct navigation in render is an anti-pattern.
     return <p>Verifying authentication...</p>;
   }
 
-  if (isLoading || !currentUser) {
-    // This state indicates data is loading or user is definitively not available post-load attempt.
+  if (isLoading || !currentUser) { // This will catch currentUser being null after loading attempted
     return <p>Loading dashboard...</p>;
   }
-
-  // If we reach here, currentUser is available.
+  
   const quickLinks = [
     { name: "My Courses", href: "/student/courses", icon: BookOpen },
-    { name: "My Assignments", href: "/student/assignments", icon: Edit3 }, // This page doesn't exist yet, but is a good target
-    { name: "My Grades", href: "/student/grades", icon: GraduationCap }, // This page doesn't exist yet
+    { name: "My Assignments", href: "/student/courses", icon: Edit3 }, // Point to courses page, can filter later
+    { name: "My Grades", href: "/student/courses", icon: GraduationCap }, // Point to courses page for now
     { name: "My Attendance", href: "/student/attendance", icon: CalendarCheck },
     { name: "My Payments", href: "/student/payments", icon: DollarSign },
     { name: "View Calendar", href: "/calendar", icon: CalendarDays },
@@ -132,7 +128,7 @@ export default function StudentDashboardPage() {
             ) : (
               <div className="text-2xl font-bold">-</div>
             )}
-            {recentlyGradedSubmissions.length > 0 && <Link href="/student/grades" className="text-xs text-primary hover:underline mt-1 block">View all grades</Link>}
+            {recentlyGradedSubmissions.length > 0 && <Link href="/student/courses" className="text-xs text-primary hover:underline mt-1 block">View all grades</Link>}
             {recentlyGradedSubmissions.length === 0 && <p className="text-xs text-muted-foreground">No grades posted yet.</p>}
           </CardContent>
         </Card>

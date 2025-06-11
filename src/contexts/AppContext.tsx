@@ -58,8 +58,8 @@ const initialState: AppState = {
   users: [],
   courses: [],
   lessons: [],
-  assignments: [], // Initialize as empty, will be fetched
-  submissions: [], // Initialize as empty, will be fetched
+  assignments: [],
+  submissions: [],
   enrollments: [],
   attendanceRecords: [],
   payments: [],
@@ -105,11 +105,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         // Dynamically fetched data should not be overwritten here unless explicitly part of LOAD_DATA payload
         courses: action.payload.courses !== undefined ? action.payload.courses : state.courses,
         lessons: action.payload.lessons !== undefined ? action.payload.lessons : state.lessons,
-        // assignments and submissions are now fetched dynamically, so they should remain as is (empty initially)
-        // or be explicitly set if LOAD_DATA is meant to override them (which it isn't for these anymore).
         assignments: action.payload.assignments !== undefined ? action.payload.assignments : state.assignments,
         submissions: action.payload.submissions !== undefined ? action.payload.submissions : state.submissions,
-
         enrollments: action.payload.enrollments !== undefined ? action.payload.enrollments : state.enrollments,
         attendanceRecords: action.payload.attendanceRecords !== undefined ? action.payload.attendanceRecords : state.attendanceRecords,
         payments: action.payload.payments !== undefined ? action.payload.payments : state.payments,
@@ -309,8 +306,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         users: [],
         courses: [],
         lessons: [],
-        assignments: [], // Cleared
-        submissions: [], // Cleared
+        assignments: [],
+        submissions: [],
         enrollments: [],
         attendanceRecords: [],
         payments: [],
@@ -716,11 +713,14 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     }
     case ActionType.DELETE_PAYMENT_SUCCESS: {
       const { id } = action.payload;
+      const paymentToDelete = state.payments.find(p => p.id === id);
+      const student = state.users.find(u => u.id === paymentToDelete?.studentId);
+      const course = state.courses.find(c => c.id === paymentToDelete?.courseId);
       return {
         ...state,
         payments: state.payments.filter(p => p.id !== id),
         isLoading: false, error: null,
-        successMessage: `Payment record ${id} deleted successfully.`,
+        successMessage: `Payment record for ${student?.name} in ${course?.name} deleted.`,
       };
     }
 
@@ -812,11 +812,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     dispatch({ type: ActionType.LOAD_DATA, payload: {
-      // courses, lessons, assignments, submissions are now fetched dynamically
       enrollments: INITIAL_ENROLLMENTS,
       attendanceRecords: SAMPLE_ATTENDANCE,
       notifications: SAMPLE_NOTIFICATIONS,
-      // payments and announcements are also fetched dynamically
     } });
   }, [dispatch]);
 
@@ -885,7 +883,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const fetchAllAssignments = useCallback(async () => {
     if (!state.currentUser || state.courses.length === 0) {
-        dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] }); // Clear if no user/courses or ensure empty if called
+        dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
         return;
     }
     dispatch({ type: ActionType.FETCH_ASSIGNMENTS_REQUEST });
@@ -896,7 +894,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
         const allAssignments: Assignment[] = [];
-        for (const course of state.courses) { // state.courses should already be filtered by user role/enrollment
+        for (const course of state.courses) {
             const assignmentsColRef = collection(db, "courses", course.id, "assignments");
             const assignmentSnapshot = await getDocs(assignmentsColRef);
             assignmentSnapshot.forEach(doc => {
@@ -912,7 +910,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const fetchAllSubmissions = useCallback(async () => {
     if (!state.currentUser || state.assignments.length === 0) {
-        dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] }); // Clear if no user/assignments or ensure empty
+        dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
         return;
     }
     dispatch({ type: ActionType.FETCH_SUBMISSIONS_REQUEST });
@@ -928,11 +926,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const submissionsColRef = collection(db, "courses", assignment.courseId, "assignments", assignment.id, "submissions");
 
             let q = query(submissionsColRef);
-            // If the current user is a student, only fetch their own submissions for this assignment.
             if (state.currentUser.role === UserRole.STUDENT) {
                q = query(submissionsColRef, where("studentId", "==", state.currentUser.id));
             }
-            // Teachers/Admins will get all submissions for the assignments they can view (implicitly handled by state.assignments).
 
             const submissionSnapshot = await getDocs(q);
             submissionSnapshot.forEach(doc => {
@@ -954,16 +950,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.FETCH_PAYMENTS_FAILURE, payload: "Firestore not available to fetch payments." });
       return;
     }
+    if (!state.currentUser) {
+      dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] }); 
+      return;
+    }
+
     try {
+      let paymentsQuery;
       const paymentsCol = collection(db, "payments");
-      const paymentSnapshot = await getDocs(paymentsCol);
+
+      if (state.currentUser.role === UserRole.SUPER_ADMIN) {
+        paymentsQuery = query(paymentsCol);
+      } else if (state.currentUser.role === UserRole.STUDENT) {
+        paymentsQuery = query(paymentsCol, where("studentId", "==", state.currentUser.id));
+      } else {
+        // Teachers currently don't fetch all payments globally via this function.
+        // Their payment visibility is per-course.
+        dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
+        return;
+      }
+
+      const paymentSnapshot = await getDocs(paymentsQuery);
       const paymentsList = paymentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Payment));
       dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: paymentsList });
     } catch (error: any) {
       console.error("Error fetching payments:", error);
       dispatch({ type: ActionType.FETCH_PAYMENTS_FAILURE, payload: error.message || "Failed to fetch payments." });
     }
-  }, [dispatch]);
+  }, [dispatch, state.currentUser]);
 
   const fetchAllAnnouncements = useCallback(async () => {
     dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_REQUEST });
@@ -1059,19 +1073,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 await Promise.all([
                     fetchAllUsers(),
                     fetchAllCourses(),
-                    fetchAllPayments(),
+                    fetchAllPayments(), // This will now be role-aware
                     fetchAllAnnouncements(),
                     fetchDirectMessagesForUser(userProfile.id)
                 ]);
-                // Lessons, Assignments, and Submissions will be fetched by their own useEffects
-                // once currentUser and courses/assignments are populated.
             } else {
                 dispatch({ type: ActionType.SET_LOADING, payload: false });
             }
           } else {
             await signOut(authInstance);
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-            // Clear all fetched data
             dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
             dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
             dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
@@ -1085,7 +1096,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch (error: any) {
           dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-           // Clear all fetched data on error too
           dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
           dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
           dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
@@ -1099,7 +1109,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       } else {
         dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-         // Clear all fetched data on logout
         dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
@@ -1114,16 +1123,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => unsubscribe();
   }, [dispatch, fetchAllUsers, fetchAllCourses, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser]);
 
-  // useEffect for fetching lessons (depends on courses)
   useEffect(() => {
-    if (state.currentUser && state.courses.length > 0) { // Check if lessons need fetching
+    if (state.currentUser && state.courses.length > 0) {
       fetchAllLessons();
     } else if (!state.currentUser) {
         dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
     }
   }, [state.currentUser, state.courses, fetchAllLessons, dispatch]);
 
-  // useEffect for fetching assignments (depends on courses)
   useEffect(() => {
       if (state.currentUser && state.courses.length > 0) {
           fetchAllAssignments();
@@ -1132,7 +1139,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
   }, [state.currentUser, state.courses, fetchAllAssignments, dispatch]);
 
-  // useEffect for fetching submissions (depends on assignments)
   useEffect(() => {
       if (state.currentUser && state.assignments.length > 0) {
           fetchAllSubmissions();
@@ -1432,8 +1438,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       await deleteDoc(doc(db, "courses", payload.id));
-      // Cascading deletes of subcollections (lessons, assignments, submissions) should be handled by Firebase Functions or carefully client-side if necessary.
-      // For now, only the course document is deleted. Local state is updated in reducer.
       dispatch({ type: ActionType.DELETE_COURSE_SUCCESS, payload });
     } catch (error: any) {
       dispatch({ type: ActionType.DELETE_COURSE_FAILURE, payload: error.message || "Failed to delete course."});
