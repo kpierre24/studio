@@ -106,6 +106,42 @@ export default function TeacherCourseDetailPage() {
   const [selectedAssignmentForGrading, setSelectedAssignmentForGrading] = useState<Assignment | null>(null);
   const [gradingFormsData, setGradingFormsData] = useState<Record<string, GradingFormData>>({});
 
+  const studentPaymentInfo = useMemo(() => {
+    if (!course) return [];
+    return course.studentIds.map(studentId => {
+      const student = users.find(u => u.id === studentId);
+      const studentPaymentsForCourse = payments.filter(p => p.studentId === studentId && p.courseId === course.id && p.status === PaymentStatus.PAID);
+      const totalPaid = studentPaymentsForCourse.reduce((sum, p) => sum + p.amount, 0);
+      const amountOwed = Math.max(0, (course.cost || 0) - totalPaid);
+      let status: string;
+      let statusVariant: "default" | "secondary" | "destructive" | "outline" = "secondary";
+
+      if ((course.cost || 0) === 0) {
+        status = "Free Course";
+        statusVariant = "outline";
+      } else if (totalPaid >= (course.cost || 0)) {
+        status = "Fully Paid";
+        statusVariant = "default";
+        if (totalPaid > (course.cost || 0)) status = "Overpaid";
+      } else if (totalPaid > 0) {
+        status = "Partially Paid";
+        statusVariant = "secondary";
+      } else {
+        status = "Not Paid";
+        statusVariant = "destructive";
+      }
+      
+      return {
+        studentId,
+        studentName: student?.name || "Unknown Student",
+        studentEmail: student?.email || "N/A",
+        totalPaid,
+        amountOwed,
+        status,
+        statusVariant,
+      };
+    });
+  }, [course, users, payments]);
 
   useEffect(() => {
     const foundCourse = courses.find(c => c.id === courseId);
@@ -328,43 +364,6 @@ export default function TeacherCourseDetailPage() {
   };
 
   const courseBannerSrc = course.bannerImageUrl || `https://placehold.co/1200x400.png?text=${encodeURIComponent(course.name)}`;
-
-  const studentPaymentInfo = useMemo(() => {
-    if (!course) return [];
-    return course.studentIds.map(studentId => {
-      const student = users.find(u => u.id === studentId);
-      const studentPaymentsForCourse = payments.filter(p => p.studentId === studentId && p.courseId === course.id && p.status === PaymentStatus.PAID);
-      const totalPaid = studentPaymentsForCourse.reduce((sum, p) => sum + p.amount, 0);
-      const amountOwed = Math.max(0, (course.cost || 0) - totalPaid);
-      let status: string;
-      let statusVariant: "default" | "secondary" | "destructive" | "outline" = "secondary";
-
-      if ((course.cost || 0) === 0) {
-        status = "Free Course";
-        statusVariant = "outline";
-      } else if (totalPaid >= (course.cost || 0)) {
-        status = "Fully Paid";
-        statusVariant = "default";
-        if (totalPaid > (course.cost || 0)) status = "Overpaid";
-      } else if (totalPaid > 0) {
-        status = "Partially Paid";
-        statusVariant = "secondary";
-      } else {
-        status = "Not Paid";
-        statusVariant = "destructive";
-      }
-      
-      return {
-        studentId,
-        studentName: student?.name || "Unknown Student",
-        studentEmail: student?.email || "N/A",
-        totalPaid,
-        amountOwed,
-        status,
-        statusVariant,
-      };
-    });
-  }, [course, users, payments]);
 
 
   return (
@@ -875,3 +874,4 @@ export default function TeacherCourseDetailPage() {
     </div>
   );
 }
+
