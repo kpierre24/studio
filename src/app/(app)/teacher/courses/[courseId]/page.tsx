@@ -73,6 +73,9 @@ interface GradingFormData {
 
 
 export default function TeacherCourseDetailPage() {
+  // Using useParams hook and destructuring to get specific route parameters.
+  // This pattern is standard for client components and avoids enumerating the entire params object,
+  // which can sometimes trigger Next.js warnings about dynamic APIs.
   const { courseId } = useParams() as { courseId: string };
   const router = useRouter();
   const {
@@ -91,21 +94,7 @@ export default function TeacherCourseDetailPage() {
   const { toast } = useToast();
 
   const [course, setCourse] = useState<Course | null>(null);
-  const courseLessons = useMemo(() => lessons.filter(l => l.courseId === courseId).sort((a, b) => a.order - b.order), [lessons, courseId]);
-  const courseAssignments = useMemo(() => assignments.filter(a => a.courseId === courseId).sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [assignments, courseId]);
-
-  const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
-  const [lessonToDelete, setLessonToDelete] = useState<Lesson | null>(null);
-  const [lessonFormData, setLessonFormData] = useState<LessonFormData>(initialLessonFormData);
-
-  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
-  const [assignmentToDelete, setAssignmentToDelete] = useState<Assignment | null>(null);
-  const [assignmentFormData, setAssignmentFormData] = useState<AssignmentFormData>(initialAssignmentFormData);
-
-  const [isGradingModalOpen, setIsGradingModalOpen] = useState(false);
-  const [selectedAssignmentForGrading, setSelectedAssignmentForGrading] = useState<Assignment | null>(null);
-  const [gradingFormsData, setGradingFormsData] = useState<Record<string, GradingFormData>>({});
-
+  
   const studentPaymentInfo = useMemo(() => {
     if (!course) return [];
     return course.studentIds.map(studentId => {
@@ -142,6 +131,22 @@ export default function TeacherCourseDetailPage() {
       };
     });
   }, [course, users, payments]);
+
+  const courseLessons = useMemo(() => lessons.filter(l => l.courseId === courseId).sort((a, b) => a.order - b.order), [lessons, courseId]);
+  const courseAssignments = useMemo(() => assignments.filter(a => a.courseId === courseId).sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [assignments, courseId]);
+
+  const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
+  const [lessonToDelete, setLessonToDelete] = useState<Lesson | null>(null);
+  const [lessonFormData, setLessonFormData] = useState<LessonFormData>(initialLessonFormData);
+
+  const [isAssignmentModalOpen, setIsAssignmentModalOpen] = useState(false);
+  const [assignmentToDelete, setAssignmentToDelete] = useState<Assignment | null>(null);
+  const [assignmentFormData, setAssignmentFormData] = useState<AssignmentFormData>(initialAssignmentFormData);
+
+  const [isGradingModalOpen, setIsGradingModalOpen] = useState(false);
+  const [selectedAssignmentForGrading, setSelectedAssignmentForGrading] = useState<Assignment | null>(null);
+  const [gradingFormsData, setGradingFormsData] = useState<Record<string, GradingFormData>>({});
+
 
   useEffect(() => {
     const foundCourse = courses.find(c => c.id === courseId);
