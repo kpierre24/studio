@@ -24,6 +24,7 @@ export default function AdminDashboardPage() {
     { name: "Manage Users", href: "/admin/users", icon: Users, description: "View and manage all user accounts." },
     { name: "Manage Courses", href: "/admin/courses", icon: BookOpen, description: "Oversee all courses in the system." },
     { name: "Manage Enrollments", href: "/admin/enrollments", icon: UserPlus, description: "Bulk enroll/unenroll students." },
+    { name: "Manage Payments", href: "/admin/payments", icon: DollarSign, description: "Track and manage all payments." },
     { name: "Attendance Records", href: "/admin/attendance", icon: CalendarCheck, description: "View all attendance data." },
     { name: "Site Settings", href: "/admin/settings", icon: Settings, description: "Configure application-wide settings." },
     { name: "View Reports", href: "/admin/reports", icon: BarChart2, description: "Access system usage and analytics." },
@@ -131,3 +132,4 @@ export default function AdminDashboardPage() {
   );
 }
 
+    
