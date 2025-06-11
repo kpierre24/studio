@@ -7,7 +7,7 @@ import { useAppContext } from '@/contexts/AppContext';
 import { ActionType, UserRole, type NotificationMessage } from '@/types';
 import { Button } from '@/components/ui/button';
 import { APP_NAME } from '@/lib/constants';
-import { Bell, LogOut, UserCircle, Settings, LayoutDashboard, BookOpen, Edit3, BarChart2, DollarSign, Users, GraduationCap, AnnoyedIcon, CalendarDays, CalendarCheck } from 'lucide-react';
+import { Bell, LogOut, UserCircle, Settings, LayoutDashboard, BookOpen, Edit3, BarChart2, DollarSign, Users, GraduationCap, AnnoyedIcon, CalendarDays, CalendarCheck, MessageSquare } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,7 +24,7 @@ import { formatDistanceToNowStrict } from 'date-fns';
 
 export function Navbar() {
   const { state, dispatch, handleLogoutUser: contextHandleLogoutUser } = useAppContext(); // Renamed to avoid conflict in this file
-  const { currentUser, notifications } = state;
+  const { currentUser, notifications, directMessages } = state;
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -33,6 +33,8 @@ export function Navbar() {
   };
 
   const unreadNotificationsCount = notifications.filter(n => !n.read).length;
+  const unreadMessagesCount = directMessages.filter(dm => dm.recipientId === currentUser?.id && !dm.read).length;
+
 
   const handleNotificationClick = (notification: NotificationMessage) => {
     if (!notification.read) {
@@ -54,6 +56,7 @@ export function Navbar() {
       case 'announcement': return <BookOpen className="w-4 h-4 text-indigo-500" />;
       case 'payment_due': return <DollarSign className="w-4 h-4 text-orange-500" />;
       case 'payment_received': return <DollarSign className="w-4 h-4 text-green-500" />;
+      case 'new_message': return <MessageSquare className="w-4 h-4 text-cyan-500" />;
       default: return <Bell className="w-4 h-4" />;
     }
   };
@@ -74,6 +77,15 @@ export function Navbar() {
                 {/* Common Links */}
                 <Link href="/announcements" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Announcements</Link>
                 <Link href="/calendar" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Calendar</Link>
+                <Link href="/messages" className="text-sm font-medium text-foreground hover:text-primary transition-colors relative">
+                  Messages
+                  {unreadMessagesCount > 0 && (
+                    <Badge variant="destructive" className="absolute -top-2 -right-3 h-4 w-4 p-0 flex items-center justify-center text-xs rounded-full">
+                      {unreadMessagesCount}
+                    </Badge>
+                  )}
+                </Link>
+
 
                 {/* Role-Specific Links */}
                 {currentUser.role === UserRole.SUPER_ADMIN && (
@@ -184,6 +196,7 @@ export function Navbar() {
                        <DropdownMenuLabel>Navigation</DropdownMenuLabel>
                         <DropdownMenuItem onClick={() => router.push('/announcements')}>Announcements</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => router.push('/calendar')}>Calendar</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => router.push('/messages')}>Messages</DropdownMenuItem>
                         {currentUser.role === UserRole.STUDENT && <DropdownMenuItem onClick={() => router.push('/student/payments')}>Payments</DropdownMenuItem>}
                       {/* Add more role specific mobile nav links here */}
                       <DropdownMenuSeparator />

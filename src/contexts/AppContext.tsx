@@ -29,12 +29,15 @@ import {
   writeBatch, 
   arrayUnion,
   arrayRemove,
+  orderBy,
+  serverTimestamp, // For Firestore server-side timestamps if needed
+  Timestamp, // For client-side timestamp creation consistent with Firestore
   type Firestore 
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, Payment, RecordPaymentPayload, UpdatePaymentPayload, DeletePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem, Enrollment, EnrollStudentPayload, EnrollStudentSuccessPayload, UnenrollStudentPayload, UnenrollStudentSuccessPayload, AdminUpdateOrCreateSubmissionPayload } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, Payment, RecordPaymentPayload, UpdatePaymentPayload, DeletePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem, Enrollment, EnrollStudentPayload, EnrollStudentSuccessPayload, UnenrollStudentPayload, UnenrollStudentSuccessPayload, AdminUpdateOrCreateSubmissionPayload, CreateAnnouncementPayload, DirectMessage, CreateDirectMessagePayload, MarkDirectMessageReadPayload } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 import { 
   SAMPLE_COURSES, 
@@ -62,6 +65,7 @@ const initialState: AppState = {
   payments: [],
   notifications: [],
   announcements: [],
+  directMessages: [],
   isLoading: true, 
   error: null,
   successMessage: null,
@@ -99,8 +103,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         courses: action.payload.courses || state.courses,
-        lessons: action.payload.lessons || state.lessons,
-        assignments: action.payload.assignments || state.assignments,
+        // lessons: action.payload.lessons || state.lessons, // Now fetched dynamically
+        assignments: action.payload.assignments || state.assignments, 
         submissions: (action.payload.submissions || state.submissions).map(submission => {
           if (submission.assignmentId) {
             const assignment = (action.payload.assignments || state.assignments).find(a => a.id === submission.assignmentId);
@@ -122,9 +126,9 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         }),
         enrollments: action.payload.enrollments || state.enrollments,
         attendanceRecords: action.payload.attendanceRecords || state.attendanceRecords,
-        payments: action.payload.payments || state.payments, 
+        // payments: action.payload.payments || state.payments, // Now fetched dynamically
         notifications: action.payload.notifications || state.notifications,
-        announcements: action.payload.announcements || state.announcements,
+        // announcements: action.payload.announcements || state.announcements, // Now fetched dynamically
       };
     }
     
@@ -155,6 +159,61 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return { ...state, payments: action.payload, isLoading: false, error: null };
     case ActionType.FETCH_PAYMENTS_FAILURE:
       return { ...state, isLoading: false, error: action.payload };
+      
+    case ActionType.FETCH_ANNOUNCEMENTS_REQUEST:
+      return { ...state, isLoading: true, error: null };
+    case ActionType.FETCH_ANNOUNCEMENTS_SUCCESS:
+      return { ...state, announcements: action.payload.sort((a,b) => b.timestamp - a.timestamp), isLoading: false, error: null };
+    case ActionType.FETCH_ANNOUNCEMENTS_FAILURE:
+      return { ...state, isLoading: false, error: action.payload };
+
+    case ActionType.CREATE_ANNOUNCEMENT_REQUEST:
+      return { ...state, isLoading: true, error: null };
+    case ActionType.CREATE_ANNOUNCEMENT_SUCCESS:
+      return { 
+        ...state, 
+        announcements: [action.payload, ...state.announcements].sort((a,b) => b.timestamp - a.timestamp), 
+        isLoading: false, 
+        error: null, 
+        successMessage: 'Announcement created successfully.' 
+      };
+    case ActionType.CREATE_ANNOUNCEMENT_FAILURE:
+      return { ...state, isLoading: false, error: action.payload };
+      
+    case ActionType.FETCH_DIRECT_MESSAGES_REQUEST:
+      return { ...state, isLoading: true, error: null };
+    case ActionType.FETCH_DIRECT_MESSAGES_SUCCESS:
+      return { ...state, directMessages: action.payload.sort((a,b) => a.timestamp - b.timestamp), isLoading: false, error: null };
+    case ActionType.FETCH_DIRECT_MESSAGES_FAILURE:
+      return { ...state, isLoading: false, error: action.payload };
+
+    case ActionType.SEND_DIRECT_MESSAGE_REQUEST:
+      return { ...state, isLoading: true, error: null };
+    case ActionType.SEND_DIRECT_MESSAGE_SUCCESS:
+      return { 
+        ...state, 
+        directMessages: [...state.directMessages, action.payload].sort((a,b) => a.timestamp - b.timestamp), 
+        isLoading: false, 
+        error: null, 
+        successMessage: 'Message sent.' 
+      };
+    case ActionType.SEND_DIRECT_MESSAGE_FAILURE:
+      return { ...state, isLoading: false, error: action.payload };
+
+    case ActionType.MARK_DIRECT_MESSAGE_READ_REQUEST:
+        return { ...state, isLoading: true, error: null };
+    case ActionType.MARK_DIRECT_MESSAGE_READ_SUCCESS:
+        return {
+            ...state,
+            directMessages: state.directMessages.map(dm => 
+                dm.id === action.payload.messageId ? { ...dm, read: true } : dm
+            ),
+            isLoading: false,
+            error: null,
+        };
+    case ActionType.MARK_DIRECT_MESSAGE_READ_FAILURE:
+        return { ...state, isLoading: false, error: action.payload };
+
 
     case ActionType.LOGIN_USER_REQUEST:
     case ActionType.REGISTER_STUDENT_REQUEST:
@@ -234,6 +293,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         attendanceRecords: [],
         payments: [],
         announcements: [], 
+        directMessages: [],
         currentUser: null, 
         isLoading: false, 
         successMessage: 'Logged out successfully.' 
@@ -717,6 +777,9 @@ const AppContext = createContext<{
   handleRecordPayment: (payload: RecordPaymentPayload) => Promise<void>;
   handleUpdatePayment: (payload: UpdatePaymentPayload) => Promise<void>;
   handleDeletePayment: (payload: DeletePaymentPayload) => Promise<void>;
+  handleCreateAnnouncement: (payload: CreateAnnouncementPayload) => Promise<void>;
+  handleSendDirectMessage: (payload: CreateDirectMessagePayload) => Promise<void>;
+  handleMarkMessageRead: (payload: MarkDirectMessageReadPayload) => Promise<void>;
 
 } | undefined>(undefined);
 
@@ -728,14 +791,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     dispatch({ type: ActionType.LOAD_DATA, payload: {
       // courses: SAMPLE_COURSES, // Now fetched
-      lessons: SAMPLE_LESSONS, // Still sample, will be fetched per course
+      // lessons: SAMPLE_LESSONS, // Now fetched dynamically
       assignments: SAMPLE_ASSIGNMENTS, 
       submissions: SAMPLE_SUBMISSIONS, 
       enrollments: INITIAL_ENROLLMENTS, 
       attendanceRecords: SAMPLE_ATTENDANCE, 
-      // payments: SAMPLE_PAYMENTS, // Now fetched
+      // payments: SAMPLE_PAYMENTS, // Now fetched dynamically
       notifications: SAMPLE_NOTIFICATIONS, 
-      announcements: SAMPLE_ANNOUNCEMENTS, 
+      // announcements: SAMPLE_ANNOUNCEMENTS, // Now fetched dynamically
     } }); 
   }, [dispatch]);
 
@@ -776,25 +839,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [dispatch]);
 
   const fetchAllLessons = useCallback(async () => {
+    if (state.courses.length === 0) {
+        dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] }); 
+        return;
+    }
     dispatch({ type: ActionType.FETCH_LESSONS_REQUEST });
     const db = getFirebaseDb();
     if (!db) {
       dispatch({ type: ActionType.FETCH_LESSONS_FAILURE, payload: "Firestore not available to fetch lessons." });
       return;
     }
-    if (state.courses.length === 0) {
-        dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] }); 
-        return;
-    }
     try {
       const allLessons: Lesson[] = [];
-      for (const course of state.courses) {
+      // Using Promise.all to fetch lessons for all courses concurrently
+      await Promise.all(state.courses.map(async (course) => {
         const lessonsColRef = collection(db, "courses", course.id, "lessons");
         const lessonSnapshot = await getDocs(lessonsColRef);
         lessonSnapshot.forEach(doc => {
           allLessons.push({ id: doc.id, courseId: course.id, ...doc.data() } as Lesson);
         });
-      }
+      }));
       dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: allLessons.sort((a,b) => a.order - b.order) });
     } catch (error: any) {
       console.error("Error fetching lessons:", error);
@@ -817,6 +881,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error: any) {
       console.error("Error fetching payments:", error);
       dispatch({ type: ActionType.FETCH_PAYMENTS_FAILURE, payload: error.message || "Failed to fetch payments." });
+    }
+  }, [dispatch]);
+
+  const fetchAllAnnouncements = useCallback(async () => {
+    dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_FAILURE, payload: "Firestore not available to fetch announcements." });
+      return;
+    }
+    try {
+      const announcementsCol = collection(db, "announcements");
+      const q = query(announcementsCol, orderBy("timestamp", "desc")); // Fetch ordered
+      const announcementSnapshot = await getDocs(q);
+      const announcementsList = announcementSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Announcement));
+      dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: announcementsList });
+    } catch (error: any) {
+      console.error("Error fetching announcements:", error);
+      dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_FAILURE, payload: error.message || "Failed to fetch announcements." });
+    }
+  }, [dispatch]);
+  
+  const fetchDirectMessagesForUser = useCallback(async (userId: string) => {
+    dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_FAILURE, payload: "Firestore not available to fetch messages." });
+      return;
+    }
+    try {
+      const messagesSentQuery = query(collection(db, "directMessages"), where("senderId", "==", userId));
+      const messagesReceivedQuery = query(collection(db, "directMessages"), where("recipientId", "==", userId));
+
+      const [sentSnapshot, receivedSnapshot] = await Promise.all([
+        getDocs(messagesSentQuery),
+        getDocs(messagesReceivedQuery)
+      ]);
+
+      const messagesList: DirectMessage[] = [];
+      const messageIds = new Set<string>(); // To avoid duplicates if a user messages themselves (unlikely but possible)
+
+      sentSnapshot.forEach(doc => {
+        if (!messageIds.has(doc.id)) {
+          messagesList.push({ id: doc.id, ...doc.data() } as DirectMessage);
+          messageIds.add(doc.id);
+        }
+      });
+      receivedSnapshot.forEach(doc => {
+         if (!messageIds.has(doc.id)) {
+          messagesList.push({ id: doc.id, ...doc.data() } as DirectMessage);
+          messageIds.add(doc.id);
+        }
+      });
+      
+      dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: messagesList.sort((a,b) => a.timestamp - b.timestamp) });
+    } catch (error: any) {
+      console.error("Error fetching direct messages:", error);
+      dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_FAILURE, payload: error.message || "Failed to fetch direct messages." });
     }
   }, [dispatch]);
 
@@ -853,10 +975,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const userProfile = { id: userDocSnap.id, ...userDocSnap.data() } as User;
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
             if (userProfile) { 
-                await fetchAllUsers(); 
-                await fetchAllCourses(); 
-                await fetchAllPayments(); 
-            } else {
+                await Promise.all([
+                    fetchAllUsers(), 
+                    fetchAllCourses(), 
+                    fetchAllPayments(),
+                    fetchAllAnnouncements(),
+                    fetchDirectMessagesForUser(userProfile.id)
+                ]);
+            } else { // Should not happen if userProfile is valid
                 dispatch({ type: ActionType.SET_LOADING, payload: false }); 
             }
           } else {
@@ -866,6 +992,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
             dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
             dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
             dispatch({ type: ActionType.SET_ERROR, payload: "User profile not found in database. Signed out." });
             dispatch({ type: ActionType.SET_LOADING, payload: false });
           }
@@ -875,6 +1003,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
           dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
           dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
+          dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
+          dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
           dispatch({ type: ActionType.SET_ERROR, payload: error.message || "Failed to load user profile." });
           dispatch({ type: ActionType.SET_LOADING, payload: false });
         }
@@ -884,17 +1014,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
+        dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
+        dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
         dispatch({ type: ActionType.SET_LOADING, payload: false });
       }
     });
     return () => unsubscribe();
-  }, [dispatch, fetchAllUsers, fetchAllCourses, fetchAllPayments]); 
+  }, [dispatch, fetchAllUsers, fetchAllCourses, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser]); 
 
   useEffect(() => {
-    if (state.currentUser && state.courses.length > 0) {
+    if (state.currentUser && state.courses.length > 0 && state.lessons.length === 0) { // Only fetch lessons if not already populated
       fetchAllLessons();
     }
-  }, [state.currentUser, state.courses, fetchAllLessons]);
+  }, [state.currentUser, state.courses, state.lessons, fetchAllLessons]);
 
 
   useEffect(() => {
@@ -918,6 +1050,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       if (!payload.password) throw new Error("Password is required.");
       await signInWithEmailAndPassword(authInstance, payload.email, payload.password);
+      // User profile and data fetching will be handled by onAuthStateChanged
     } catch (error: any) {
       dispatch({ type: ActionType.LOGIN_USER_FAILURE, payload: error.message || "Failed to login." });
     }
@@ -944,7 +1077,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png?text=${payload.name.substring(0,2).toUpperCase()}`,
       };
       await setDoc(doc(dbInstance, "users", firebaseUser.uid), newUserForFirestore);
-      dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [...state.users, newUserForFirestore] });
+      // Don't dispatch SET_CURRENT_USER here; onAuthStateChanged will handle it.
+      // We can update the local users list optimistically if needed or rely on fetchAllUsers.
+      dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [...state.users, newUserForFirestore] }); // Optimistic update
       dispatch({ type: ActionType.ADD_NOTIFICATION, payload: {
         userId: firebaseUser.uid, type: 'success',
         message: `Welcome to ${APP_NAME}, ${newUserForFirestore.name}! Account created.`
@@ -1507,7 +1642,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       firestoreUpdateData.rubric = (payload.rubric && payload.rubric.length > 0) ? payload.rubric : null;
       firestoreUpdateData.externalLink = payload.externalLink || null;
       
-      if (uploadedFileUrl !== undefined) { // Check against undefined, as null is a valid value to set
+      if (uploadedFileUrl !== undefined) { 
         firestoreUpdateData.assignmentFileUrl = uploadedFileUrl;
         firestoreUpdateData.assignmentFileName = uploadedFileName;
       } else if (payload.assignmentFile === null && payload.assignmentFileUrl === undefined) {
@@ -1717,15 +1852,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const paymentRef = doc(db, "payments", payload.id);
       const updateData: Partial<Payment> = { ...payload };
-      delete updateData.id; // ID is not part of the update payload itself for the doc
+      delete updateData.id; 
 
-      // Ensure paymentDate is only updated if provided in payload
       if (payload.paymentDate === undefined) {
         delete updateData.paymentDate;
       }
 
       await updateDoc(paymentRef, updateData);
-      // For local state, we need the full updated object to reflect changes
       const updatedPaymentForState = { ...state.payments.find(p => p.id === payload.id), ...payload } as Payment;
       dispatch({ type: ActionType.UPDATE_PAYMENT_SUCCESS, payload: updatedPaymentForState });
     } catch (error: any) {
@@ -1747,6 +1880,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.DELETE_PAYMENT_FAILURE, payload: error.message || "Failed to delete payment." });
     }
   }, [dispatch]);
+  
+  const handleCreateAnnouncement = useCallback(async (payload: CreateAnnouncementPayload) => {
+    dispatch({ type: ActionType.CREATE_ANNOUNCEMENT_REQUEST });
+    const db = getFirebaseDb();
+    if(!db) {
+        dispatch({ type: ActionType.CREATE_ANNOUNCEMENT_FAILURE, payload: "Firestore not available." });
+        return;
+    }
+    try {
+        const announcementId = doc(collection(db, "announcements")).id;
+        const newAnnouncement: Announcement = {
+            ...payload,
+            id: announcementId,
+            timestamp: Date.now(),
+        };
+        await setDoc(doc(db, "announcements", announcementId), newAnnouncement);
+        dispatch({ type: ActionType.CREATE_ANNOUNCEMENT_SUCCESS, payload: newAnnouncement});
+
+    } catch (error: any) {
+        dispatch({ type: ActionType.CREATE_ANNOUNCEMENT_FAILURE, payload: error.message || "Failed to create announcement."});
+    }
+  }, [dispatch]);
+
+  const handleSendDirectMessage = useCallback(async (payload: CreateDirectMessagePayload) => {
+    if (!state.currentUser) {
+      dispatch({ type: ActionType.SEND_DIRECT_MESSAGE_FAILURE, payload: "User not authenticated." });
+      return;
+    }
+    dispatch({ type: ActionType.SEND_DIRECT_MESSAGE_REQUEST });
+    const db = getFirebaseDb();
+    if(!db) {
+        dispatch({ type: ActionType.SEND_DIRECT_MESSAGE_FAILURE, payload: "Firestore not available." });
+        return;
+    }
+    try {
+        const messageId = doc(collection(db, "directMessages")).id;
+        const newMessage: DirectMessage = {
+            ...payload,
+            id: messageId,
+            senderId: state.currentUser.id,
+            timestamp: Date.now(),
+            read: false,
+        };
+        await setDoc(doc(db, "directMessages", messageId), newMessage);
+        dispatch({ type: ActionType.SEND_DIRECT_MESSAGE_SUCCESS, payload: newMessage });
+        
+        // Send notification to recipient
+        const recipientUser = state.users.find(u => u.id === payload.recipientId);
+        if (recipientUser) {
+           dispatch({ 
+             type: ActionType.ADD_NOTIFICATION, 
+             payload: { 
+               userId: payload.recipientId, 
+               type: 'new_message', 
+               message: `New message from ${state.currentUser.name}: "${payload.content.substring(0,30)}..."`,
+               link: '/messages' // Or specific message link later
+            }
+          });
+        }
+
+    } catch (error: any) {
+        dispatch({ type: ActionType.SEND_DIRECT_MESSAGE_FAILURE, payload: error.message || "Failed to send message."});
+    }
+  }, [dispatch, state.currentUser, state.users]);
+  
+  const handleMarkMessageRead = useCallback(async (payload: MarkDirectMessageReadPayload) => {
+    dispatch({ type: ActionType.MARK_DIRECT_MESSAGE_READ_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+        dispatch({ type: ActionType.MARK_DIRECT_MESSAGE_READ_FAILURE, payload: "Firestore not available." });
+        return;
+    }
+    try {
+        const messageRef = doc(db, "directMessages", payload.messageId);
+        await updateDoc(messageRef, { read: true });
+        dispatch({ type: ActionType.MARK_DIRECT_MESSAGE_READ_SUCCESS, payload });
+    } catch (error: any) {
+        dispatch({ type: ActionType.MARK_DIRECT_MESSAGE_READ_FAILURE, payload: error.message || "Failed to mark message as read." });
+    }
+  }, [dispatch]);
+
 
   const contextValue = {
     state,
@@ -1778,6 +1992,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     handleRecordPayment,
     handleUpdatePayment,
     handleDeletePayment,
+    handleCreateAnnouncement,
+    handleSendDirectMessage,
+    handleMarkMessageRead,
   };
 
   return (

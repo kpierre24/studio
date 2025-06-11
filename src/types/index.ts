@@ -163,6 +163,25 @@ export enum ActionType {
   DELETE_PAYMENT_REQUEST = 'DELETE_PAYMENT_REQUEST',
   DELETE_PAYMENT_SUCCESS = 'DELETE_PAYMENT_SUCCESS',
   DELETE_PAYMENT_FAILURE = 'DELETE_PAYMENT_FAILURE',
+
+  // Announcements
+  FETCH_ANNOUNCEMENTS_REQUEST = 'FETCH_ANNOUNCEMENTS_REQUEST',
+  FETCH_ANNOUNCEMENTS_SUCCESS = 'FETCH_ANNOUNCEMENTS_SUCCESS',
+  FETCH_ANNOUNCEMENTS_FAILURE = 'FETCH_ANNOUNCEMENTS_FAILURE',
+  CREATE_ANNOUNCEMENT_REQUEST = 'CREATE_ANNOUNCEMENT_REQUEST',
+  CREATE_ANNOUNCEMENT_SUCCESS = 'CREATE_ANNOUNCEMENT_SUCCESS',
+  CREATE_ANNOUNCEMENT_FAILURE = 'CREATE_ANNOUNCEMENT_FAILURE',
+
+  // Direct Messaging
+  FETCH_DIRECT_MESSAGES_REQUEST = 'FETCH_DIRECT_MESSAGES_REQUEST',
+  FETCH_DIRECT_MESSAGES_SUCCESS = 'FETCH_DIRECT_MESSAGES_SUCCESS',
+  FETCH_DIRECT_MESSAGES_FAILURE = 'FETCH_DIRECT_MESSAGES_FAILURE',
+  SEND_DIRECT_MESSAGE_REQUEST = 'SEND_DIRECT_MESSAGE_REQUEST',
+  SEND_DIRECT_MESSAGE_SUCCESS = 'SEND_DIRECT_MESSAGE_SUCCESS',
+  SEND_DIRECT_MESSAGE_FAILURE = 'SEND_DIRECT_MESSAGE_FAILURE',
+  MARK_DIRECT_MESSAGE_READ_REQUEST = 'MARK_DIRECT_MESSAGE_READ_REQUEST',
+  MARK_DIRECT_MESSAGE_READ_SUCCESS = 'MARK_DIRECT_MESSAGE_READ_SUCCESS',
+  MARK_DIRECT_MESSAGE_READ_FAILURE = 'MARK_DIRECT_MESSAGE_READ_FAILURE',
 }
 
 // Interfaces
@@ -284,7 +303,7 @@ export interface NotificationMessage {
   id: string;
   userId?: string; 
   courseId?: string; 
-  type: 'success' | 'error' | 'info' | 'warning' | 'new_assignment' | 'grade_update' | 'announcement' | 'payment_due' | 'payment_received' | 'submission_received' | 'submission_graded' | 'enrollment_update';
+  type: 'success' | 'error' | 'info' | 'warning' | 'new_assignment' | 'grade_update' | 'announcement' | 'payment_due' | 'payment_received' | 'submission_received' | 'submission_graded' | 'enrollment_update' | 'new_message';
   message: string;
   link?: string; 
   read: boolean;
@@ -301,6 +320,16 @@ export interface Announcement {
   link?: string;     
 }
 
+export interface DirectMessage {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  content: string;
+  timestamp: number; 
+  read: boolean;
+  courseContextId?: string; 
+}
+
 
 // App State
 export interface AppState {
@@ -315,6 +344,7 @@ export interface AppState {
   payments: Payment[];
   notifications: NotificationMessage[];
   announcements: Announcement[];
+  directMessages: DirectMessage[];
   isLoading: boolean;
   error: string | null;
   successMessage: string | null;
@@ -379,6 +409,10 @@ export type UpdateAttendanceRecordPayload = Partial<Omit<AttendanceRecord, 'id' 
 export type RecordPaymentPayload = Omit<Payment, 'id'>;
 export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id' | 'studentId' | 'courseId'>>;
 export type DeletePaymentPayload = { id: string };
+
+export type CreateAnnouncementPayload = Omit<Announcement, 'id' | 'timestamp'>;
+export type CreateDirectMessagePayload = Omit<DirectMessage, 'id' | 'timestamp' | 'read' | 'senderId'>;
+export type MarkDirectMessageReadPayload = { messageId: string };
 
 
 export type AppAction =
@@ -484,6 +518,23 @@ export type AppAction =
   | { type: ActionType.DELETE_PAYMENT_SUCCESS; payload: DeletePaymentPayload }
   | { type: ActionType.DELETE_PAYMENT_FAILURE; payload: string }
 
+  | { type: ActionType.FETCH_ANNOUNCEMENTS_REQUEST }
+  | { type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS; payload: Announcement[] }
+  | { type: ActionType.FETCH_ANNOUNCEMENTS_FAILURE; payload: string }
+  | { type: ActionType.CREATE_ANNOUNCEMENT_REQUEST }
+  | { type: ActionType.CREATE_ANNOUNCEMENT_SUCCESS; payload: Announcement }
+  | { type: ActionType.CREATE_ANNOUNCEMENT_FAILURE; payload: string }
+
+  | { type: ActionType.FETCH_DIRECT_MESSAGES_REQUEST }
+  | { type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS; payload: DirectMessage[] }
+  | { type: ActionType.FETCH_DIRECT_MESSAGES_FAILURE; payload: string }
+  | { type: ActionType.SEND_DIRECT_MESSAGE_REQUEST }
+  | { type: ActionType.SEND_DIRECT_MESSAGE_SUCCESS; payload: DirectMessage }
+  | { type: ActionType.SEND_DIRECT_MESSAGE_FAILURE; payload: string }
+  | { type: ActionType.MARK_DIRECT_MESSAGE_READ_REQUEST }
+  | { type: ActionType.MARK_DIRECT_MESSAGE_READ_SUCCESS; payload: { messageId: string } }
+  | { type: ActionType.MARK_DIRECT_MESSAGE_READ_FAILURE; payload: string }
+
 
   | { type: ActionType.LOAD_DATA; payload: Partial<AppState> } 
   | { type: ActionType.SET_LOADING; payload: boolean }
@@ -514,5 +565,6 @@ export interface GenerateQuizQuestionsOutput {
 
 // Ensure payload for UpdatePaymentPayload is specific for what can be updated
 // export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id' | 'studentId' | 'courseId'>>;
+
 
 
