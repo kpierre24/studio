@@ -320,6 +320,7 @@ export default function TeacherCourseDetailPage() {
     return submissions.filter(sub => sub.assignmentId === assignmentId).sort((a,b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
   };
 
+  const courseBannerSrc = course.bannerImageUrl || `https://placehold.co/1200x400.png?text=${encodeURIComponent(course.name)}`;
 
   return (
     <div className="space-y-6">
@@ -330,12 +331,12 @@ export default function TeacherCourseDetailPage() {
       <Card className="overflow-hidden shadow-lg">
          <div className="aspect-[16/9] md:aspect-[21/9] relative w-full">
           <Image
-            src={`https://placehold.co/1200x400.png?text=${encodeURIComponent(course.name)}`}
+            src={courseBannerSrc}
             alt={course.name}
             fill
             style={{objectFit:"cover"}}
             className="bg-muted"
-            data-ai-hint="course landscape banner"
+            priority={course.bannerImageUrl ? true : false}
           />
         </div>
         <CardHeader className="border-b">
@@ -782,3 +783,4 @@ export default function TeacherCourseDetailPage() {
     </div>
   );
 }
+

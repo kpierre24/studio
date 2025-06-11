@@ -174,6 +174,7 @@ export interface Course {
   category?: string;
   cost: number; 
   prerequisites?: string[]; 
+  bannerImageUrl?: string; // Added for custom course banners
 }
 
 export interface Lesson {
@@ -338,7 +339,7 @@ export type DeleteLessonPayload = { id: string; courseId: string };
 
 
 export type CreateAssignmentPayload = Omit<Assignment, 'id'| 'totalPoints'> & { manualTotalPoints?: number; assignmentFile?: File | null; };
-export type UpdateAssignmentPayload = Partial<Omit<Assignment, 'id' | 'courseId'>> & { id: string; courseId: string; assignmentFile?: File | null; manualTotalPoints?:number; }; // courseId is now mandatory
+export type UpdateAssignmentPayload = Partial<Omit<Assignment, 'id' | 'courseId'>> & { id: string; courseId: string; assignmentFile?: File | null; manualTotalPoints?:number; };
 export type DeleteAssignmentPayload = { id: string; courseId: string };
 
 export type SubmitAssignmentPayload = Submission; // Submission type itself is used as payload
@@ -486,3 +487,4 @@ export interface GenerateQuizQuestionsOutput {
         correctAnswer: string;
     }>;
 }
+

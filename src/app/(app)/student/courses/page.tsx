@@ -54,38 +54,42 @@ export default function StudentCoursesPage() {
         </Card>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {enrolledCourses.map(course => (
-            <Card key={course.id} className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
-              <CardHeader className="pb-2">
-                 <div className="aspect-[16/9] relative mb-4 rounded-t-md overflow-hidden">
-                    <Image 
-                        src={`https://placehold.co/600x400.png?text=${encodeURIComponent(course.name)}`} 
-                        alt={course.name} 
-                        layout="fill"
-                        objectFit="cover"
-                        data-ai-hint="course banner"
-                    />
-                 </div>
-                <CardTitle className="text-xl hover:text-primary transition-colors">
-                  <Link href={`/student/courses/${course.id}`}>{course.name}</Link>
-                </CardTitle>
-                <CardDescription className="h-10 overflow-hidden text-ellipsis">{course.description}</CardDescription>
-              </CardHeader>
-              <CardContent className="flex-grow pt-2">
-                <p className="text-sm text-muted-foreground">Instructor: {getTeacherName(course.teacherId)}</p>
-                <p className="text-sm text-muted-foreground">Category: {course.category || "N/A"}</p>
-              </CardContent>
-              <CardFooter>
-                <Button asChild variant="outline" className="w-full" disabled={isLoading}>
-                  <Link href={`/student/courses/${course.id}`}>
-                    View Course <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
+          {enrolledCourses.map(course => {
+            const courseImageSrc = course.bannerImageUrl || `https://placehold.co/600x400.png?text=${encodeURIComponent(course.name)}`;
+            return (
+              <Card key={course.id} className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <CardHeader className="pb-2">
+                  <div className="aspect-[16/9] relative mb-4 rounded-t-md overflow-hidden">
+                      <Image 
+                          src={courseImageSrc}
+                          alt={course.name} 
+                          layout="fill"
+                          objectFit="cover"
+                          priority={course.bannerImageUrl ? true : false}
+                      />
+                  </div>
+                  <CardTitle className="text-xl hover:text-primary transition-colors">
+                    <Link href={`/student/courses/${course.id}`}>{course.name}</Link>
+                  </CardTitle>
+                  <CardDescription className="h-10 overflow-hidden text-ellipsis">{course.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex-grow pt-2">
+                  <p className="text-sm text-muted-foreground">Instructor: {getTeacherName(course.teacherId)}</p>
+                  <p className="text-sm text-muted-foreground">Category: {course.category || "N/A"}</p>
+                </CardContent>
+                <CardFooter>
+                  <Button asChild variant="outline" className="w-full" disabled={isLoading}>
+                    <Link href={`/student/courses/${course.id}`}>
+                      View Course <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </CardFooter>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
+

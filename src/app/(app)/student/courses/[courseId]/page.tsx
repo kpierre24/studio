@@ -165,6 +165,8 @@ export default function StudentCourseDetailPage() {
     }
   };
 
+  const courseBannerSrc = course!.bannerImageUrl || `https://placehold.co/1200x400.png?text=${encodeURIComponent(course!.name)}`;
+
   return (
     <div className="space-y-8">
       <Button variant="outline" onClick={() => router.back()} className="mb-6" disabled={isLoading}>
@@ -174,12 +176,12 @@ export default function StudentCourseDetailPage() {
       <Card className="overflow-hidden shadow-lg">
         <div className="aspect-[16/9] md:aspect-[21/9] relative w-full">
           <Image
-            src={`https://placehold.co/1200x400.png?text=${encodeURIComponent(course!.name)}`}
+            src={courseBannerSrc}
             alt={course!.name}
             fill
             style={{objectFit:"cover"}}
             className="bg-muted"
-            data-ai-hint="course landscape banner"
+            priority={course!.bannerImageUrl ? true : false} 
           />
         </div>
         <CardHeader className="pt-6">
@@ -430,3 +432,4 @@ export default function StudentCourseDetailPage() {
     </div>
   );
 }
+

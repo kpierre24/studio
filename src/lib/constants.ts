@@ -78,6 +78,7 @@ export const SAMPLE_COURSES: Course[] = [
     category: 'Computer Science',
     cost: 100,
     prerequisites: [],
+    bannerImageUrl: '/images/school_of_ministry_banner.png', // Specific banner for this course
   },
   {
     id: 'course-2',
@@ -88,6 +89,7 @@ export const SAMPLE_COURSES: Course[] = [
     category: 'Mathematics',
     cost: 150,
     prerequisites: ['course-1'],
+    // No bannerImageUrl, will use placeholder
   },
 ];
 
