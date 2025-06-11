@@ -1,8 +1,9 @@
 
+
 import type { User, Course, Lesson, Assignment, Submission, Payment, AttendanceRecord, NotificationMessage, Enrollment, QuizQuestion, RubricCriterion, Announcement } from '@/types';
 import { UserRole, AssignmentType, QuestionType, AttendanceStatus } from '@/types';
 
-export const APP_NAME = "School of Ministry";
+export const APP_NAME = "students in bible school";
 
 export const SAMPLE_SUPER_ADMIN: User = {
   id: 'user-super-admin',
