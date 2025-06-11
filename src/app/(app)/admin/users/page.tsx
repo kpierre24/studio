@@ -196,13 +196,13 @@ export default function AdminUsersPage() {
 
       const header = lines[0].split(',').map(h => h.trim().toLowerCase());
       const emailIndex = header.indexOf('email');
-      const passwordIndex = header.indexOf('password');
+      const passwordIndex = header.indexOf('password'); // Password column is now optional
       let nameIndex = header.indexOf('name');
       let firstNameIndex = header.indexOf('firstname');
       let lastNameIndex = header.indexOf('lastname');
 
-      if (emailIndex === -1 || passwordIndex === -1) {
-        toast({ title: "Invalid CSV Header", description: "CSV must contain 'email' and 'password' columns.", variant: "destructive" });
+      if (emailIndex === -1) {
+        toast({ title: "Invalid CSV Header", description: "CSV must contain an 'email' column.", variant: "destructive" });
         setIsBulkCreating(false);
         return;
       }
@@ -216,7 +216,8 @@ export default function AdminUsersPage() {
       for (let i = 1; i < lines.length; i++) {
         const data = lines[i].split(',').map(d => d.trim());
         const email = data[emailIndex];
-        const password = data[passwordIndex];
+        // Password is now optional. If column exists and has value, use it. Otherwise, it will be undefined.
+        const password = passwordIndex !== -1 && data[passwordIndex] ? data[passwordIndex] : undefined; 
         let name: string | undefined;
 
         if (nameIndex !== -1 && data[nameIndex]) {
@@ -228,7 +229,7 @@ export default function AdminUsersPage() {
         const missingFields = [];
         if (!name) missingFields.push("name (or firstname/lastname)");
         if (!email) missingFields.push("email");
-        if (!password) missingFields.push("password");
+        // Password is no longer a required field for this check, default will be applied in context if missing.
 
         if (missingFields.length > 0) {
           toast({ title: "Row Error", description: `Row ${i + 1}: Missing required field(s): ${missingFields.join(', ')}. Skipping.`, variant: "destructive" });
@@ -239,7 +240,7 @@ export default function AdminUsersPage() {
           toast({ title: "Row Error", description: `Row ${i + 1}: Invalid email format: ${email}. Skipping.`, variant: "destructive" });
           continue;
         }
-        studentsToCreate.push({ name: name!, email: email!, password: password! });
+        studentsToCreate.push({ name: name!, email: email!, password: password }); // Pass password (can be undefined)
       }
 
       if (studentsToCreate.length > 0) {
@@ -326,7 +327,7 @@ export default function AdminUsersPage() {
         <CardHeader>
             <CardTitle>Bulk Add Students via CSV</CardTitle>
             <CardDescription>
-                Upload a CSV file with student data. Columns must include: 'email', 'password', and ('name' OR 'firstname' & 'lastname'). All users will be created with 'Student' role and Firebase Auth accounts.
+                Upload a CSV file with student data. Required columns: 'email', and ('name' OR 'firstname' & 'lastname'). The 'password' column is optional; if omitted or empty for a user, their password will default to "123456". All users will be created with 'Student' role and Firebase Auth accounts.
             </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -372,7 +373,7 @@ export default function AdminUsersPage() {
             {users.map((user) => (
               <TableRow key={user.id}>
                 <TableCell className="font-medium flex items-center gap-2">
-                  <img src={user.avatarUrl || `https://placehold.co/32x32.png?text=${user.name.substring(0,1)}`} alt={user.name} className="h-8 w-8 rounded-full" data-ai-hint="user avatar"/>
+                  <img src={user.avatarUrl || `https://placehold.co/32x32.png`} alt={user.name} className="h-8 w-8 rounded-full" data-ai-hint="user avatar"/>
                   {user.name}
                 </TableCell>
                 <TableCell>{user.email}</TableCell>
