@@ -117,6 +117,13 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.FETCH_COURSES_FAILURE:
       return { ...state, isLoading: false, error: action.payload };
 
+    case ActionType.FETCH_ENROLLMENTS_REQUEST:
+      return { ...state, isLoading: true, error: null };
+    case ActionType.FETCH_ENROLLMENTS_SUCCESS:
+      return { ...state, enrollments: action.payload, isLoading: false, error: null };
+    case ActionType.FETCH_ENROLLMENTS_FAILURE:
+      return { ...state, isLoading: false, error: action.payload };
+
     case ActionType.FETCH_LESSONS_REQUEST:
       return { ...state, isLoading: true, error: null };
     case ActionType.FETCH_LESSONS_SUCCESS:
@@ -250,13 +257,13 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case ActionType.LOGIN_USER_SUCCESS:
     case ActionType.REGISTER_STUDENT_SUCCESS:
-    case ActionType.FETCH_USER_PROFILE_SUCCESS: // Should ideally not change isLoading on its own
+    case ActionType.FETCH_USER_PROFILE_SUCCESS: // Used by auth flow, should not change isLoading directly
       return {
         ...state,
         currentUser: action.payload,
-        // isLoading: false, // isLoading is managed by the overall auth flow
         error: null,
         successMessage: action.type === ActionType.LOGIN_USER_SUCCESS ? 'Login successful!' : (action.type === ActionType.REGISTER_STUDENT_SUCCESS ? 'Registration successful!' : null )
+        // isLoading is managed by the overall auth flow in onAuthStateChanged
       };
 
     case ActionType.SET_CURRENT_USER:
@@ -295,7 +302,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case ActionType.LOGOUT_USER_SUCCESS:
       return {
-        ...initialState, // Resets all fields to their initial values
+        ...initialState, // Resets all fields to their initial values including enrollments
         currentUser: null, // Explicitly set currentUser to null
         isLoading: false, // Auth flow is complete
         successMessage: 'Logged out successfully.'
@@ -795,7 +802,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     dispatch({ type: ActionType.LOAD_DATA, payload: {
-      enrollments: INITIAL_ENROLLMENTS,
+      // enrollments: INITIAL_ENROLLMENTS, // Removed as enrollments are now fetched dynamically
       attendanceRecords: SAMPLE_ATTENDANCE,
       notifications: SAMPLE_NOTIFICATIONS,
     } });
@@ -836,6 +843,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.FETCH_COURSES_FAILURE, payload: error.message || "Failed to fetch all courses." });
     }
   }, [dispatch]);
+
+  const fetchEnrollmentsForUser = useCallback(async (userId: string) => {
+    dispatch({ type: ActionType.FETCH_ENROLLMENTS_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.FETCH_ENROLLMENTS_FAILURE, payload: "Firestore not available to fetch enrollments." });
+      return;
+    }
+    try {
+      const enrollmentsCol = collection(db, "enrollments");
+      const q = query(enrollmentsCol, where("studentId", "==", userId));
+      const enrollmentSnapshot = await getDocs(q);
+      const enrollmentsList = enrollmentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Enrollment));
+      dispatch({ type: ActionType.FETCH_ENROLLMENTS_SUCCESS, payload: enrollmentsList });
+    } catch (error: any) {
+      console.error("Error fetching enrollments for user:", error);
+      dispatch({ type: ActionType.FETCH_ENROLLMENTS_FAILURE, payload: error.message || "Failed to fetch enrollments." });
+    }
+  }, [dispatch]);
+
 
   const fetchAllLessons = useCallback(async () => {
     if (state.courses.length === 0) {
@@ -931,7 +958,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] }); 
       return;
     }
-    //isLoading set by individual REQUEST actions
+    dispatch({ type: ActionType.FETCH_PAYMENTS_REQUEST });
     const db = getFirebaseDb();
     if (!db) {
       dispatch({ type: ActionType.FETCH_PAYMENTS_FAILURE, payload: "Firestore not available to fetch payments." });
@@ -948,6 +975,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         paymentsQuery = query(paymentsCol, where("studentId", "==", currentUserForFetch.id));
       } else {
         // Teachers currently don't fetch all payments globally via this function.
+        // Their payment views are typically per-course, handled elsewhere.
         dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
         return;
       }
@@ -1024,9 +1052,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const authInstance = getFirebaseAuth();
     if (!authInstance) {
       console.error("Firebase Auth instance not available.");
-      dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
       dispatch({ type: ActionType.SET_ERROR, payload: "Firebase initialization failed." });
-      dispatch({ type: ActionType.SET_LOADING, payload: false });
+      dispatch({ type: ActionType.SET_LOADING, payload: false }); // Ensure loading stops
       return;
     }
 
@@ -1034,12 +1061,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!dbInstance) {
         console.error("Firebase Firestore instance not available.");
          dispatch({ type: ActionType.SET_ERROR, payload: "Firebase Firestore not initialized." });
-         dispatch({ type: ActionType.SET_LOADING, payload: false });
+         dispatch({ type: ActionType.SET_LOADING, payload: false }); // Ensure loading stops
          return;
     }
 
     const unsubscribe = onAuthStateChanged(authInstance, async (firebaseUser: FirebaseUser | null) => {
-      dispatch({ type: ActionType.SET_LOADING, payload: true }); // Global loading for auth process
+      dispatch({ type: ActionType.SET_LOADING, payload: true }); 
 
       if (firebaseUser) {
         try {
@@ -1048,43 +1075,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           if (userDocSnap.exists()) {
             const userProfile = { id: userDocSnap.id, ...userDocSnap.data() } as User;
-            dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile }); // Only sets user, doesn't change isLoading
+            dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
 
-            // Fetch initial data. Each fetch function will handle its own isLoading via _REQUEST/_SUCCESS/_FAILURE
-            // but the global isLoading will remain true until all these are done.
             await Promise.all([
                 fetchAllUsers(),
                 fetchAllCourses(),
+                fetchEnrollmentsForUser(userProfile.id),
                 fetchAllPayments(userProfile), 
                 fetchAllAnnouncements(),
                 fetchDirectMessagesForUser(userProfile.id)
             ]);
-            dispatch({ type: ActionType.SET_LOADING, payload: false }); // All initial data loaded
+            // SET_LOADING to false is handled by individual fetcher success/failure, or at the end if no other way.
+            // However, for initial load, we should set it false after all critical data is attempted.
           } else {
-            await signOut(authInstance);
+            await signOut(authInstance); // Sign out if profile doesn't exist
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-            // Clear all data lists
             dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
             dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
-            // ... (clear other data types)
+            dispatch({ type: ActionType.FETCH_ENROLLMENTS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
             dispatch({ type: ActionType.SET_ERROR, payload: "User profile not found. Signed out." });
-            dispatch({ type: ActionType.SET_LOADING, payload: false });
           }
         } catch (error: any) {
           console.error("Error during auth state change processing:", error);
           dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-           // Clear all data lists
           dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
           dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
-          // ... (clear other data types)
+          dispatch({ type: ActionType.FETCH_ENROLLMENTS_SUCCESS, payload: [] });
+          dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
+          dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
+          dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
+          dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
+          dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
+          dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
           dispatch({ type: ActionType.SET_ERROR, payload: error.message || "Failed to load user profile." });
-          dispatch({ type: ActionType.SET_LOADING, payload: false });
+        } finally {
+            dispatch({ type: ActionType.SET_LOADING, payload: false }); // Ensure loading is set to false after all operations
         }
-      } else { // No firebaseUser (logged out or not logged in)
+      } else { 
         dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-         // Clear all data lists
         dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
+        dispatch({ type: ActionType.FETCH_ENROLLMENTS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
@@ -1095,10 +1132,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
     return () => unsubscribe();
-  // fetch* functions are wrapped in useCallback with stable dependencies (mostly just dispatch, or dispatch + passed args)
-  // so they don't need to be in this main useEffect's dependency array if they are stable.
-  // The key trigger for this effect is auth state change, and dispatch is stable.
-  }, [dispatch, fetchAllUsers, fetchAllCourses, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser]);
+  }, [dispatch, fetchAllUsers, fetchAllCourses, fetchEnrollmentsForUser, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser]);
 
   // Effect for fetching lessons, depends on currentUser and courses
   useEffect(() => {

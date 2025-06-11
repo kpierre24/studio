@@ -89,6 +89,9 @@ export enum ActionType {
   DELETE_COURSE_FAILURE = 'DELETE_COURSE_FAILURE',
 
   // Enrollment Management
+  FETCH_ENROLLMENTS_REQUEST = 'FETCH_ENROLLMENTS_REQUEST',
+  FETCH_ENROLLMENTS_SUCCESS = 'FETCH_ENROLLMENTS_SUCCESS',
+  FETCH_ENROLLMENTS_FAILURE = 'FETCH_ENROLLMENTS_FAILURE',
   ENROLL_STUDENT_REQUEST = 'ENROLL_STUDENT_REQUEST',
   ENROLL_STUDENT_SUCCESS = 'ENROLL_STUDENT_SUCCESS',
   ENROLL_STUDENT_FAILURE = 'ENROLL_STUDENT_FAILURE',
@@ -467,6 +470,9 @@ export type AppAction =
   | { type: ActionType.DELETE_COURSE_SUCCESS; payload: DeleteCoursePayload }
   | { type: ActionType.DELETE_COURSE_FAILURE; payload: string }
 
+  | { type: ActionType.FETCH_ENROLLMENTS_REQUEST }
+  | { type: ActionType.FETCH_ENROLLMENTS_SUCCESS; payload: Enrollment[] }
+  | { type: ActionType.FETCH_ENROLLMENTS_FAILURE; payload: string }
   | { type: ActionType.ENROLL_STUDENT_REQUEST }
   | { type: ActionType.ENROLL_STUDENT_SUCCESS; payload: EnrollStudentSuccessPayload }
   | { type: ActionType.ENROLL_STUDENT_FAILURE; payload: string }
@@ -578,6 +584,7 @@ export interface GenerateQuizQuestionsOutput {
 
 // Ensure payload for UpdatePaymentPayload is specific for what can be updated
 // export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id' | 'studentId' | 'courseId'>>;
+
 
 
 
