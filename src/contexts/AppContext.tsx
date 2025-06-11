@@ -4,48 +4,48 @@
 
 import type { Dispatch } from 'react';
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
-import { 
-  getFirebaseAuth, 
-  getFirebaseDb, 
+import {
+  getFirebaseAuth,
+  getFirebaseDb,
   getFirebaseStorage
-} from '@/lib/firebase'; 
-import { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
+} from '@/lib/firebase';
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
-  type User as FirebaseUser 
+  type User as FirebaseUser
 } from 'firebase/auth';
-import { 
-  doc, 
-  getDoc, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc, 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  writeBatch, 
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  writeBatch,
   arrayUnion,
   arrayRemove,
   orderBy,
   serverTimestamp, // For Firestore server-side timestamps if needed
   Timestamp, // For client-side timestamp creation consistent with Firestore
-  type Firestore 
+  type Firestore
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 
 import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, Payment, RecordPaymentPayload, UpdatePaymentPayload, DeletePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem, Enrollment, EnrollStudentPayload, EnrollStudentSuccessPayload, UnenrollStudentPayload, UnenrollStudentSuccessPayload, AdminUpdateOrCreateSubmissionPayload, CreateAnnouncementPayload, DirectMessage, CreateDirectMessagePayload, MarkDirectMessageReadPayload } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
-import { 
-  SAMPLE_COURSES, 
-  SAMPLE_LESSONS, 
-  SAMPLE_ASSIGNMENTS, 
-  SAMPLE_SUBMISSIONS, 
-  SAMPLE_PAYMENTS, 
-  SAMPLE_ATTENDANCE, 
+import {
+  SAMPLE_COURSES,
+  SAMPLE_LESSONS,
+  SAMPLE_ASSIGNMENTS,
+  SAMPLE_SUBMISSIONS,
+  SAMPLE_PAYMENTS,
+  SAMPLE_ATTENDANCE,
   INITIAL_ENROLLMENTS,
   SAMPLE_NOTIFICATIONS,
   SAMPLE_ANNOUNCEMENTS,
@@ -54,19 +54,19 @@ import {
 import { useToast } from '@/hooks/use-toast';
 
 const initialState: AppState = {
-  currentUser: undefined, 
-  users: [], 
+  currentUser: undefined,
+  users: [],
   courses: [],
   lessons: [],
-  assignments: [],
-  submissions: [],
+  assignments: [], // Initialize as empty, will be fetched
+  submissions: [], // Initialize as empty, will be fetched
   enrollments: [],
   attendanceRecords: [],
   payments: [],
   notifications: [],
   announcements: [],
   directMessages: [],
-  isLoading: true, 
+  isLoading: true,
   error: null,
   successMessage: null,
 };
@@ -102,36 +102,22 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.LOAD_DATA: {
       return {
         ...state,
-        courses: action.payload.courses || state.courses,
-        // lessons: action.payload.lessons || state.lessons, // Now fetched dynamically
-        assignments: action.payload.assignments || state.assignments, 
-        submissions: (action.payload.submissions || state.submissions).map(submission => {
-          if (submission.assignmentId) {
-            const assignment = (action.payload.assignments || state.assignments).find(a => a.id === submission.assignmentId);
-            if (assignment && assignment.type === AssignmentType.QUIZ && submission.quizAnswers && assignment.questions) {
-              let calculatedGrade = 0;
-              const updatedQuizAnswers = submission.quizAnswers.map(qa => {
-                const question = assignment.questions!.find(q => q.id === qa.questionId);
-                if (question) {
-                  const { isCorrect, score } = autoGradeQuizAnswer(question, qa.studentAnswer);
-                  calculatedGrade += score;
-                  return { ...qa, isCorrect, autoGradeScore: score };
-                }
-                return qa;
-              });
-              return { ...submission, quizAnswers: updatedQuizAnswers, grade: submission.grade ?? calculatedGrade };
-            }
-          }
-          return submission;
-        }),
-        enrollments: action.payload.enrollments || state.enrollments,
-        attendanceRecords: action.payload.attendanceRecords || state.attendanceRecords,
-        // payments: action.payload.payments || state.payments, // Now fetched dynamically
-        notifications: action.payload.notifications || state.notifications,
-        // announcements: action.payload.announcements || state.announcements, // Now fetched dynamically
+        // Dynamically fetched data should not be overwritten here unless explicitly part of LOAD_DATA payload
+        courses: action.payload.courses !== undefined ? action.payload.courses : state.courses,
+        lessons: action.payload.lessons !== undefined ? action.payload.lessons : state.lessons,
+        // assignments and submissions are now fetched dynamically, so they should remain as is (empty initially)
+        // or be explicitly set if LOAD_DATA is meant to override them (which it isn't for these anymore).
+        assignments: action.payload.assignments !== undefined ? action.payload.assignments : state.assignments,
+        submissions: action.payload.submissions !== undefined ? action.payload.submissions : state.submissions,
+
+        enrollments: action.payload.enrollments !== undefined ? action.payload.enrollments : state.enrollments,
+        attendanceRecords: action.payload.attendanceRecords !== undefined ? action.payload.attendanceRecords : state.attendanceRecords,
+        payments: action.payload.payments !== undefined ? action.payload.payments : state.payments,
+        notifications: action.payload.notifications !== undefined ? action.payload.notifications : state.notifications,
+        announcements: action.payload.announcements !== undefined ? action.payload.announcements : state.announcements,
       };
     }
-    
+
     case ActionType.FETCH_USERS_REQUEST:
       return { ...state, isLoading: true, error: null };
     case ActionType.FETCH_USERS_SUCCESS:
@@ -153,13 +139,49 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.FETCH_LESSONS_FAILURE:
       return { ...state, isLoading: false, error: action.payload };
 
+    case ActionType.FETCH_ASSIGNMENTS_REQUEST:
+      return { ...state, isLoading: true, error: null };
+    case ActionType.FETCH_ASSIGNMENTS_SUCCESS:
+      return { ...state, assignments: action.payload, isLoading: false, error: null };
+    case ActionType.FETCH_ASSIGNMENTS_FAILURE:
+      return { ...state, isLoading: false, error: action.payload };
+
+    case ActionType.FETCH_SUBMISSIONS_REQUEST:
+      return { ...state, isLoading: true, error: null };
+    case ActionType.FETCH_SUBMISSIONS_SUCCESS: {
+      const assignmentsForGrading = state.assignments; // Use current assignments from state
+      const processedSubmissions = (action.payload || []).map(submission => {
+        if (submission.assignmentId) {
+          const assignment = assignmentsForGrading.find(a => a.id === submission.assignmentId);
+          if (assignment && assignment.type === AssignmentType.QUIZ && submission.quizAnswers && assignment.questions) {
+            let calculatedGrade = 0;
+            const updatedQuizAnswers = submission.quizAnswers.map(qa => {
+              const question = assignment.questions!.find(q => q.id === qa.questionId);
+              if (question) {
+                const { isCorrect, score } = autoGradeQuizAnswer(question, qa.studentAnswer);
+                calculatedGrade += score;
+                return { ...qa, isCorrect, autoGradeScore: score };
+              }
+              return qa;
+            });
+            return { ...submission, quizAnswers: updatedQuizAnswers, grade: submission.grade ?? calculatedGrade };
+          }
+        }
+        return submission;
+      });
+      return { ...state, submissions: processedSubmissions, isLoading: false, error: null };
+    }
+    case ActionType.FETCH_SUBMISSIONS_FAILURE:
+      return { ...state, isLoading: false, error: action.payload };
+
+
     case ActionType.FETCH_PAYMENTS_REQUEST:
       return { ...state, isLoading: true, error: null };
     case ActionType.FETCH_PAYMENTS_SUCCESS:
       return { ...state, payments: action.payload, isLoading: false, error: null };
     case ActionType.FETCH_PAYMENTS_FAILURE:
       return { ...state, isLoading: false, error: action.payload };
-      
+
     case ActionType.FETCH_ANNOUNCEMENTS_REQUEST:
       return { ...state, isLoading: true, error: null };
     case ActionType.FETCH_ANNOUNCEMENTS_SUCCESS:
@@ -170,16 +192,16 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.CREATE_ANNOUNCEMENT_REQUEST:
       return { ...state, isLoading: true, error: null };
     case ActionType.CREATE_ANNOUNCEMENT_SUCCESS:
-      return { 
-        ...state, 
-        announcements: [action.payload, ...state.announcements].sort((a,b) => b.timestamp - a.timestamp), 
-        isLoading: false, 
-        error: null, 
-        successMessage: 'Announcement created successfully.' 
+      return {
+        ...state,
+        announcements: [action.payload, ...state.announcements].sort((a,b) => b.timestamp - a.timestamp),
+        isLoading: false,
+        error: null,
+        successMessage: 'Announcement created successfully.'
       };
     case ActionType.CREATE_ANNOUNCEMENT_FAILURE:
       return { ...state, isLoading: false, error: action.payload };
-      
+
     case ActionType.FETCH_DIRECT_MESSAGES_REQUEST:
       return { ...state, isLoading: true, error: null };
     case ActionType.FETCH_DIRECT_MESSAGES_SUCCESS:
@@ -190,12 +212,12 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.SEND_DIRECT_MESSAGE_REQUEST:
       return { ...state, isLoading: true, error: null };
     case ActionType.SEND_DIRECT_MESSAGE_SUCCESS:
-      return { 
-        ...state, 
-        directMessages: [...state.directMessages, action.payload].sort((a,b) => a.timestamp - b.timestamp), 
-        isLoading: false, 
-        error: null, 
-        successMessage: 'Message sent.' 
+      return {
+        ...state,
+        directMessages: [...state.directMessages, action.payload].sort((a,b) => a.timestamp - b.timestamp),
+        isLoading: false,
+        error: null,
+        successMessage: 'Message sent.'
       };
     case ActionType.SEND_DIRECT_MESSAGE_FAILURE:
       return { ...state, isLoading: false, error: action.payload };
@@ -205,7 +227,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.MARK_DIRECT_MESSAGE_READ_SUCCESS:
         return {
             ...state,
-            directMessages: state.directMessages.map(dm => 
+            directMessages: state.directMessages.map(dm =>
                 dm.id === action.payload.messageId ? { ...dm, read: true } : dm
             ),
             isLoading: false,
@@ -243,16 +265,16 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
 
     case ActionType.LOGIN_USER_SUCCESS:
     case ActionType.REGISTER_STUDENT_SUCCESS:
-    case ActionType.FETCH_USER_PROFILE_SUCCESS: 
-      return { 
-        ...state, 
-        currentUser: action.payload, 
-        isLoading: false, 
-        error: null, 
-        successMessage: action.type === ActionType.LOGIN_USER_SUCCESS ? 'Login successful!' : (action.type === ActionType.REGISTER_STUDENT_SUCCESS ? 'Registration successful!' : null ) 
+    case ActionType.FETCH_USER_PROFILE_SUCCESS:
+      return {
+        ...state,
+        currentUser: action.payload,
+        isLoading: false,
+        error: null,
+        successMessage: action.type === ActionType.LOGIN_USER_SUCCESS ? 'Login successful!' : (action.type === ActionType.REGISTER_STUDENT_SUCCESS ? 'Registration successful!' : null )
       };
-    
-    case ActionType.SET_CURRENT_USER: 
+
+    case ActionType.SET_CURRENT_USER:
       return { ...state, currentUser: action.payload, isLoading: false, error: null };
 
     case ActionType.LOGIN_USER_FAILURE:
@@ -279,27 +301,27 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.RECORD_PAYMENT_FAILURE:
     case ActionType.UPDATE_PAYMENT_FAILURE:
     case ActionType.DELETE_PAYMENT_FAILURE:
-      return { ...state, isLoading: false, error: action.payload, currentUser: state.currentUser === undefined ? null : state.currentUser  }; 
+      return { ...state, isLoading: false, error: action.payload, currentUser: state.currentUser === undefined ? null : state.currentUser  };
 
     case ActionType.LOGOUT_USER_SUCCESS:
-      return { 
-        ...initialState, 
-        users: [], 
-        courses: [], 
-        lessons: [], 
-        assignments: [], 
-        submissions: [], 
-        enrollments: [], 
+      return {
+        ...initialState,
+        users: [],
+        courses: [],
+        lessons: [],
+        assignments: [], // Cleared
+        submissions: [], // Cleared
+        enrollments: [],
         attendanceRecords: [],
         payments: [],
-        announcements: [], 
+        announcements: [],
         directMessages: [],
-        currentUser: null, 
-        isLoading: false, 
-        successMessage: 'Logged out successfully.' 
+        currentUser: null,
+        isLoading: false,
+        successMessage: 'Logged out successfully.'
       };
-    
-    case ActionType.CREATE_USER_SUCCESS: { 
+
+    case ActionType.CREATE_USER_SUCCESS: {
       const newUserDoc = action.payload as User;
       const userExists = state.users.some(u => u.id === newUserDoc.id);
       return {
@@ -348,9 +370,9 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
        const { error } = action.payload;
       return { ...state, isLoading: false, error: error };
     }
-    
+
      case ActionType.CREATE_COURSE_SUCCESS: {
-      const courseToAdd = action.payload as Course; 
+      const courseToAdd = action.payload as Course;
       const courseExists = state.courses.some(c => c.id === courseToAdd.id);
       return {
         ...state,
@@ -378,13 +400,13 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         courses: state.courses.filter(course => course.id !== id),
-        lessons: state.lessons.filter(lesson => lesson.courseId !== id), 
-        assignments: state.assignments.filter(assignment => assignment.courseId !== id), 
+        lessons: state.lessons.filter(lesson => lesson.courseId !== id),
+        assignments: state.assignments.filter(assignment => assignment.courseId !== id),
         isLoading: false, error: null,
         successMessage: `Course "${courseToDelete?.name || id}" deleted successfully.`,
       };
     }
-    
+
     case ActionType.ENROLL_STUDENT_SUCCESS: {
       const { course, enrollment } = action.payload;
       const student = state.users.find(u => u.id === enrollment.studentId);
@@ -435,13 +457,13 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         ].slice(0, 20),
       };
     }
-    
+
     case ActionType.CREATE_LESSON_SUCCESS: {
       const newLesson = action.payload as Lesson;
       const lessonExists = state.lessons.some(l => l.id === newLesson.id);
       return {
         ...state,
-        lessons: lessonExists 
+        lessons: lessonExists
           ? state.lessons.map(l => l.id === newLesson.id ? newLesson : l).sort((a, b) => a.order - b.order)
           : [...state.lessons, newLesson].sort((a, b) => a.order - b.order),
         isLoading: false, error: null,
@@ -500,15 +522,15 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         return {
             ...state,
             assignments: state.assignments.filter(assignment => assignment.id !== id),
-            submissions: state.submissions.filter(sub => sub.assignmentId !== id), 
+            submissions: state.submissions.filter(sub => sub.assignmentId !== id),
             isLoading: false, error: null,
             successMessage: `Assignment "${assignmentToDelete?.title || id}" deleted successfully.`,
         };
     }
-    
+
     case ActionType.SUBMIT_ASSIGNMENT_SUCCESS: {
-      const newSubmission = action.payload as Submission; 
-      
+      const newSubmission = action.payload as Submission;
+
       const assignment = state.assignments.find(a => a.id === newSubmission.assignmentId);
       const course = state.courses.find(c => c.id === assignment?.courseId);
       const teacher = state.users.find(u => u.id === course?.teacherId);
@@ -520,7 +542,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
             userId: teacher.id,
             type: 'submission_received',
             message: `New submission for '${assignment.title}' in course '${course.name}' from student ${state.users.find(u => u.id === newSubmission.studentId)?.name || newSubmission.studentId}.`,
-            link: `/teacher/courses/${assignment.courseId}?assignment=${assignment.id}`, 
+            link: `/teacher/courses/${assignment.courseId}?assignment=${assignment.id}`,
             read: false,
             timestamp: Date.now(),
           },
@@ -550,18 +572,18 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
             userId: submissionToGrade.studentId,
             type: 'submission_graded',
             message: `Your submission for '${assignment?.title}' has been graded. Grade: ${grade}`,
-            link: `/student/courses/${assignment?.courseId}?assignment=${assignment?.id}`, 
+            link: `/student/courses/${assignment?.courseId}?assignment=${assignment?.id}`,
             read: false,
             timestamp: Date.now(),
           },
           ...state.notifications
         ];
       }
-      
+
       return {
         ...state,
         submissions: state.submissions.map(sub =>
-          sub.id === submissionId ? { ...sub, grade, feedback, submittedAt: sub.submittedAt || new Date().toISOString() } : sub 
+          sub.id === submissionId ? { ...sub, grade, feedback, submittedAt: sub.submittedAt || new Date().toISOString() } : sub
         ),
         notifications: notifications.slice(0,20),
         isLoading: false, error: null,
@@ -578,7 +600,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       } else {
         newSubmissions = [...state.submissions, updatedSubmission];
       }
-      
+
       const assignment = state.assignments.find(a => a.id === updatedSubmission.assignmentId);
       const studentName = state.users.find(u => u.id === updatedSubmission.studentId)?.name || "Student";
 
@@ -620,7 +642,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         return { ...state, error: action.payload.error };
     }
 
-    case ActionType.TAKE_ATTENDANCE: { 
+    case ActionType.TAKE_ATTENDANCE: {
       const { courseId, date, studentStatuses } = action.payload as TakeAttendancePayload;
       const updatedAttendanceRecords = [...state.attendanceRecords];
       let recordsAdded = 0;
@@ -747,8 +769,8 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
   }
 };
 
-const AppContext = createContext<{ 
-  state: AppState; 
+const AppContext = createContext<{
+  state: AppState;
   dispatch: Dispatch<AppAction>;
   handleLoginUser: (payload: LoginUserPayload) => Promise<void>;
   handleRegisterStudent: (payload: RegisterStudentPayload) => Promise<void>;
@@ -771,7 +793,7 @@ const AppContext = createContext<{
   handleCreateAssignment: (payload: CreateAssignmentPayload & { assignmentFile?: File | null }) => Promise<void>;
   handleUpdateAssignment: (payload: UpdateAssignmentPayload & { assignmentFile?: File | null }) => Promise<void>;
   handleDeleteAssignment: (payload: DeleteAssignmentPayload) => Promise<void>;
-  handleStudentSubmitAssignment: (payload: SubmitAssignmentPayload) => Promise<void>; 
+  handleStudentSubmitAssignment: (payload: SubmitAssignmentPayload) => Promise<void>;
   handleTeacherGradeSubmission: (payload: GradeSubmissionPayload) => Promise<void>;
   handleAdminUpdateOrCreateSubmission: (payload: AdminUpdateOrCreateSubmissionPayload) => Promise<void>;
   handleRecordPayment: (payload: RecordPaymentPayload) => Promise<void>;
@@ -790,16 +812,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     dispatch({ type: ActionType.LOAD_DATA, payload: {
-      // courses: SAMPLE_COURSES, // Now fetched
-      // lessons: SAMPLE_LESSONS, // Now fetched dynamically
-      assignments: SAMPLE_ASSIGNMENTS, 
-      submissions: SAMPLE_SUBMISSIONS, 
-      enrollments: INITIAL_ENROLLMENTS, 
-      attendanceRecords: SAMPLE_ATTENDANCE, 
-      // payments: SAMPLE_PAYMENTS, // Now fetched dynamically
-      notifications: SAMPLE_NOTIFICATIONS, 
-      // announcements: SAMPLE_ANNOUNCEMENTS, // Now fetched dynamically
-    } }); 
+      // courses, lessons, assignments, submissions are now fetched dynamically
+      enrollments: INITIAL_ENROLLMENTS,
+      attendanceRecords: SAMPLE_ATTENDANCE,
+      notifications: SAMPLE_NOTIFICATIONS,
+      // payments and announcements are also fetched dynamically
+    } });
   }, [dispatch]);
 
   const fetchAllUsers = useCallback(async () => {
@@ -840,7 +858,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const fetchAllLessons = useCallback(async () => {
     if (state.courses.length === 0) {
-        dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] }); 
+        dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
         return;
     }
     dispatch({ type: ActionType.FETCH_LESSONS_REQUEST });
@@ -851,7 +869,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       const allLessons: Lesson[] = [];
-      // Using Promise.all to fetch lessons for all courses concurrently
       await Promise.all(state.courses.map(async (course) => {
         const lessonsColRef = collection(db, "courses", course.id, "lessons");
         const lessonSnapshot = await getDocs(lessonsColRef);
@@ -864,7 +881,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error("Error fetching lessons:", error);
       dispatch({ type: ActionType.FETCH_LESSONS_FAILURE, payload: error.message || "Failed to fetch lessons." });
     }
-  }, [dispatch, state.courses]); 
+  }, [dispatch, state.courses]);
+
+  const fetchAllAssignments = useCallback(async () => {
+    if (!state.currentUser || state.courses.length === 0) {
+        dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] }); // Clear if no user/courses or ensure empty if called
+        return;
+    }
+    dispatch({ type: ActionType.FETCH_ASSIGNMENTS_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+        dispatch({ type: ActionType.FETCH_ASSIGNMENTS_FAILURE, payload: "Firestore not available." });
+        return;
+    }
+    try {
+        const allAssignments: Assignment[] = [];
+        for (const course of state.courses) { // state.courses should already be filtered by user role/enrollment
+            const assignmentsColRef = collection(db, "courses", course.id, "assignments");
+            const assignmentSnapshot = await getDocs(assignmentsColRef);
+            assignmentSnapshot.forEach(doc => {
+                allAssignments.push({ id: doc.id, courseId: course.id, ...doc.data() } as Assignment);
+            });
+        }
+        dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: allAssignments });
+    } catch (error: any) {
+        console.error("Error fetching assignments:", error);
+        dispatch({ type: ActionType.FETCH_ASSIGNMENTS_FAILURE, payload: error.message || "Failed to fetch assignments." });
+    }
+  }, [dispatch, state.currentUser, state.courses]);
+
+  const fetchAllSubmissions = useCallback(async () => {
+    if (!state.currentUser || state.assignments.length === 0) {
+        dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] }); // Clear if no user/assignments or ensure empty
+        return;
+    }
+    dispatch({ type: ActionType.FETCH_SUBMISSIONS_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+        dispatch({ type: ActionType.FETCH_SUBMISSIONS_FAILURE, payload: "Firestore not available." });
+        return;
+    }
+    try {
+        const allSubmissions: Submission[] = [];
+        for (const assignment of state.assignments) {
+            if (!assignment.courseId) continue;
+            const submissionsColRef = collection(db, "courses", assignment.courseId, "assignments", assignment.id, "submissions");
+
+            let q = query(submissionsColRef);
+            // If the current user is a student, only fetch their own submissions for this assignment.
+            if (state.currentUser.role === UserRole.STUDENT) {
+               q = query(submissionsColRef, where("studentId", "==", state.currentUser.id));
+            }
+            // Teachers/Admins will get all submissions for the assignments they can view (implicitly handled by state.assignments).
+
+            const submissionSnapshot = await getDocs(q);
+            submissionSnapshot.forEach(doc => {
+                allSubmissions.push({ id: doc.id, ...doc.data() } as Submission);
+            });
+        }
+        dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: allSubmissions });
+    } catch (error: any) {
+        console.error("Error fetching submissions:", error);
+        dispatch({ type: ActionType.FETCH_SUBMISSIONS_FAILURE, payload: error.message || "Failed to fetch submissions." });
+    }
+  }, [dispatch, state.currentUser, state.assignments]);
+
 
   const fetchAllPayments = useCallback(async () => {
     dispatch({ type: ActionType.FETCH_PAYMENTS_REQUEST });
@@ -893,7 +974,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       const announcementsCol = collection(db, "announcements");
-      const q = query(announcementsCol, orderBy("timestamp", "desc")); // Fetch ordered
+      const q = query(announcementsCol, orderBy("timestamp", "desc"));
       const announcementSnapshot = await getDocs(q);
       const announcementsList = announcementSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Announcement));
       dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: announcementsList });
@@ -902,7 +983,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_FAILURE, payload: error.message || "Failed to fetch announcements." });
     }
   }, [dispatch]);
-  
+
   const fetchDirectMessagesForUser = useCallback(async (userId: string) => {
     dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_REQUEST });
     const db = getFirebaseDb();
@@ -920,7 +1001,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ]);
 
       const messagesList: DirectMessage[] = [];
-      const messageIds = new Set<string>(); // To avoid duplicates if a user messages themselves (unlikely but possible)
+      const messageIds = new Set<string>();
 
       sentSnapshot.forEach(doc => {
         if (!messageIds.has(doc.id)) {
@@ -934,7 +1015,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           messageIds.add(doc.id);
         }
       });
-      
+
       dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: messagesList.sort((a,b) => a.timestamp - b.timestamp) });
     } catch (error: any) {
       console.error("Error fetching direct messages:", error);
@@ -952,14 +1033,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.SET_LOADING, payload: false });
       return;
     }
-    
-    const dbInstance = getFirebaseDb(); 
+
+    const dbInstance = getFirebaseDb();
     if (!dbInstance) {
         console.error("Firebase Firestore instance not available.");
     }
 
     const unsubscribe = onAuthStateChanged(authInstance, async (firebaseUser: FirebaseUser | null) => {
-      dispatch({ type: ActionType.SET_LOADING, payload: true }); 
+      dispatch({ type: ActionType.SET_LOADING, payload: true });
       if (firebaseUser) {
         if (!dbInstance) {
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
@@ -974,23 +1055,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (userDocSnap.exists()) {
             const userProfile = { id: userDocSnap.id, ...userDocSnap.data() } as User;
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
-            if (userProfile) { 
+            if (userProfile) {
                 await Promise.all([
-                    fetchAllUsers(), 
-                    fetchAllCourses(), 
+                    fetchAllUsers(),
+                    fetchAllCourses(),
                     fetchAllPayments(),
                     fetchAllAnnouncements(),
                     fetchDirectMessagesForUser(userProfile.id)
                 ]);
-            } else { // Should not happen if userProfile is valid
-                dispatch({ type: ActionType.SET_LOADING, payload: false }); 
+                // Lessons, Assignments, and Submissions will be fetched by their own useEffects
+                // once currentUser and courses/assignments are populated.
+            } else {
+                dispatch({ type: ActionType.SET_LOADING, payload: false });
             }
           } else {
-            await signOut(authInstance); 
+            await signOut(authInstance);
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-            dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
+            // Clear all fetched data
+            dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
             dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
             dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
             dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
             dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
             dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
@@ -999,20 +1085,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch (error: any) {
           dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-          dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
+           // Clear all fetched data on error too
+          dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
           dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
           dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
+          dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
+          dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
           dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
           dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
           dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
           dispatch({ type: ActionType.SET_ERROR, payload: error.message || "Failed to load user profile." });
           dispatch({ type: ActionType.SET_LOADING, payload: false });
         }
-      } else { 
+      } else {
         dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-        dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] }); 
+         // Clear all fetched data on logout
+        dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
+        dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
+        dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
@@ -1020,19 +1112,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
     return () => unsubscribe();
-  }, [dispatch, fetchAllUsers, fetchAllCourses, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser]); 
+  }, [dispatch, fetchAllUsers, fetchAllCourses, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser]);
 
+  // useEffect for fetching lessons (depends on courses)
   useEffect(() => {
-    if (state.currentUser && state.courses.length > 0 && state.lessons.length === 0) { // Only fetch lessons if not already populated
+    if (state.currentUser && state.courses.length > 0) { // Check if lessons need fetching
       fetchAllLessons();
+    } else if (!state.currentUser) {
+        dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
     }
-  }, [state.currentUser, state.courses, state.lessons, fetchAllLessons]);
+  }, [state.currentUser, state.courses, fetchAllLessons, dispatch]);
+
+  // useEffect for fetching assignments (depends on courses)
+  useEffect(() => {
+      if (state.currentUser && state.courses.length > 0) {
+          fetchAllAssignments();
+      } else if (!state.currentUser) {
+          dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
+      }
+  }, [state.currentUser, state.courses, fetchAllAssignments, dispatch]);
+
+  // useEffect for fetching submissions (depends on assignments)
+  useEffect(() => {
+      if (state.currentUser && state.assignments.length > 0) {
+          fetchAllSubmissions();
+      } else if (!state.currentUser) {
+          dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
+      }
+  }, [state.currentUser, state.assignments, fetchAllSubmissions, dispatch]);
 
 
   useEffect(() => {
     if (state.error) {
       toast({ variant: "destructive", title: "Error", description: state.error });
-      dispatch({ type: ActionType.CLEAR_ERROR }); 
+      dispatch({ type: ActionType.CLEAR_ERROR });
     }
     if (state.successMessage) {
       toast({ title: "Success", description: state.successMessage });
@@ -1050,7 +1163,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       if (!payload.password) throw new Error("Password is required.");
       await signInWithEmailAndPassword(authInstance, payload.email, payload.password);
-      // User profile and data fetching will be handled by onAuthStateChanged
     } catch (error: any) {
       dispatch({ type: ActionType.LOGIN_USER_FAILURE, payload: error.message || "Failed to login." });
     }
@@ -1077,9 +1189,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png?text=${payload.name.substring(0,2).toUpperCase()}`,
       };
       await setDoc(doc(dbInstance, "users", firebaseUser.uid), newUserForFirestore);
-      // Don't dispatch SET_CURRENT_USER here; onAuthStateChanged will handle it.
-      // We can update the local users list optimistically if needed or rely on fetchAllUsers.
-      dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [...state.users, newUserForFirestore] }); // Optimistic update
+      dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [...state.users, newUserForFirestore] });
       dispatch({ type: ActionType.ADD_NOTIFICATION, payload: {
         userId: firebaseUser.uid, type: 'success',
         message: `Welcome to ${APP_NAME}, ${newUserForFirestore.name}! Account created.`
@@ -1103,7 +1213,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.LOGOUT_USER_FAILURE, payload: error.message || "Failed to logout." });
     }
   }, [dispatch]);
-  
+
   const handleLessonFileUpload = useCallback(async (courseId: string, lessonId: string, file: File) => {
     const storage = getFirebaseStorage();
     if (!storage) {
@@ -1132,7 +1242,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const assignmentFileUrl = await getDownloadURL(fileStorageRef);
     return { assignmentFileUrl, assignmentFileName: file.name };
   }, []);
-  
+
   const handleStudentSubmissionUpload = useCallback(async (courseId: string, assignmentId: string, studentId: string, file: File) => {
     const storage = getFirebaseStorage();
     if (!storage) {
@@ -1165,7 +1275,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             results.push({ success: false, email: studentData.email, error: "Email already exists in local state." });
             continue;
         }
-        
+
         const userCredential = await createUserWithEmailAndPassword(auth, studentData.email, studentData.password || "defaultPassword123");
         const firebaseUser = userCredential.user;
         const newUserDoc: User = {
@@ -1186,13 +1296,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         results.push({ success: false, email: studentData.email, error: error.message || "Unknown error during creation." });
       }
     }
-    
+
     if (createdUsers.length > 0) {
       dispatch({ type: ActionType.BULK_CREATE_STUDENTS_SUCCESS, payload: { users: createdUsers, results } });
-    } else if (results.some(r => !r.success && r.error !== "Email already exists in local state.")) { 
+    } else if (results.some(r => !r.success && r.error !== "Email already exists in local state.")) {
       dispatch({ type: ActionType.BULK_CREATE_STUDENTS_FAILURE, payload: { error: "Some students could not be created. Check details.", results } });
     } else {
-       dispatch({ type: ActionType.BULK_CREATE_STUDENTS_SUCCESS, payload: { users: [], results } }); 
+       dispatch({ type: ActionType.BULK_CREATE_STUDENTS_SUCCESS, payload: { users: [], results } });
     }
 
   }, [dispatch, state.users]);
@@ -1205,7 +1315,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     try {
-      const userId = doc(collection(db, "users")).id; 
+      const userId = doc(collection(db, "users")).id;
       const newUserDoc: User = {
         id: userId,
         name: payload.name,
@@ -1254,7 +1364,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleCreateCourse = useCallback(async (payload: CreateCoursePayload) => {
     dispatch({ type: ActionType.CREATE_COURSE_REQUEST });
     const db = getFirebaseDb();
-    
+
     if (!db) {
         console.error("[AppContext] Firestore DB instance is not available for handleCreateCourse.");
         dispatch({ type: ActionType.CREATE_COURSE_FAILURE, payload: "Firestore not available." });
@@ -1273,11 +1383,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             id: courseId,
             name: payload.name,
             description: payload.description,
-            teacherId: payload.teacherId || state.currentUser.id, 
+            teacherId: payload.teacherId || state.currentUser.id,
             studentIds: payload.studentIds || [],
             category: payload.category || '',
             cost: payload.cost || 0,
             prerequisites: payload.prerequisites || [],
+            bannerImageUrl: payload.bannerImageUrl,
         };
         console.log("[AppContext] Attempting to save course to Firestore:", newCourse);
         await setDoc(doc(db, "courses", courseId), newCourse);
@@ -1304,7 +1415,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const courseRef = doc(db, "courses", payload.id);
       const updateData: Partial<Course> = { ...payload };
-      delete updateData.id; 
+      delete updateData.id;
       await updateDoc(courseRef, updateData as any);
       dispatch({ type: ActionType.UPDATE_COURSE_SUCCESS, payload });
     } catch (error: any) {
@@ -1321,12 +1432,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       await deleteDoc(doc(db, "courses", payload.id));
+      // Cascading deletes of subcollections (lessons, assignments, submissions) should be handled by Firebase Functions or carefully client-side if necessary.
+      // For now, only the course document is deleted. Local state is updated in reducer.
       dispatch({ type: ActionType.DELETE_COURSE_SUCCESS, payload });
     } catch (error: any) {
       dispatch({ type: ActionType.DELETE_COURSE_FAILURE, payload: error.message || "Failed to delete course."});
     }
   }, [dispatch]);
-  
+
   const handleEnrollStudent = useCallback(async (payload: EnrollStudentPayload) => {
     dispatch({ type: ActionType.ENROLL_STUDENT_REQUEST });
     const { courseId, studentId } = payload;
@@ -1354,12 +1467,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const updatedCourseDoc = await getDoc(courseRef);
       const updatedCourse = { id: updatedCourseDoc.id, ...updatedCourseDoc.data() } as Course;
-      
+
       dispatch({ type: ActionType.ENROLL_STUDENT_SUCCESS, payload: { course: updatedCourse, enrollment: newEnrollment } });
 
-    } catch (error: any) { 
+    } catch (error: any) {
       dispatch({ type: ActionType.ENROLL_STUDENT_FAILURE, payload: error.message || "Failed to enroll student." });
-    } 
+    }
   }, [dispatch]);
 
   const handleUnenrollStudent = useCallback(async (payload: UnenrollStudentPayload) => {
@@ -1383,7 +1496,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const updatedCourseDoc = await getDoc(courseRef);
       const updatedCourse = { id: updatedCourseDoc.id, ...updatedCourseDoc.data() } as Course;
-      
+
       dispatch({ type: ActionType.UNENROLL_STUDENT_SUCCESS, payload: { course: updatedCourse, studentId, enrollmentId } });
     } catch (error: any) {
       dispatch({ type: ActionType.UNENROLL_STUDENT_FAILURE, payload: error.message || "Failed to unenroll student." });
@@ -1410,10 +1523,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return;
         }
       }
-      
+
       try {
         const lessonId = payload.id || doc(collection(db, "courses", payload.courseId, "lessons")).id;
-        const newLesson: Lesson = { 
+        const newLesson: Lesson = {
           id: lessonId,
           courseId: payload.courseId,
           title: payload.title,
@@ -1437,11 +1550,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.UPDATE_LESSON_FAILURE, payload: "Firestore or courseId not available." });
       return;
     }
-    
+
     let uploadedFileUrl = payload.fileUrl;
     let uploadedFileName = payload.fileName;
 
-    if (payload.file) { 
+    if (payload.file) {
       try {
         const { fileUrl: newFileUrl, fileName: newFileName } = await handleLessonFileUpload(payload.courseId, payload.id, payload.file);
         uploadedFileUrl = newFileUrl;
@@ -1450,14 +1563,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dispatch({ type: ActionType.UPDATE_LESSON_FAILURE, payload: error.message || "Failed to upload new lesson file." });
         return;
       }
-    } else if (payload.file === null && payload.fileUrl === undefined) { 
+    } else if (payload.file === null && payload.fileUrl === undefined) {
         uploadedFileUrl = undefined;
         uploadedFileName = undefined;
     }
 
     try {
       const lessonRef = doc(db, "courses", payload.courseId, "lessons", payload.id);
-      const updateData: Partial<Lesson> = { 
+      const updateData: Partial<Lesson> = {
         title: payload.title,
         contentMarkdown: payload.contentMarkdown,
         videoUrl: payload.videoUrl,
@@ -1471,7 +1584,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.UPDATE_LESSON_FAILURE, payload: error.message || "Failed to update lesson."});
     }
   }, [dispatch, handleLessonFileUpload]);
-  
+
   const handleDeleteLesson = useCallback(async (payload: DeleteLessonPayload) => {
     dispatch({ type: ActionType.DELETE_LESSON_REQUEST });
     const db = getFirebaseDb();
@@ -1521,10 +1634,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return;
         }
     }
-    
+
     try {
       const assignmentId = payload.id || doc(collection(db, "courses", payload.courseId, "assignments")).id;
-      
+
       let totalPoints = 0;
       if (payload.type === AssignmentType.QUIZ && payload.questions && payload.questions.length > 0) {
         totalPoints = payload.questions.reduce((sum, q) => sum + q.points, 0);
@@ -1543,7 +1656,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         type: payload.type,
         totalPoints,
       };
-      
+
       if (payload.rubric && payload.rubric.length > 0) {
         firestoreData.rubric = payload.rubric;
       }
@@ -1564,13 +1677,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               id: q.id || doc(collection(db, "temp")).id,
               assignmentId: assignmentId
             }))
-          : []; 
+          : [];
       }
-      
+
 
       await setDoc(doc(db, "courses", payload.courseId, "assignments", assignmentId), firestoreData);
-      
-      
+
+
       const newAssignmentForState: Assignment = {
         id: firestoreData.id,
         courseId: firestoreData.courseId,
@@ -1581,9 +1694,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         totalPoints: firestoreData.totalPoints,
         questions: payload.type === AssignmentType.QUIZ ? (firestoreData.questions || []) : null,
         rubric: firestoreData.rubric || null,
-        assignmentFileUrl: firestoreData.assignmentFileUrl || null, 
-        assignmentFileName: firestoreData.assignmentFileName || null, 
-        externalLink: firestoreData.externalLink || null, 
+        assignmentFileUrl: firestoreData.assignmentFileUrl || null,
+        assignmentFileName: firestoreData.assignmentFileName || null,
+        externalLink: firestoreData.externalLink || null,
       };
 
       dispatch({ type: ActionType.CREATE_ASSIGNMENT_SUCCESS, payload: newAssignmentForState });
@@ -1595,14 +1708,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const handleUpdateAssignment = useCallback(async (payload: UpdateAssignmentPayload & { assignmentFile?: File | null }) => {
     dispatch({ type: ActionType.UPDATE_ASSIGNMENT_REQUEST });
     const db = getFirebaseDb();
-    if (!db || !payload.courseId) { 
+    if (!db || !payload.courseId) {
       dispatch({ type: ActionType.UPDATE_ASSIGNMENT_FAILURE, payload: "Firestore or courseId not available." });
       return;
     }
 
     let uploadedFileUrl = payload.assignmentFileUrl;
     let uploadedFileName = payload.assignmentFileName;
-    
+
     if (payload.assignmentFile) {
         try {
             const { assignmentFileUrl: newFileUrl, assignmentFileName: newFileName } = await handleAssignmentAttachmentUpload(payload.courseId, payload.id, payload.assignmentFile);
@@ -1612,16 +1725,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             dispatch({ type: ActionType.UPDATE_ASSIGNMENT_FAILURE, payload: error.message || "Failed to upload new assignment attachment." });
             return;
         }
-    } else if (payload.assignmentFile === null && payload.assignmentFileUrl === undefined) { 
-        
-        uploadedFileUrl = null; 
-        uploadedFileName = null; 
+    } else if (payload.assignmentFile === null && payload.assignmentFileUrl === undefined) {
+
+        uploadedFileUrl = null;
+        uploadedFileName = null;
     }
 
     try {
       const assignmentRef = doc(db, "courses", payload.courseId, "assignments", payload.id);
-      
-      let totalPoints = payload.totalPoints || 0; 
+
+      let totalPoints = payload.totalPoints || 0;
       if (payload.manualTotalPoints !== undefined) {
           totalPoints = payload.manualTotalPoints;
       } else if (payload.type === AssignmentType.QUIZ && payload.questions && payload.questions.length > 0) {
@@ -1638,15 +1751,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         totalPoints,
       };
 
-      
+
       firestoreUpdateData.rubric = (payload.rubric && payload.rubric.length > 0) ? payload.rubric : null;
       firestoreUpdateData.externalLink = payload.externalLink || null;
-      
-      if (uploadedFileUrl !== undefined) { 
+
+      if (uploadedFileUrl !== undefined) {
         firestoreUpdateData.assignmentFileUrl = uploadedFileUrl;
         firestoreUpdateData.assignmentFileName = uploadedFileName;
       } else if (payload.assignmentFile === null && payload.assignmentFileUrl === undefined) {
-        
+
         firestoreUpdateData.assignmentFileUrl = null;
         firestoreUpdateData.assignmentFileName = null;
       }
@@ -1660,18 +1773,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               assignmentId: payload.id
             }))
           : [];
-      } else { 
-        firestoreUpdateData.questions = null; 
+      } else {
+        firestoreUpdateData.questions = null;
       }
-      
-      
-      await updateDoc(assignmentRef, firestoreUpdateData as any); 
-      
+
+
+      await updateDoc(assignmentRef, firestoreUpdateData as any);
+
       const updatedAssignmentForState: UpdateAssignmentPayload = {
-        ...payload, 
+        ...payload,
         courseId: payload.courseId,
-        assignmentFileUrl: uploadedFileUrl, 
-        assignmentFileName: uploadedFileName, 
+        assignmentFileUrl: uploadedFileUrl,
+        assignmentFileName: uploadedFileName,
         totalPoints: totalPoints,
         questions: payload.type === AssignmentType.QUIZ ? (firestoreUpdateData.questions || []) : null,
         rubric: firestoreUpdateData.rubric === null ? null : firestoreUpdateData.rubric,
@@ -1711,7 +1824,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.DELETE_ASSIGNMENT_FAILURE, payload: error.message || "Failed to delete assignment."});
     }
   }, [dispatch, state.assignments]);
-  
+
   const handleStudentSubmitAssignment = useCallback(async (payload: SubmitAssignmentPayload) => {
     dispatch({ type: ActionType.SUBMIT_ASSIGNMENT_REQUEST });
     const db = getFirebaseDb();
@@ -1732,7 +1845,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: submissionId,
         submittedAt: payload.submittedAt || new Date().toISOString(),
       };
-      delete (finalSubmission as any).file; 
+      delete (finalSubmission as any).file;
 
       await setDoc(doc(db, "courses", assignment.courseId, "assignments", payload.assignmentId, "submissions", submissionId), finalSubmission);
       dispatch({ type: ActionType.SUBMIT_ASSIGNMENT_SUCCESS, payload: finalSubmission });
@@ -1788,7 +1901,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let submissionToUpdate: Submission;
 
       if (!querySnapshot.empty) {
-        // Submission exists, update it
         const existingSubmissionDoc = querySnapshot.docs[0];
         submissionToUpdate = {
           ...existingSubmissionDoc.data() as Submission,
@@ -1802,14 +1914,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           feedback: submissionToUpdate.feedback,
         });
       } else {
-        // Submission does not exist, create it
         const newSubmissionId = doc(submissionCollectionRef).id;
         submissionToUpdate = {
           id: newSubmissionId,
           assignmentId: payload.assignmentId,
           studentId: payload.studentId,
           submittedAt: new Date().toISOString(),
-          content: "Administratively recorded.", // Or leave empty
+          content: "Administratively recorded.",
           grade: payload.grade,
           feedback: payload.feedback || "",
         };
@@ -1852,7 +1963,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const paymentRef = doc(db, "payments", payload.id);
       const updateData: Partial<Payment> = { ...payload };
-      delete updateData.id; 
+      delete updateData.id;
 
       if (payload.paymentDate === undefined) {
         delete updateData.paymentDate;
@@ -1865,7 +1976,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.UPDATE_PAYMENT_FAILURE, payload: error.message || "Failed to update payment." });
     }
   }, [dispatch, state.payments]);
-  
+
   const handleDeletePayment = useCallback(async (payload: DeletePaymentPayload) => {
     dispatch({ type: ActionType.DELETE_PAYMENT_REQUEST });
     const db = getFirebaseDb();
@@ -1880,7 +1991,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       dispatch({ type: ActionType.DELETE_PAYMENT_FAILURE, payload: error.message || "Failed to delete payment." });
     }
   }, [dispatch]);
-  
+
   const handleCreateAnnouncement = useCallback(async (payload: CreateAnnouncementPayload) => {
     dispatch({ type: ActionType.CREATE_ANNOUNCEMENT_REQUEST });
     const db = getFirebaseDb();
@@ -1925,17 +2036,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
         await setDoc(doc(db, "directMessages", messageId), newMessage);
         dispatch({ type: ActionType.SEND_DIRECT_MESSAGE_SUCCESS, payload: newMessage });
-        
-        // Send notification to recipient
+
         const recipientUser = state.users.find(u => u.id === payload.recipientId);
         if (recipientUser) {
-           dispatch({ 
-             type: ActionType.ADD_NOTIFICATION, 
-             payload: { 
-               userId: payload.recipientId, 
-               type: 'new_message', 
+           dispatch({
+             type: ActionType.ADD_NOTIFICATION,
+             payload: {
+               userId: payload.recipientId,
+               type: 'new_message',
                message: `New message from ${state.currentUser.name}: "${payload.content.substring(0,30)}..."`,
-               link: '/messages' // Or specific message link later
+               link: '/messages'
             }
           });
         }
@@ -1944,7 +2054,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dispatch({ type: ActionType.SEND_DIRECT_MESSAGE_FAILURE, payload: error.message || "Failed to send message."});
     }
   }, [dispatch, state.currentUser, state.users]);
-  
+
   const handleMarkMessageRead = useCallback(async (payload: MarkDirectMessageReadPayload) => {
     dispatch({ type: ActionType.MARK_DIRECT_MESSAGE_READ_REQUEST });
     const db = getFirebaseDb();

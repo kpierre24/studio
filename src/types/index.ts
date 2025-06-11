@@ -17,8 +17,8 @@ export enum AttendanceStatus {
 }
 
 export enum AssignmentType {
-  STANDARD = 'standard', 
-  QUIZ = 'quiz', 
+  STANDARD = 'standard',
+  QUIZ = 'quiz',
 }
 
 export enum QuestionType {
@@ -28,10 +28,10 @@ export enum QuestionType {
 }
 
 export enum AnnouncementAudience {
-  ALL = 'all', 
-  STUDENTS = 'students', 
-  TEACHERS = 'teachers', 
-  COURSE_SPECIFIC = 'course_specific', 
+  ALL = 'all',
+  STUDENTS = 'students',
+  TEACHERS = 'teachers',
+  COURSE_SPECIFIC = 'course_specific',
 }
 
 export enum PaymentStatus {
@@ -52,7 +52,7 @@ export enum ActionType {
   LOGOUT_USER_REQUEST = 'LOGOUT_USER_REQUEST',
   LOGOUT_USER_SUCCESS = 'LOGOUT_USER_SUCCESS',
   LOGOUT_USER_FAILURE = 'LOGOUT_USER_FAILURE',
-  SET_CURRENT_USER = 'SET_CURRENT_USER', 
+  SET_CURRENT_USER = 'SET_CURRENT_USER',
   FETCH_USER_PROFILE_SUCCESS = 'FETCH_USER_PROFILE_SUCCESS', // Used internally by auth flow
   FETCH_USER_PROFILE_FAILURE = 'FETCH_USER_PROFILE_FAILURE', // Used internally by auth flow
 
@@ -65,15 +65,15 @@ export enum ActionType {
   DELETE_USER_REQUEST = 'DELETE_USER_REQUEST',
   DELETE_USER_SUCCESS = 'DELETE_USER_SUCCESS',
   DELETE_USER_FAILURE = 'DELETE_USER_FAILURE',
-  
+
   FETCH_USERS_REQUEST = 'FETCH_USERS_REQUEST',
   FETCH_USERS_SUCCESS = 'FETCH_USERS_SUCCESS',
   FETCH_USERS_FAILURE = 'FETCH_USERS_FAILURE',
-  
+
   BULK_CREATE_STUDENTS_REQUEST = 'BULK_CREATE_STUDENTS_REQUEST',
   BULK_CREATE_STUDENTS_SUCCESS = 'BULK_CREATE_STUDENTS_SUCCESS',
   BULK_CREATE_STUDENTS_FAILURE = 'BULK_CREATE_STUDENTS_FAILURE',
-  
+
   // Course Management
   FETCH_COURSES_REQUEST = 'FETCH_COURSES_REQUEST',
   FETCH_COURSES_SUCCESS = 'FETCH_COURSES_SUCCESS',
@@ -87,7 +87,7 @@ export enum ActionType {
   DELETE_COURSE_REQUEST = 'DELETE_COURSE_REQUEST',
   DELETE_COURSE_SUCCESS = 'DELETE_COURSE_SUCCESS',
   DELETE_COURSE_FAILURE = 'DELETE_COURSE_FAILURE',
-  
+
   // Enrollment Management
   ENROLL_STUDENT_REQUEST = 'ENROLL_STUDENT_REQUEST',
   ENROLL_STUDENT_SUCCESS = 'ENROLL_STUDENT_SUCCESS',
@@ -109,7 +109,11 @@ export enum ActionType {
   DELETE_LESSON_REQUEST = 'DELETE_LESSON_REQUEST',
   DELETE_LESSON_SUCCESS = 'DELETE_LESSON_SUCCESS',
   DELETE_LESSON_FAILURE = 'DELETE_LESSON_FAILURE',
+
   // Assignment & Submission
+  FETCH_ASSIGNMENTS_REQUEST = 'FETCH_ASSIGNMENTS_REQUEST',
+  FETCH_ASSIGNMENTS_SUCCESS = 'FETCH_ASSIGNMENTS_SUCCESS',
+  FETCH_ASSIGNMENTS_FAILURE = 'FETCH_ASSIGNMENTS_FAILURE',
   CREATE_ASSIGNMENT_REQUEST = 'CREATE_ASSIGNMENT_REQUEST',
   CREATE_ASSIGNMENT_SUCCESS = 'CREATE_ASSIGNMENT_SUCCESS',
   CREATE_ASSIGNMENT_FAILURE = 'CREATE_ASSIGNMENT_FAILURE',
@@ -119,22 +123,25 @@ export enum ActionType {
   DELETE_ASSIGNMENT_REQUEST = 'DELETE_ASSIGNMENT_REQUEST',
   DELETE_ASSIGNMENT_SUCCESS = 'DELETE_ASSIGNMENT_SUCCESS',
   DELETE_ASSIGNMENT_FAILURE = 'DELETE_ASSIGNMENT_FAILURE',
-  
+
+  FETCH_SUBMISSIONS_REQUEST = 'FETCH_SUBMISSIONS_REQUEST',
+  FETCH_SUBMISSIONS_SUCCESS = 'FETCH_SUBMISSIONS_SUCCESS',
+  FETCH_SUBMISSIONS_FAILURE = 'FETCH_SUBMISSIONS_FAILURE',
   SUBMIT_ASSIGNMENT_REQUEST = 'SUBMIT_ASSIGNMENT_REQUEST',
   SUBMIT_ASSIGNMENT_SUCCESS = 'SUBMIT_ASSIGNMENT_SUCCESS',
   SUBMIT_ASSIGNMENT_FAILURE = 'SUBMIT_ASSIGNMENT_FAILURE',
-  
+
   GRADE_SUBMISSION_REQUEST = 'GRADE_SUBMISSION_REQUEST',
   GRADE_SUBMISSION_SUCCESS = 'GRADE_SUBMISSION_SUCCESS',
   GRADE_SUBMISSION_FAILURE = 'GRADE_SUBMISSION_FAILURE',
-  
+
   ADMIN_UPDATE_OR_CREATE_SUBMISSION_REQUEST = 'ADMIN_UPDATE_OR_CREATE_SUBMISSION_REQUEST',
   ADMIN_UPDATE_OR_CREATE_SUBMISSION_SUCCESS = 'ADMIN_UPDATE_OR_CREATE_SUBMISSION_SUCCESS',
   ADMIN_UPDATE_OR_CREATE_SUBMISSION_FAILURE = 'ADMIN_UPDATE_OR_CREATE_SUBMISSION_FAILURE',
 
   // Attendance
-  TAKE_ATTENDANCE = 'TAKE_ATTENDANCE', 
-  UPDATE_ATTENDANCE_RECORD = 'UPDATE_ATTENDANCE_RECORD', 
+  TAKE_ATTENDANCE = 'TAKE_ATTENDANCE',
+  UPDATE_ATTENDANCE_RECORD = 'UPDATE_ATTENDANCE_RECORD',
   // UI & Data
   LOAD_DATA = 'LOAD_DATA',
   SET_LOADING = 'SET_LOADING',
@@ -186,11 +193,11 @@ export enum ActionType {
 
 // Interfaces
 export interface User {
-  id: string; 
+  id: string;
   name: string;
-  email: string; 
+  email: string;
   role: UserRole;
-  avatarUrl?: string; 
+  avatarUrl?: string;
   password?: string; // Only for payload during creation by admin, not stored in Firestore doc
 }
 
@@ -198,32 +205,32 @@ export interface Course {
   id: string;
   name: string;
   description: string;
-  teacherId: string; 
+  teacherId: string;
   studentIds: string[];
   category?: string;
-  cost: number; 
-  prerequisites?: string[]; 
-  bannerImageUrl?: string; 
+  cost: number;
+  prerequisites?: string[];
+  bannerImageUrl?: string;
 }
 
 export interface Lesson {
   id: string;
   courseId: string;
   title: string;
-  contentMarkdown: string; 
+  contentMarkdown: string;
   videoUrl?: string;
-  fileUrl?: string; 
+  fileUrl?: string;
   fileName?: string;
   order: number;
 }
 
 export interface QuizQuestion {
   id: string;
-  assignmentId?: string; 
+  assignmentId?: string;
   questionText: string;
   questionType: QuestionType;
-  options?: string[]; 
-  correctAnswer: string | string[]; 
+  options?: string[];
+  correctAnswer: string | string[];
   points: number;
 }
 
@@ -238,13 +245,13 @@ export interface Assignment {
   courseId: string;
   title: string;
   description: string;
-  dueDate: string; 
+  dueDate: string;
   type: AssignmentType;
   totalPoints: number;
-  rubric?: RubricCriterion[] | null; 
-  questions?: QuizQuestion[] | null; 
-  assignmentFileUrl?: string | null; 
-  assignmentFileName?: string | null; 
+  rubric?: RubricCriterion[] | null;
+  questions?: QuizQuestion[] | null;
+  assignmentFileUrl?: string | null;
+  assignmentFileName?: string | null;
   externalLink?: string | null;
 }
 
@@ -261,13 +268,13 @@ export interface Submission {
   id: string;
   assignmentId: string;
   studentId: string;
-  submittedAt: string; 
-  content?: string; 
-  fileUrl?: string; 
-  fileName?: string; 
-  quizAnswers?: QuizAnswer[]; 
-  grade?: number; 
-  feedback?: string; 
+  submittedAt: string;
+  content?: string;
+  fileUrl?: string;
+  fileName?: string;
+  quizAnswers?: QuizAnswer[];
+  grade?: number;
+  feedback?: string;
   rubricScores?: { criterionId: string; score: number }[];
 }
 
@@ -275,17 +282,17 @@ export interface Enrollment {
   id: string;
   studentId: string;
   courseId: string;
-  enrollmentDate: string; 
-  grade?: string; 
+  enrollmentDate: string;
+  grade?: string;
 }
 
 export interface AttendanceRecord {
-  id: string; 
+  id: string;
   studentId: string;
   courseId: string;
-  date: string; 
+  date: string;
   status: AttendanceStatus;
-  notes?: string; 
+  notes?: string;
 }
 
 export interface Payment {
@@ -294,30 +301,30 @@ export interface Payment {
   courseId: string;
   amount: number;
   status: PaymentStatus;
-  paymentDate?: string; 
+  paymentDate?: string;
   transactionId?: string;
-  notes?: string; 
+  notes?: string;
 }
 
 export interface NotificationMessage {
   id: string;
-  userId?: string; 
-  courseId?: string; 
+  userId?: string;
+  courseId?: string;
   type: 'success' | 'error' | 'info' | 'warning' | 'new_assignment' | 'grade_update' | 'announcement' | 'payment_due' | 'payment_received' | 'submission_received' | 'submission_graded' | 'enrollment_update' | 'new_message';
   message: string;
-  link?: string; 
+  link?: string;
   read: boolean;
   timestamp: number;
 }
 
 export interface Announcement {
   id: string;
-  message: string; 
-  timestamp: number; 
-  type: string; 
-  courseId?: string; 
-  userId?: string;   
-  link?: string;     
+  message: string;
+  timestamp: number;
+  type: string;
+  courseId?: string;
+  userId?: string;
+  link?: string;
 }
 
 export interface DirectMessage {
@@ -325,16 +332,16 @@ export interface DirectMessage {
   senderId: string;
   recipientId: string;
   content: string;
-  timestamp: number; 
+  timestamp: number;
   read: boolean;
-  courseContextId?: string; 
+  courseContextId?: string;
 }
 
 
 // App State
 export interface AppState {
-  currentUser: User | null | undefined; 
-  users: User[]; 
+  currentUser: User | null | undefined;
+  users: User[];
   courses: Course[];
   lessons: Lesson[];
   assignments: Assignment[];
@@ -363,7 +370,7 @@ export type BulkCreateStudentsResultItem = { success: boolean; email: string; us
 export type BulkCreateStudentsResult = BulkCreateStudentsResultItem[];
 
 
-export type CreateCoursePayload = Omit<Course, 'id' | 'studentIds'> & { studentIds?: string[]; id?: string; }; 
+export type CreateCoursePayload = Omit<Course, 'id' | 'studentIds'> & { studentIds?: string[]; id?: string; };
 export type UpdateCoursePayload = Partial<Omit<Course, 'id'>> & { id: string };
 export type DeleteCoursePayload = { id: string };
 
@@ -374,7 +381,7 @@ export type UnenrollStudentSuccessPayload = { course: Course; studentId: string;
 
 
 export type CreateLessonPayload = Omit<Lesson, 'id'>;
-export type UpdateLessonPayload = Partial<Omit<Lesson, 'id' | 'courseId'>> & { id: string; courseId: string; }; 
+export type UpdateLessonPayload = Partial<Omit<Lesson, 'id' | 'courseId'>> & { id: string; courseId: string; };
 export type DeleteLessonPayload = { id: string; courseId: string };
 
 
@@ -392,16 +399,16 @@ export type GradeSubmissionPayload = {
 export type AdminUpdateOrCreateSubmissionPayload = {
   studentId: string;
   assignmentId: string;
-  courseId: string; 
+  courseId: string;
   grade: number;
   feedback?: string;
-  assignmentTotalPoints: number; 
+  assignmentTotalPoints: number;
 };
 
 
 export type TakeAttendancePayload = {
   courseId: string;
-  date: string; 
+  date: string;
   studentStatuses: Array<{ studentId: string; status: AttendanceStatus; notes?: string }>;
 };
 export type UpdateAttendanceRecordPayload = Partial<Omit<AttendanceRecord, 'id' | 'courseId' | 'studentId' | 'date'>> & { id: string };
@@ -425,7 +432,7 @@ export type AppAction =
   | { type: ActionType.LOGOUT_USER_REQUEST }
   | { type: ActionType.LOGOUT_USER_SUCCESS }
   | { type: ActionType.LOGOUT_USER_FAILURE; payload: string }
-  | { type: ActionType.SET_CURRENT_USER; payload: User | null } 
+  | { type: ActionType.SET_CURRENT_USER; payload: User | null }
   | { type: ActionType.FETCH_USER_PROFILE_SUCCESS; payload: User }
   | { type: ActionType.FETCH_USER_PROFILE_FAILURE; payload: string }
 
@@ -438,11 +445,11 @@ export type AppAction =
   | { type: ActionType.DELETE_USER_REQUEST }
   | { type: ActionType.DELETE_USER_SUCCESS; payload: DeleteUserPayload }
   | { type: ActionType.DELETE_USER_FAILURE; payload: string }
-  
+
   | { type: ActionType.FETCH_USERS_REQUEST }
   | { type: ActionType.FETCH_USERS_SUCCESS; payload: User[] }
   | { type: ActionType.FETCH_USERS_FAILURE; payload: string }
-  
+
   | { type: ActionType.BULK_CREATE_STUDENTS_REQUEST }
   | { type: ActionType.BULK_CREATE_STUDENTS_SUCCESS; payload: { users: User[]; results: BulkCreateStudentsResult } }
   | { type: ActionType.BULK_CREATE_STUDENTS_FAILURE; payload: { error: string; results: BulkCreateStudentsResult } }
@@ -479,7 +486,10 @@ export type AppAction =
   | { type: ActionType.DELETE_LESSON_REQUEST }
   | { type: ActionType.DELETE_LESSON_SUCCESS; payload: DeleteLessonPayload }
   | { type: ActionType.DELETE_LESSON_FAILURE; payload: string }
-  
+
+  | { type: ActionType.FETCH_ASSIGNMENTS_REQUEST }
+  | { type: ActionType.FETCH_ASSIGNMENTS_SUCCESS; payload: Assignment[] }
+  | { type: ActionType.FETCH_ASSIGNMENTS_FAILURE; payload: string }
   | { type: ActionType.CREATE_ASSIGNMENT_REQUEST }
   | { type: ActionType.CREATE_ASSIGNMENT_SUCCESS; payload: Assignment }
   | { type: ActionType.CREATE_ASSIGNMENT_FAILURE; payload: string }
@@ -490,10 +500,13 @@ export type AppAction =
   | { type: ActionType.DELETE_ASSIGNMENT_SUCCESS; payload: DeleteAssignmentPayload }
   | { type: ActionType.DELETE_ASSIGNMENT_FAILURE; payload: string }
 
+  | { type: ActionType.FETCH_SUBMISSIONS_REQUEST }
+  | { type: ActionType.FETCH_SUBMISSIONS_SUCCESS; payload: Submission[] }
+  | { type: ActionType.FETCH_SUBMISSIONS_FAILURE; payload: string }
   | { type: ActionType.SUBMIT_ASSIGNMENT_REQUEST }
   | { type: ActionType.SUBMIT_ASSIGNMENT_SUCCESS; payload: Submission }
   | { type: ActionType.SUBMIT_ASSIGNMENT_FAILURE; payload: string }
-  
+
   | { type: ActionType.GRADE_SUBMISSION_REQUEST }
   | { type: ActionType.GRADE_SUBMISSION_SUCCESS; payload: GradeSubmissionPayload }
   | { type: ActionType.GRADE_SUBMISSION_FAILURE; payload: string }
@@ -504,7 +517,7 @@ export type AppAction =
 
   | { type: ActionType.TAKE_ATTENDANCE; payload: TakeAttendancePayload }
   | { type: ActionType.UPDATE_ATTENDANCE_RECORD; payload: UpdateAttendanceRecordPayload }
-  
+
   | { type: ActionType.FETCH_PAYMENTS_REQUEST }
   | { type: ActionType.FETCH_PAYMENTS_SUCCESS; payload: Payment[] }
   | { type: ActionType.FETCH_PAYMENTS_FAILURE; payload: string }
@@ -536,7 +549,7 @@ export type AppAction =
   | { type: ActionType.MARK_DIRECT_MESSAGE_READ_FAILURE; payload: string }
 
 
-  | { type: ActionType.LOAD_DATA; payload: Partial<AppState> } 
+  | { type: ActionType.LOAD_DATA; payload: Partial<AppState> }
   | { type: ActionType.SET_LOADING; payload: boolean }
   | { type: ActionType.SET_ERROR; payload: string | null }
   | { type: ActionType.CLEAR_ERROR }
@@ -565,6 +578,7 @@ export interface GenerateQuizQuestionsOutput {
 
 // Ensure payload for UpdatePaymentPayload is specific for what can be updated
 // export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id' | 'studentId' | 'courseId'>>;
+
 
 
 
