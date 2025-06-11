@@ -13,24 +13,40 @@ export default function StudentDashboardPage() {
   const { state } = useAppContext();
   const { currentUser, courses, assignments, submissions, enrollments, announcements, isLoading } = state;
 
-  if (!currentUser && !isLoading) return <p>Redirecting to login...</p>;
-  if (isLoading || !currentUser) return <p>Loading dashboard...</p>;
+  // ALL HOOKS MUST BE CALLED AT THE TOP LEVEL, BEFORE ANY CONDITIONAL RETURNS.
+  const studentEnrollments = useMemo(() => {
+    if (!currentUser) return [];
+    return enrollments.filter(e => e.studentId === currentUser.id);
+  }, [enrollments, currentUser]);
 
-  const studentEnrollments = useMemo(() => enrollments.filter(e => e.studentId === currentUser.id), [enrollments, currentUser.id]);
-  const enrolledCourseIds = useMemo(() => studentEnrollments.map(e => e.courseId), [studentEnrollments]);
-  const enrolledCourses = useMemo(() => courses.filter(c => enrolledCourseIds.includes(c.id)), [courses, enrolledCourseIds]);
+  const enrolledCourseIds = useMemo(() => {
+    if (!currentUser) return [];
+    return studentEnrollments.map(e => e.courseId);
+  }, [studentEnrollments, currentUser]);
 
-  const upcomingAssignments = useMemo(() => assignments
-    .filter(a => enrolledCourseIds.includes(a.courseId) && new Date(a.dueDate) >= new Date())
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-    .slice(0, 3), [assignments, enrolledCourseIds]);
+  const enrolledCourses = useMemo(() => {
+    if (!currentUser) return [];
+    return courses.filter(c => enrolledCourseIds.includes(c.id));
+  }, [courses, enrolledCourseIds, currentUser]);
 
-  const recentAnnouncements = useMemo(() => (announcements || [])
-    .filter(ann => ann.userId === currentUser.id || (ann.courseId && enrolledCourseIds.includes(ann.courseId)) || (ann.type === 'announcement' && ann.userId === undefined && !ann.courseId))
-    .sort((a,b) => b.timestamp - a.timestamp)
-    .slice(0,3), [announcements, currentUser.id, enrolledCourseIds]);
+  const upcomingAssignments = useMemo(() => {
+    if (!currentUser) return [];
+    return assignments
+      .filter(a => enrolledCourseIds.includes(a.courseId) && new Date(a.dueDate) >= new Date())
+      .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
+      .slice(0, 3);
+  }, [assignments, enrolledCourseIds, currentUser]);
+
+  const recentAnnouncements = useMemo(() => {
+    if (!currentUser) return [];
+    return (announcements || [])
+      .filter(ann => ann.userId === currentUser.id || (ann.courseId && enrolledCourseIds.includes(ann.courseId)) || (ann.type === 'announcement' && ann.userId === undefined && !ann.courseId))
+      .sort((a,b) => b.timestamp - a.timestamp)
+      .slice(0,3);
+  }, [announcements, currentUser, enrolledCourseIds]);
 
   const recentlyGradedSubmissions = useMemo(() => {
+    if (!currentUser) return [];
     return submissions
       .filter(sub => sub.studentId === currentUser.id && sub.grade !== undefined)
       .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime()) // Assuming grading happens around submission time, or use a gradedAt timestamp if available
@@ -45,8 +61,22 @@ export default function StudentDashboardPage() {
           totalPoints: assignment?.totalPoints,
         };
       });
-  }, [submissions, assignments, courses, currentUser.id]);
+  }, [submissions, assignments, courses, currentUser]);
 
+  // Conditional returns now come AFTER all hook calls.
+  // ProtectedLayout should ideally handle redirection if !currentUser before this page renders.
+  if (!currentUser && !isLoading) {
+    // This state indicates auth might be resolved, but no user. ProtectedLayout should redirect.
+    // Displaying a generic message here as direct navigation in render is an anti-pattern.
+    return <p>Verifying authentication...</p>;
+  }
+
+  if (isLoading || !currentUser) {
+    // This state indicates data is loading or user is definitively not available post-load attempt.
+    return <p>Loading dashboard...</p>;
+  }
+
+  // If we reach here, currentUser is available.
   const quickLinks = [
     { name: "My Courses", href: "/student/courses", icon: BookOpen },
     { name: "My Assignments", href: "/student/assignments", icon: Edit3 }, // This page doesn't exist yet, but is a good target
@@ -93,7 +123,7 @@ export default function StudentDashboardPage() {
                 {recentlyGradedSubmissions.map(sub => (
                   <Link key={sub.id} href={`/student/courses/${assignments.find(a=>a.id === sub.assignmentId)?.courseId}?assignment=${sub.assignmentId}`} className="text-xs text-primary hover:underline block">
                      <div className="flex justify-between items-center">
-                        <span className="truncate w-3/4" title={sub.assignmentTitle}>{sub.assignmentTitle}</span> 
+                        <span className="truncate w-3/4" title={sub.assignmentTitle}>{sub.assignmentTitle}</span>
                         <span className="font-semibold">{sub.grade}/{sub.totalPoints}</span>
                      </div>
                   </Link>
@@ -107,7 +137,7 @@ export default function StudentDashboardPage() {
           </CardContent>
         </Card>
       </div>
-      
+
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -154,4 +184,4 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
-
+    
