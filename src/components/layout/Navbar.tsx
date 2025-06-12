@@ -94,7 +94,8 @@ export function Navbar() {
                     <Link href="/admin/users" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Users</Link>
                     <Link href="/admin/courses" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Courses</Link>
                     <Link href="/admin/attendance" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Attendance</Link>
-                    {/* Admin might have a payments overview page too */}
+                    <Link href="/admin/payments" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Payments</Link>
+                    <Link href="/admin/reports" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Reports</Link>
                   </>
                 )}
                 {currentUser.role === UserRole.TEACHER && (
@@ -109,8 +110,7 @@ export function Navbar() {
                   <>
                     <Link href="/student/dashboard" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Dashboard</Link>
                     <Link href="/student/courses" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Courses</Link>
-                    <Link href="/student/assignments" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Assignments</Link>
-                    <Link href="/student/grades" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Grades</Link>
+                    {/* Removed /student/assignments and /student/grades as they are typically part of course detail */}
                     <Link href="/student/attendance" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Attendance</Link>
                     <Link href="/student/payments" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Payments</Link>
                   </>
@@ -198,7 +198,9 @@ export function Navbar() {
                         <DropdownMenuItem onClick={() => router.push('/calendar')}>Calendar</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => router.push('/messages')}>Messages</DropdownMenuItem>
                         {currentUser.role === UserRole.STUDENT && <DropdownMenuItem onClick={() => router.push('/student/payments')}>Payments</DropdownMenuItem>}
-                      {/* Add more role specific mobile nav links here */}
+                        {currentUser.role === UserRole.SUPER_ADMIN && <DropdownMenuItem onClick={() => router.push('/admin/attendance')}>Attendance</DropdownMenuItem>}
+                        {currentUser.role === UserRole.SUPER_ADMIN && <DropdownMenuItem onClick={() => router.push('/admin/payments')}>Payments</DropdownMenuItem>}
+                        {currentUser.role === UserRole.SUPER_ADMIN && <DropdownMenuItem onClick={() => router.push('/admin/reports')}>Reports</DropdownMenuItem>}
                       <DropdownMenuSeparator />
                     </div>
                     <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive focus:bg-destructive/10">
@@ -217,5 +219,3 @@ export function Navbar() {
     </nav>
   );
 }
-
-    
