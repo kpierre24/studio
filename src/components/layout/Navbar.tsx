@@ -110,7 +110,6 @@ export function Navbar() {
                   <>
                     <Link href="/student/dashboard" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Dashboard</Link>
                     <Link href="/student/courses" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Courses</Link>
-                    {/* Removed /student/assignments and /student/grades as they are typically part of course detail */}
                     <Link href="/student/attendance" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Attendance</Link>
                     <Link href="/student/payments" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Payments</Link>
                   </>
@@ -170,7 +169,7 @@ export function Navbar() {
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="relative h-9 w-9 rounded-full">
                        <Avatar className="h-9 w-9">
-                        <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} data-ai-hint="profile picture" />
+                        <AvatarImage src={currentUser.avatarUrl} alt={currentUser.name} data-ai-hint="profile picture"/>
                         <AvatarFallback>{currentUser.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                       </Avatar>
                     </Button>
@@ -197,6 +196,7 @@ export function Navbar() {
                         <DropdownMenuItem onClick={() => router.push('/announcements')}>Announcements</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => router.push('/calendar')}>Calendar</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => router.push('/messages')}>Messages</DropdownMenuItem>
+                        {currentUser.role === UserRole.STUDENT && <DropdownMenuItem onClick={() => router.push('/student/attendance')}>Attendance</DropdownMenuItem>}
                         {currentUser.role === UserRole.STUDENT && <DropdownMenuItem onClick={() => router.push('/student/payments')}>Payments</DropdownMenuItem>}
                         {currentUser.role === UserRole.SUPER_ADMIN && <DropdownMenuItem onClick={() => router.push('/admin/attendance')}>Attendance</DropdownMenuItem>}
                         {currentUser.role === UserRole.SUPER_ADMIN && <DropdownMenuItem onClick={() => router.push('/admin/payments')}>Payments</DropdownMenuItem>}
