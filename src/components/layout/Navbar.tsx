@@ -7,7 +7,7 @@ import { useAppContext } from '@/contexts/AppContext';
 import { ActionType, UserRole, type NotificationMessage } from '@/types';
 import { Button } from '@/components/ui/button';
 import { APP_NAME } from '@/lib/constants';
-import { Bell, LogOut, UserCircle, Settings, LayoutDashboard, BookOpen, Edit3, BarChart2, DollarSign, Users, GraduationCap, AnnoyedIcon, CalendarDays, CalendarCheck, MessageSquare } from 'lucide-react';
+import { Bell, LogOut, UserCircle, Settings, LayoutDashboard, BookOpen, Edit3, BarChart2, DollarSign, Users, GraduationCap, AnnoyedIcon, CalendarDays, CalendarCheck, MessageSquare, Video } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -110,6 +110,9 @@ export function Navbar() {
                   <>
                     <Link href="/student/dashboard" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Dashboard</Link>
                     <Link href="/student/courses" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Courses</Link>
+                    <Link href="/student/live-class" className="text-sm font-medium text-foreground hover:text-primary transition-colors flex items-center">
+                      <Video className="mr-1 h-4 w-4" /> Live Class
+                    </Link>
                     <Link href="/student/attendance" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Attendance</Link>
                     <Link href="/student/payments" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Payments</Link>
                   </>
@@ -196,6 +199,7 @@ export function Navbar() {
                         <DropdownMenuItem onClick={() => router.push('/announcements')}>Announcements</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => router.push('/calendar')}>Calendar</DropdownMenuItem>
                         <DropdownMenuItem onClick={() => router.push('/messages')}>Messages</DropdownMenuItem>
+                        {currentUser.role === UserRole.STUDENT && <DropdownMenuItem onClick={() => router.push('/student/live-class')}>Live Class</DropdownMenuItem>}
                         {currentUser.role === UserRole.STUDENT && <DropdownMenuItem onClick={() => router.push('/student/attendance')}>Attendance</DropdownMenuItem>}
                         {currentUser.role === UserRole.STUDENT && <DropdownMenuItem onClick={() => router.push('/student/payments')}>Payments</DropdownMenuItem>}
                         {currentUser.role === UserRole.SUPER_ADMIN && <DropdownMenuItem onClick={() => router.push('/admin/attendance')}>Attendance</DropdownMenuItem>}
@@ -219,3 +223,4 @@ export function Navbar() {
     </nav>
   );
 }
+

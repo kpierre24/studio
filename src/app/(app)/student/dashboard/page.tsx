@@ -6,7 +6,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { BookOpen, Edit3, CalendarDays, GraduationCap, FileText, DollarSign, CalendarCheck, CheckCircle } from "lucide-react";
+import { BookOpen, Edit3, CalendarDays, GraduationCap, FileText, DollarSign, CalendarCheck, CheckCircle, Video } from "lucide-react";
 import { format } from 'date-fns';
 
 export default function StudentDashboardPage() {
@@ -84,6 +84,7 @@ export default function StudentDashboardPage() {
   
   const quickLinks = [
     { name: "My Courses", href: "/student/courses", icon: BookOpen },
+    { name: "Join Live Class", href: "/student/live-class", icon: Video },
     { name: "My Assignments", href: "/student/courses", icon: Edit3 }, 
     { name: "My Grades", href: "/student/courses", icon: GraduationCap }, 
     { name: "My Attendance", href: "/student/attendance", icon: CalendarCheck },
