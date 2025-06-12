@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarCheck, Users, BookOpen, Filter, CheckCircle, XCircle, AlertTriangle, Info } from 'lucide-react';
+import { CalendarCheck, Users, BookOpen, Filter, CheckCircle, XCircle, AlertTriangle, Info, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 const ALL_COURSES_VALUE = "all_courses";
@@ -18,10 +18,10 @@ const ALL_STATUSES_VALUE = "all_statuses";
 
 export default function AdminAttendancePage() {
   const { state } = useAppContext();
-  const { attendanceRecords, users, courses } = state;
+  const { attendanceRecords, users, courses, isLoading: isContextLoading } = state;
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCourse, setSelectedCourse] = useState(ALL_COURSES_VALUE);
+  const [selectedCourse, setSelectedCourse] = useState(ALL_COURSES_VALUE); // Default to "All Courses"
   const [selectedStatus, setSelectedStatus] = useState(ALL_STATUSES_VALUE);
 
   const getUserName = (userId: string) => users.find(u => u.id === userId)?.name || 'Unknown User';
@@ -102,7 +102,12 @@ export default function AdminAttendancePage() {
           </div>
         </CardHeader>
         <CardContent>
-          {filteredAttendance.length === 0 ? (
+          {isContextLoading && attendanceRecords.length === 0 ? (
+             <div className="text-center py-10 text-muted-foreground">
+                <Loader2 className="mx-auto h-10 w-10 animate-spin mb-2 text-primary" />
+                Loading attendance records...
+            </div>
+          ) : filteredAttendance.length === 0 ? (
             <p className="text-muted-foreground text-center py-10">
               <Users className="h-12 w-12 mx-auto text-muted-foreground mb-2"/>
               No attendance records match your filters, or no records exist yet.
