@@ -60,6 +60,7 @@ export default function StudentDashboardPage() {
           assignmentTitle: assignment?.title || "Unknown Assignment",
           courseName: course?.name || "Unknown Course",
           totalPoints: assignment?.totalPoints,
+          courseId: assignment?.courseId, // Add courseId for linking
         };
       });
   }, [submissions, assignments, courses, currentUser]); // Depend on currentUser
@@ -106,7 +107,7 @@ export default function StudentDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{upcomingAssignments.length}</div>
-            <Link href={upcomingAssignments.length > 0 ? `/student/courses/${upcomingAssignments[0]?.courseId}?assignment=${upcomingAssignments[0]?.id}` : "/student/courses"} className="text-xs text-primary hover:underline">View assignments</Link>
+            <Link href={upcomingAssignments.length > 0 && upcomingAssignments[0]?.courseId && upcomingAssignments[0]?.id ? `/student/courses/${upcomingAssignments[0].courseId}?assignment=${upcomingAssignments[0].id}` : "/student/courses"} className="text-xs text-primary hover:underline">View assignments</Link>
           </CardContent>
         </Card>
          <Card>
@@ -117,17 +118,18 @@ export default function StudentDashboardPage() {
           <CardContent>
             {recentlyGradedSubmissions.length > 0 ? (
               <div className="space-y-1">
-                {recentlyGradedSubmissions.map(sub => {
-                  const assignmentForLink = assignments.find(a=>a.id === sub.assignmentId);
-                  return (
-                  <Link key={sub.id} href={assignmentForLink ? `/student/courses/${assignmentForLink.courseId}?assignment=${sub.assignmentId}` : "/student/courses"} className="text-xs text-primary hover:underline block">
+                {recentlyGradedSubmissions.map(sub => (
+                  <Link 
+                    key={sub.id} 
+                    href={sub.courseId ? `/student/courses/${sub.courseId}?assignment=${sub.assignmentId}` : "/student/courses"} 
+                    className="text-xs text-primary hover:underline block"
+                  >
                      <div className="flex justify-between items-center">
                         <span className="truncate w-3/4" title={sub.assignmentTitle}>{sub.assignmentTitle}</span>
                         <span className="font-semibold">{sub.grade}/{sub.totalPoints}</span>
                      </div>
                   </Link>
-                );
-              })}
+                ))}
               </div>
             ) : (
               <div className="text-2xl font-bold">-</div>

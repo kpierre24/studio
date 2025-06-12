@@ -224,8 +224,8 @@ export default function TeacherCoursesPage() {
             const courseImageSrc = course.bannerImageUrl || `https://placehold.co/600x400.png?text=${encodeURIComponent(course.name)}`;
             return (
             <Card key={course.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader className="pb-0"> {/* Reduced padding */}
-                 <div className="aspect-[16/9] relative mb-3 rounded-md overflow-hidden"> {/* Added rounded corners and margin */}
+              <CardHeader className="pb-0"> 
+                 <div className="aspect-[16/9] relative mb-3 rounded-md overflow-hidden">
                     <Image 
                         src={courseImageSrc}
                         alt={course.name} 
@@ -235,32 +235,39 @@ export default function TeacherCoursesPage() {
                         data-ai-hint="course banner"
                     />
                 </div>
-                <CardTitle className="hover:text-primary transition-colors text-xl"> {/* Slightly smaller title */}
+                <CardTitle className="hover:text-primary transition-colors text-xl"> 
                   <Link href={`/teacher/courses/${course.id}`}>{course.name}</Link>
                 </CardTitle>
-                <CardDescription className="h-10 overflow-hidden text-ellipsis text-xs">{course.description}</CardDescription> {/* Smaller description */}
+                <CardDescription className="h-10 overflow-hidden text-ellipsis text-xs">{course.description}</CardDescription>
               </CardHeader>
-              <CardContent className="flex-grow pt-2 space-y-0.5 text-sm"> {/* Reduced padding and spacing */}
+              <CardContent className="flex-grow pt-2 space-y-0.5 text-sm">
                 <p className="text-muted-foreground text-xs">Category: {course.category || 'N/A'}</p>
                 <div className="flex items-center text-muted-foreground text-xs">
-                    <Users className="mr-1.5 h-3.5 w-3.5" /> Students: {course.studentIds.length} {/* Smaller icon */}
+                    <Users className="mr-1.5 h-3.5 w-3.5" /> Students: {course.studentIds.length}
                 </div>
                 <p className="text-muted-foreground text-xs">Cost: ${course.cost || 0}</p>
               </CardContent>
-              <CardFooter className="flex flex-col items-stretch gap-2 pt-3"> {/* Reduced padding */}
-                <Button variant="outline" size="sm" asChild disabled={isLoading}> {/* Smaller button */}
+              <CardFooter className="flex flex-col items-stretch gap-2 pt-3"> 
+                <Button variant="outline" size="sm" asChild disabled={isLoading}>
                   <Link href={`/teacher/courses/${course.id}`}>
                     <BookOpen className="mr-2 h-4 w-4" /> Manage Course
                   </Link>
                 </Button>
-                <div className="grid grid-cols-3 gap-1.5"> {/* Reduced gap */}
-                    <Button variant="ghost" size="sm" onClick={() => handleOpenCourseModal(course)} title="Edit Course" className="flex-1 justify-center px-2" disabled={isLoading}>
+                <div className="grid grid-cols-3 gap-1.5">
+                    <Button variant="ghost" size="sm" onClick={() => handleOpenCourseModal(course)} title="Edit Course Details" className="flex-1 justify-center px-1" disabled={isLoading}>
                         <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" title="Add Assignment" onClick={() => handleOpenAssignmentModal(course)} className="flex-1 justify-center px-2" disabled={isLoading}>
+                    <Button variant="ghost" size="sm" title="Create New Assignment" onClick={() => handleOpenAssignmentModal(course)} className="flex-1 justify-center px-1" disabled={isLoading}>
                         <PlusCircle className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive-foreground hover:bg-destructive flex-1 justify-center px-2" title="Delete Course" onClick={() => confirmDeleteCourse(course.id)} disabled={isLoading || course.studentIds.length > 0}>
+                    <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-destructive hover:text-destructive-foreground hover:bg-destructive/90 flex-1 justify-center px-1" 
+                        title="Delete Course" 
+                        onClick={() => confirmDeleteCourse(course.id)} 
+                        disabled={isLoading || course.studentIds.length > 0}
+                    >
                         <Trash2 className="h-4 w-4" />
                     </Button>
                 </div>

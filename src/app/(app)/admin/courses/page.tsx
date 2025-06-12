@@ -275,7 +275,11 @@ export default function AdminCoursesPage() {
                           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                           <AlertDialogDescription>
                               This action cannot be undone. This will permanently delete the course: <span className="font-semibold">{courseToDelete?.name}</span>.
-                              {courseToDelete && courseToDelete.studentIds.length > 0 && <strong className="block mt-2 text-destructive-foreground bg-destructive p-2 rounded-md">Warning: This course has {courseToDelete.studentIds.length} student(s) enrolled. Deletion is blocked. Unenroll students first.</strong>}
+                              {courseToDelete && courseToDelete.studentIds.length > 0 && 
+                                <strong className="block mt-2 font-semibold text-destructive-foreground bg-destructive p-2 rounded-md">
+                                  Warning: This course has {courseToDelete.studentIds.length} student(s) enrolled. Deletion is blocked. Please unenroll students first.
+                                </strong>
+                              }
                               Associated lessons and assignments will also be removed from local state. Submissions and files in storage will need manual cleanup.
                           </AlertDialogDescription>
                           </AlertDialogHeader>

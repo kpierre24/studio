@@ -42,6 +42,7 @@ import Image from 'next/image';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 
 interface LessonFormData extends Omit<CreateLessonPayload, 'courseId' | 'order' | 'fileUrl' | 'fileName'> {
@@ -131,6 +132,11 @@ export default function TeacherCourseDetailPage() {
 
   const courseLessons = useMemo(() => lessons.filter(l => l.courseId === courseId).sort((a, b) => a.order - b.order), [lessons, courseId]);
   const courseAssignments = useMemo(() => assignments.filter(a => a.courseId === courseId).sort((a,b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()), [assignments, courseId]);
+  const enrolledStudentsData = useMemo(() => {
+    if (!course) return [];
+    return users.filter(u => course.studentIds.includes(u.id));
+  }, [course, users]);
+
 
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
   const [lessonToDelete, setLessonToDelete] = useState<Lesson | null>(null);
@@ -399,7 +405,7 @@ export default function TeacherCourseDetailPage() {
             <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 rounded-none border-b">
               <TabsTrigger value="lessons" className="rounded-none py-3"><FileText className="mr-2" />Lessons ({courseLessons.length})</TabsTrigger>
               <TabsTrigger value="assignments" className="rounded-none py-3"><BookOpen className="mr-2" />Assignments ({courseAssignments.length})</TabsTrigger>
-              <TabsTrigger value="students" className="rounded-none py-3"><UserSquare className="mr-2" />Students ({course.studentIds.length})</TabsTrigger>
+              <TabsTrigger value="students" className="rounded-none py-3"><UserSquare className="mr-2" />Students ({enrolledStudentsData.length})</TabsTrigger>
               <TabsTrigger value="attendance" asChild className="rounded-none py-3">
                 <Link href={`/teacher/courses/${courseId}/attendance`}><CalendarCheck className="mr-2" />Attendance</Link>
               </TabsTrigger>
@@ -517,26 +523,28 @@ export default function TeacherCourseDetailPage() {
             </TabsContent>
 
             <TabsContent value="students" className="p-6">
-                <h3 className="text-xl font-semibold mb-4">Enrolled Students</h3>
-                 {isLoading && course.studentIds.length === 0 && !users.some(u => course.studentIds.includes(u.id)) && <p className="text-muted-foreground text-center py-4">Loading student information...</p>}
-                {!isLoading && course.studentIds.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">No students are currently enrolled in this course.</p>
-                ) : (
-                    <ul className="space-y-2">
-                    {course.studentIds.map(studentId => {
-                        const student = users.find(u => u.id === studentId);
-                        return student ? (
-                        <li key={student.id} className="p-3 border rounded-md flex items-center gap-3 hover:bg-muted/50 transition-colors">
-                            <Image src={student.avatarUrl || `https://placehold.co/40x40.png?text=${student.name.substring(0,1)}`} alt={student.name} width={40} height={40} className="rounded-full" data-ai-hint="student avatar"/>
-                            <div>
-                                <p className="font-medium">{student.name}</p>
-                                <p className="text-sm text-muted-foreground">{student.email}</p>
-                            </div>
-                        </li>
-                        ) : <li key={studentId} className="p-3 border rounded-md text-muted-foreground">Loading student data for ID: {studentId}...</li>;
-                    })}
-                    </ul>
-                )}
+              <h3 className="text-xl font-semibold mb-4">Enrolled Students ({enrolledStudentsData.length})</h3>
+              {isLoading && enrolledStudentsData.length === 0 && course.studentIds.length > 0 && <p className="text-muted-foreground text-center py-4">Loading student information...</p>}
+              {!isLoading && enrolledStudentsData.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No students are currently enrolled in this course.</p>
+              ) : (
+                <ScrollArea className="max-h-[500px]">
+                  <ul className="space-y-3 pr-4">
+                    {enrolledStudentsData.map(student => (
+                      <li key={student.id} className="p-3 border rounded-md flex items-center gap-3 hover:bg-muted/50 transition-colors">
+                        <Avatar>
+                          <AvatarImage src={student.avatarUrl} alt={student.name} data-ai-hint="student avatar" />
+                          <AvatarFallback>{student.name.substring(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">{student.name}</p>
+                          <p className="text-sm text-muted-foreground">{student.email}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </ScrollArea>
+              )}
             </TabsContent>
             
             <TabsContent value="attendance" className="p-6">
