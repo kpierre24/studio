@@ -98,7 +98,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         // enrollments: action.payload.enrollments !== undefined ? action.payload.enrollments : state.enrollments, // Managed by FETCH_ENROLLMENTS
-        attendanceRecords: action.payload.attendanceRecords !== undefined ? action.payload.attendanceRecords : state.attendanceRecords,
+        // attendanceRecords: action.payload.attendanceRecords !== undefined ? action.payload.attendanceRecords : state.attendanceRecords, // Attendance records fetched dynamically
         notifications: action.payload.notifications !== undefined ? action.payload.notifications : state.notifications,
         // Other data (courses, lessons, assignments, etc.) are fetched dynamically
       };
@@ -831,7 +831,7 @@ type AppContextType = {
   handleUpdateCourseDaySchedule: (payload: UpdateCourseDaySchedulePayload) => Promise<void>;
   handleClearCourseDaySchedule: (payload: ClearCourseDaySchedulePayload) => Promise<void>;
   handleSaveAttendanceRecords: (payload: TakeAttendancePayload) => Promise<void>;
-  fetchCurrentUserAttendanceRecords: () => Promise<void>;
+  fetchCurrentUserAttendanceRecords: (currentUser: User | null) => Promise<void>;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -993,9 +993,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch]);
 
-  const fetchCurrentUserAttendanceRecords = useCallback(async () => {
-    const currentUser = state.currentUser; // Get current user from state at call time
-    if (!currentUser) {
+  const fetchCurrentUserAttendanceRecords = useCallback(async (userToFetchFor: User | null) => {
+    if (!userToFetchFor) {
         dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_SUCCESS, payload: [] });
         return;
     }
@@ -1009,10 +1008,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
         const attendanceCol = collection(db, "attendanceRecords");
         let q;
-        if (currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.TEACHER) {
+        if (userToFetchFor.role === UserRole.SUPER_ADMIN || userToFetchFor.role === UserRole.TEACHER) {
             q = query(attendanceCol); // Admins and Teachers fetch all
-        } else if (currentUser.role === UserRole.STUDENT) {
-            q = query(attendanceCol, where("studentId", "==", currentUser.id)); // Students fetch only their own
+        } else if (userToFetchFor.role === UserRole.STUDENT) {
+            q = query(attendanceCol, where("studentId", "==", userToFetchFor.id)); // Students fetch only their own
         } else {
             dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_SUCCESS, payload: [] }); // Should not happen
             return;
@@ -1025,7 +1024,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.error("Error fetching attendance records for current user:", error);
         dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_FAILURE, payload: error.message || "Failed to fetch attendance records." });
     }
-  }, [dispatch, state.currentUser]); // Add state.currentUser as a dependency
+  }, [dispatch]);
 
 
   const fetchCourseSchedule = useCallback(async (courseId: string) => {
@@ -1241,7 +1240,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             await fetchAllPayments(userProfile); 
             await fetchAllAnnouncements();
             await fetchDirectMessagesForUser(userProfile.id);
-            await fetchCurrentUserAttendanceRecords(); 
+            await fetchCurrentUserAttendanceRecords(userProfile); 
           } else {
             await signOut(authInstance); 
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
