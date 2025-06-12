@@ -221,6 +221,8 @@ export interface User {
   role: UserRole;
   avatarUrl?: string;
   password?: string; // Only for payload during creation by admin, not stored in Firestore doc
+  phoneNumber?: string;
+  bio?: string;
 }
 
 export interface Course {
@@ -392,8 +394,8 @@ export interface AppState {
 export type LoginUserPayload = { email: string; password?: string };
 export type RegisterStudentPayload = { name: string; email: string; password?: string; avatarUrl?: string };
 
-export type CreateUserPayload = Omit<User, 'id' | 'avatarUrl'> & Partial<Pick<User, 'avatarUrl'>>;
-export type UpdateUserPayload = Partial<Omit<User, 'id' | 'email' | 'password'>> & { id: string };
+export type CreateUserPayload = Omit<User, 'id' | 'avatarUrl' | 'phoneNumber' | 'bio'> & Partial<Pick<User, 'avatarUrl' | 'phoneNumber' | 'bio'>>;
+export type UpdateUserPayload = Partial<Omit<User, 'id' | 'email' | 'password'>> & { id: string }; // Admins can update role, users can update their own profiles
 export type DeleteUserPayload = { id: string };
 
 export type BulkCreateStudentData = { name: string; email: string; password?: string; };
@@ -644,6 +646,7 @@ export interface GenerateQuizQuestionsOutput {
 
 // Ensure payload for UpdatePaymentPayload is specific for what can be updated
 // export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id' | 'studentId' | 'courseId'>>;
+
 
 
 

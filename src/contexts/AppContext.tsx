@@ -391,7 +391,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         users: state.users.map(user =>
           user.id === payload.id ? { ...user, ...payload } : user
         ),
-        currentUser: state.currentUser?.id === payload.id ? { ...state.currentUser, ...payload } : state.currentUser,
+        currentUser: state.currentUser?.id === payload.id ? { ...state.currentUser, ...payload } as User : state.currentUser,
         isLoading: false, error: null,
         successMessage: `User ${payload.name || state.users.find(u=>u.id === payload.id)?.name} updated successfully.`,
       };
@@ -792,18 +792,19 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
   }
 };
 
-const AppContext = createContext<{
+type AppContextType = {
   state: AppState;
   dispatch: Dispatch<AppAction>;
   handleLoginUser: (payload: LoginUserPayload) => Promise<void>;
   handleRegisterStudent: (payload: RegisterStudentPayload) => Promise<void>;
   handleLogoutUser: () => Promise<void>;
+  handleUpdateUserProfile: (payload: UpdateUserPayload) => Promise<void>; // For users updating their own profile
   handleLessonFileUpload: (courseId: string, lessonId: string, file: File) => Promise<{ fileUrl: string, fileName: string }>;
   handleAssignmentAttachmentUpload: (courseId: string, assignmentId: string, file: File) => Promise<{ assignmentFileUrl: string, assignmentFileName: string }>;
   handleStudentSubmissionUpload: (courseId: string, assignmentId: string, studentId: string, file: File) => Promise<{ fileUrl: string, fileName: string }>;
   handleBulkCreateStudents: (studentsToCreate: BulkCreateStudentData[]) => Promise<void>;
   handleAdminCreateUser: (payload: CreateUserPayload) => Promise<void>;
-  handleAdminUpdateUser: (payload: UpdateUserPayload) => Promise<void>;
+  handleAdminUpdateUser: (payload: UpdateUserPayload) => Promise<void>; // For admins updating any user
   handleAdminDeleteUser: (payload: DeleteUserPayload) => Promise<void>;
   handleCreateCourse: (payload: CreateCoursePayload) => Promise<void>;
   handleUpdateCourse: (payload: UpdateCoursePayload) => Promise<void>;
@@ -831,9 +832,9 @@ const AppContext = createContext<{
   handleClearCourseDaySchedule: (payload: ClearCourseDaySchedulePayload) => Promise<void>;
   handleSaveAttendanceRecords: (payload: TakeAttendancePayload) => Promise<void>;
   fetchAllAttendanceRecords: () => Promise<void>;
+};
 
-
-} | undefined>(undefined);
+const AppContext = createContext<AppContextType | undefined>(undefined);
 
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -1356,6 +1357,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch]);
 
+  const handleUpdateUserProfile = useCallback(async (payload: UpdateUserPayload) => {
+    dispatch({ type: ActionType.UPDATE_USER_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.UPDATE_USER_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    if (state.currentUser?.id !== payload.id) {
+      dispatch({ type: ActionType.UPDATE_USER_FAILURE, payload: "User can only update their own profile." });
+      return;
+    }
+    try {
+      const userRef = doc(db, "users", payload.id);
+      const updateData: Partial<User> = {};
+      if (payload.name !== undefined) updateData.name = payload.name;
+      if (payload.avatarUrl !== undefined) updateData.avatarUrl = payload.avatarUrl;
+      if (payload.phoneNumber !== undefined) updateData.phoneNumber = payload.phoneNumber;
+      if (payload.bio !== undefined) updateData.bio = payload.bio;
+
+      if (Object.keys(updateData).length === 0) {
+        dispatch({ type: ActionType.UPDATE_USER_SUCCESS, payload }); // No actual changes to save
+        toast({ title: "No Changes", description: "No profile information was changed." });
+        return;
+      }
+
+      await updateDoc(userRef, updateData);
+      dispatch({ type: ActionType.UPDATE_USER_SUCCESS, payload });
+    } catch (error: any) {
+      dispatch({ type: ActionType.UPDATE_USER_FAILURE, payload: error.message || "Failed to update profile."});
+    }
+  }, [dispatch, state.currentUser, toast]);
+
   const handleLessonFileUpload = useCallback(async (courseId: string, lessonId: string, file: File) => {
     const storage = getFirebaseStorage();
     if (!storage) {
@@ -1464,6 +1497,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         email: payload.email,
         role: payload.role,
         avatarUrl: payload.avatarUrl || `https://placehold.co/100x100.png`,
+        phoneNumber: payload.phoneNumber,
+        bio: payload.bio,
         // password field from payload is for admin reference, not stored or used for auth here.
       };
       await setDoc(doc(db, "users", userId), newUserDoc);
@@ -1482,7 +1517,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     try {
       const userRef = doc(db, "users", payload.id);
-      await updateDoc(userRef, { name: payload.name, role: payload.role, avatarUrl: payload.avatarUrl });
+      const updateData: Partial<User> = { ...payload };
+      delete updateData.id; // Don't try to update the ID field itself
+      await updateDoc(userRef, updateData as any);
       dispatch({ type: ActionType.UPDATE_USER_SUCCESS, payload });
     } catch (error: any) {
       dispatch({ type: ActionType.UPDATE_USER_FAILURE, payload: error.message || "Failed to update user."});
@@ -2267,12 +2304,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [dispatch]);
 
 
-  const contextValue = {
+  const contextValue: AppContextType = {
     state,
     dispatch,
     handleLoginUser,
     handleRegisterStudent,
     handleLogoutUser,
+    handleUpdateUserProfile,
     handleLessonFileUpload,
     handleAssignmentAttachmentUpload,
     handleStudentSubmissionUpload,
