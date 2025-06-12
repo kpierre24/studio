@@ -44,14 +44,14 @@ export default function CourseAttendancePage() {
 
   const selectedDayStatus = useMemo(() => {
     if (!selectedDate || !course) return null;
-    const dateStr = format(selectedDate, 'yyyy-MM-DD');
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const schedule = courseSchedules.find(cs => cs.courseId === courseId && cs.id === dateStr);
     return schedule ? schedule.status : null; // null if not set, 'class' or 'no_class' if set
   }, [selectedDate, courseId, courseSchedules, course]);
   
   const selectedDayScheduleDetails = useMemo(() => {
     if (!selectedDate || !course) return null;
-    const dateStr = format(selectedDate, 'yyyy-MM-DD');
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
     return courseSchedules.find(cs => cs.courseId === courseId && cs.id === dateStr);
   }, [selectedDate, courseId, courseSchedules, course]);
 
@@ -69,7 +69,7 @@ export default function CourseAttendancePage() {
       return;
     }
 
-    const dateStr = format(selectedDate, 'yyyy-MM-DD');
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const newAttendanceMap: Record<string, StudentAttendanceState> = {};
     
     const daySchedule = courseSchedules.find(cs => cs.courseId === courseId && cs.id === dateStr);
@@ -127,7 +127,7 @@ export default function CourseAttendancePage() {
     setIsSavingAttendance(true);
     const payload: TakeAttendancePayload = {
       courseId: course.id,
-      date: format(selectedDate, 'yyyy-MM-DD'),
+      date: format(selectedDate, 'yyyy-MM-dd'),
       studentStatuses: Object.values(studentAttendanceMap),
     };
     await handleSaveAttendanceRecords(payload);
@@ -157,7 +157,7 @@ export default function CourseAttendancePage() {
     if (!selectedDate || !course) return;
     const payload: UpdateCourseDaySchedulePayload = {
       courseId: course.id,
-      date: format(selectedDate, 'yyyy-MM-DD'),
+      date: format(selectedDate, 'yyyy-MM-dd'),
       status,
       notes: dayNotes,
     };
@@ -168,7 +168,7 @@ export default function CourseAttendancePage() {
     if (!selectedDate || !course) return;
     const payload: ClearCourseDaySchedulePayload = {
       courseId: course.id,
-      date: format(selectedDate, 'yyyy-MM-DD'),
+      date: format(selectedDate, 'yyyy-MM-dd'),
     };
     await handleClearCourseDaySchedule(payload);
     setDayNotes(''); 
