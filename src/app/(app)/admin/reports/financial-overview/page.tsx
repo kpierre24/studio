@@ -5,10 +5,21 @@ import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { DollarSign, TrendingUp, AlertCircle, BarChartBig, ArrowLeft } from "lucide-react";
+import { DollarSign, TrendingUp, AlertCircle, BarChartBig, ArrowLeft, AlertTriangle } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
 import { PaymentStatus } from "@/types";
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
+// Recharts components
+import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+
+
+const chartConfig = {
+  revenue: {
+    label: "Revenue",
+    color: "hsl(var(--chart-1))",
+  },
+} satisfies ChartConfig
 
 export default function FinancialOverviewReportsPage() {
   const { state } = useAppContext();
@@ -27,31 +38,29 @@ export default function FinancialOverviewReportsPage() {
       .filter(p => p.paymentDate && isWithinInterval(parseISO(p.paymentDate), { start: startOfThisMonth, end: endOfThisMonth }))
       .reduce((sum, p) => sum + p.amount, 0);
 
-    // Simplified: Sum of 'Pending' payments.
-    // A more accurate "Outstanding" would involve calculating (course_cost - amount_paid_for_course_enrollment) per student per course.
     const outstandingPayments = payments
         .filter(p => p.status === PaymentStatus.PENDING)
         .reduce((sum, p) => sum + p.amount, 0);
 
-    const revenueByCourse: Record<string, { name: string, revenue: number }> = {};
+    const revenueByCourse: Record<string, { name: string, revenue: number, id: string }> = {};
     paidPayments.forEach(p => {
       const course = courses.find(c => c.id === p.courseId);
       if (course) {
         if (!revenueByCourse[course.id]) {
-          revenueByCourse[course.id] = { name: course.name, revenue: 0 };
+          revenueByCourse[course.id] = { name: course.name, revenue: 0, id: course.id };
         }
         revenueByCourse[course.id].revenue += p.amount;
       }
     });
-
-    const topPerformingCourse = Object.values(revenueByCourse).sort((a,b) => b.revenue - a.revenue)[0] || { name: "N/A", revenue: 0 };
+    
+    const revenueByCourseList = Object.values(revenueByCourse).sort((a,b) => b.revenue - a.revenue);
     
     return {
       totalRevenue,
       revenueThisMonth,
       outstandingPayments,
-      topPerformingCourse,
-      revenueByCourseList: Object.values(revenueByCourse).sort((a,b) => b.revenue - a.revenue),
+      revenueByCourseList,
+      chartData: revenueByCourseList.slice(0, 7).map(item => ({ month: item.name, revenue: item.revenue, fill: "hsl(var(--chart-1))" })).reverse() // Show top 7 for chart
     };
   }, [payments, courses]);
 
@@ -112,24 +121,30 @@ export default function FinancialOverviewReportsPage() {
       <div className="grid gap-6 md:grid-cols-1">
         <Card>
           <CardHeader>
-            <CardTitle>Revenue by Course (Top 5)</CardTitle>
-            <CardDescription>Total 'Paid' revenue generated per course.</CardDescription>
+            <CardTitle>Revenue by Course</CardTitle>
+            <CardDescription>Total 'Paid' revenue generated per course (Top {financialStats.chartData.length} shown in chart).
+            {financialStats.revenueByCourseList.length > financialStats.chartData.length && ` Total ${financialStats.revenueByCourseList.length} courses with revenue.`}
+            </CardDescription>
           </CardHeader>
-          <CardContent className="min-h-[200px] bg-muted/50 rounded-md p-6">
-            {financialStats.revenueByCourseList.length > 0 ? (
-                <ul className="space-y-2">
-                    {financialStats.revenueByCourseList.slice(0,5).map(courseItem => (
-                        <li key={courseItem.name} className="flex justify-between text-sm border-b pb-1">
-                            <span>{courseItem.name}</span>
-                            <span className="font-semibold">${courseItem.revenue.toFixed(2)}</span>
-                        </li>
-                    ))}
-                     {financialStats.revenueByCourseList.length === 0 && <p className="text-muted-foreground">No paid revenue data by course yet.</p>}
-                </ul>
-            ): (
-                 <p className="text-muted-foreground text-center py-10">[Chart Placeholder: Revenue by Course - e.g., Top: {financialStats.topPerformingCourse.name} (${financialStats.topPerformingCourse.revenue.toFixed(2)})]</p>
+          <CardContent className="min-h-[300px] bg-muted/50 rounded-md p-4">
+            {financialStats.chartData.length > 0 ? (
+              <ChartContainer config={chartConfig} className="w-full h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={financialStats.chartData} layout="vertical" margin={{ right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid horizontal={false} />
+                    <XAxis type="number" dataKey="revenue" tickFormatter={(value) => `$${value.toLocaleString()}`} />
+                    <YAxis dataKey="month" type="category" tickLine={false} axisLine={false} width={150} hide={financialStats.chartData.length > 10} />
+                    <ChartTooltip
+                        cursor={false}
+                        content={<ChartTooltipContent hideLabel />}
+                    />
+                    <Bar dataKey="revenue" radius={5} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            ) : (
+                 <p className="text-muted-foreground text-center py-10">No paid revenue data by course yet.</p>
             )}
-             <p className="text-xs text-muted-foreground mt-4">Full chart visualization coming soon.</p>
           </CardContent>
         </Card>
       </div>
