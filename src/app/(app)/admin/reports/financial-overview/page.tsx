@@ -1,20 +1,60 @@
 
 "use client";
 
+import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { DollarSign, TrendingUp, AlertCircle, BarChartBig, ArrowLeft } from "lucide-react";
-
-// Placeholder data - replace with actual data fetching and charting
-const sampleFinancialStats = {
-  totalRevenue: 7500.00,
-  revenueThisMonth: 1200.00,
-  outstandingPayments: 350.00,
-  topPerformingCourse: { name: "Introduction to Programming", revenue: 3000.00 },
-};
+import { useAppContext } from "@/contexts/AppContext";
+import { PaymentStatus } from "@/types";
+import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from "date-fns";
 
 export default function FinancialOverviewReportsPage() {
+  const { state } = useAppContext();
+  const { payments, courses } = state;
+
+  const financialStats = useMemo(() => {
+    const paidPayments = payments.filter(p => p.status === PaymentStatus.PAID && p.paymentDate);
+    
+    const totalRevenue = paidPayments.reduce((sum, p) => sum + p.amount, 0);
+
+    const now = new Date();
+    const startOfThisMonth = startOfMonth(now);
+    const endOfThisMonth = endOfMonth(now);
+
+    const revenueThisMonth = paidPayments
+      .filter(p => p.paymentDate && isWithinInterval(parseISO(p.paymentDate), { start: startOfThisMonth, end: endOfThisMonth }))
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    // Simplified: Sum of 'Pending' payments.
+    // A more accurate "Outstanding" would involve calculating (course_cost - amount_paid_for_course_enrollment) per student per course.
+    const outstandingPayments = payments
+        .filter(p => p.status === PaymentStatus.PENDING)
+        .reduce((sum, p) => sum + p.amount, 0);
+
+    const revenueByCourse: Record<string, { name: string, revenue: number }> = {};
+    paidPayments.forEach(p => {
+      const course = courses.find(c => c.id === p.courseId);
+      if (course) {
+        if (!revenueByCourse[course.id]) {
+          revenueByCourse[course.id] = { name: course.name, revenue: 0 };
+        }
+        revenueByCourse[course.id].revenue += p.amount;
+      }
+    });
+
+    const topPerformingCourse = Object.values(revenueByCourse).sort((a,b) => b.revenue - a.revenue)[0] || { name: "N/A", revenue: 0 };
+    
+    return {
+      totalRevenue,
+      revenueThisMonth,
+      outstandingPayments,
+      topPerformingCourse,
+      revenueByCourseList: Object.values(revenueByCourse).sort((a,b) => b.revenue - a.revenue),
+    };
+  }, [payments, courses]);
+
   return (
     <div className="space-y-8">
       <Button variant="outline" asChild>
@@ -32,7 +72,7 @@ export default function FinancialOverviewReportsPage() {
       <CardDescription className="text-lg">
         Monitor revenue, track payments, and analyze financial performance.
         <span className="block mt-1 text-sm text-orange-500 flex items-center gap-1">
-          <AlertTriangle className="h-4 w-4"/> This page is a placeholder. Detailed charts and data visualizations are planned.
+          <AlertTriangle className="h-4 w-4"/> This page provides a basic overview. Detailed charts and data visualizations are planned.
         </span>
       </CardDescription>
 
@@ -43,8 +83,8 @@ export default function FinancialOverviewReportsPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${sampleFinancialStats.totalRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">All-time gross revenue</p>
+            <div className="text-2xl font-bold">${financialStats.totalRevenue.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">All-time (from 'Paid' payments)</p>
           </CardContent>
         </Card>
         <Card>
@@ -53,18 +93,18 @@ export default function FinancialOverviewReportsPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${sampleFinancialStats.revenueThisMonth.toFixed(2)}</div>
+            <div className="text-2xl font-bold">${financialStats.revenueThisMonth.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">Current calendar month</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Outstanding Payments</CardTitle>
+            <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
             <AlertCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${sampleFinancialStats.outstandingPayments.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">Across all pending invoices</p>
+            <div className="text-2xl font-bold">${financialStats.outstandingPayments.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Sum of payments with 'Pending' status</p>
           </CardContent>
         </Card>
       </div>
@@ -72,15 +112,26 @@ export default function FinancialOverviewReportsPage() {
       <div className="grid gap-6 md:grid-cols-1">
         <Card>
           <CardHeader>
-            <CardTitle>Revenue by Course</CardTitle>
-            <CardDescription>Chart showing revenue generated per course.</CardDescription>
+            <CardTitle>Revenue by Course (Top 5)</CardTitle>
+            <CardDescription>Total 'Paid' revenue generated per course.</CardDescription>
           </CardHeader>
-          <CardContent className="h-[350px] flex items-center justify-center bg-muted/50 rounded-md">
-            <p className="text-muted-foreground">[Chart Placeholder: Revenue by Course - e.g., Top: {sampleFinancialStats.topPerformingCourse.name} (${sampleFinancialStats.topPerformingCourse.revenue.toFixed(2)})]</p>
+          <CardContent className="min-h-[200px] bg-muted/50 rounded-md p-6">
+            {financialStats.revenueByCourseList.length > 0 ? (
+                <ul className="space-y-2">
+                    {financialStats.revenueByCourseList.slice(0,5).map(courseItem => (
+                        <li key={courseItem.name} className="flex justify-between text-sm border-b pb-1">
+                            <span>{courseItem.name}</span>
+                            <span className="font-semibold">${courseItem.revenue.toFixed(2)}</span>
+                        </li>
+                    ))}
+                     {financialStats.revenueByCourseList.length === 0 && <p className="text-muted-foreground">No paid revenue data by course yet.</p>}
+                </ul>
+            ): (
+                 <p className="text-muted-foreground text-center py-10">[Chart Placeholder: Revenue by Course - e.g., Top: {financialStats.topPerformingCourse.name} (${financialStats.topPerformingCourse.revenue.toFixed(2)})]</p>
+            )}
+             <p className="text-xs text-muted-foreground mt-4">Full chart visualization coming soon.</p>
           </CardContent>
         </Card>
-        {/* Add more placeholder cards for other planned financial reports as needed */}
-        {/* e.g., Payment Status Breakdown, Revenue Trends Over Time */}
       </div>
       
       <Card className="mt-8 bg-muted/30 border-dashed">

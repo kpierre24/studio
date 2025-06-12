@@ -1,25 +1,49 @@
 
 "use client";
 
+import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Users, BarChartHorizontalBig, UserPlus, AlertTriangle, ArrowLeft } from "lucide-react";
-
-// Placeholder data - replace with actual data fetching and charting components
-const sampleUserStats = {
-  totalUsers: 1250,
-  newRegistrationsToday: 15,
-  activeUsersDAU: 350,
-  activeUsersMAU: 900,
-  roleDistribution: {
-    Student: 1000,
-    Teacher: 200,
-    SuperAdmin: 50,
-  },
-};
+import { useAppContext } from "@/contexts/AppContext";
+import { UserRole } from "@/types";
 
 export default function UserActivityReportsPage() {
+  const { state } = useAppContext();
+  const { users } = state;
+
+  const userStats = useMemo(() => {
+    const totalUsers = users.length;
+    // Placeholder: "New Today" would require user creation timestamps.
+    const newRegistrationsToday = users.filter(u => {
+        // This is a mock. Real implementation needs creation timestamps.
+        // For now, let's assume users created in the last 24 hours if we had a 'createdAt' field.
+        // const today = new Date();
+        // const yesterday = new Date(today);
+        // yesterday.setDate(today.getDate() - 1);
+        // return u.createdAt && new Date(u.createdAt) > yesterday;
+        return false; // No createdAt field on User type
+    }).length;
+
+    // Placeholder: Active users (DAU/MAU) require activity tracking (e.g., last login).
+    const activeUsersDAU = Math.floor(totalUsers * 0.3) || 0; // Mock DAU
+    const activeUsersMAU = Math.floor(totalUsers * 0.7) || 0; // Mock MAU
+
+    const roleDistribution = users.reduce((acc, user) => {
+      acc[user.role] = (acc[user.role] || 0) + 1;
+      return acc;
+    }, {} as Record<UserRole, number>);
+
+    return {
+      totalUsers,
+      newRegistrationsToday: 1, // Static placeholder as creationTime not available
+      activeUsersDAU,
+      activeUsersMAU,
+      roleDistribution,
+    };
+  }, [users]);
+
   return (
     <div className="space-y-8">
       <Button variant="outline" asChild>
@@ -37,7 +61,7 @@ export default function UserActivityReportsPage() {
       <CardDescription className="text-lg">
         Insights into user registration, engagement, and demographics.
          <span className="block mt-1 text-sm text-orange-500 flex items-center gap-1">
-          <AlertTriangle className="h-4 w-4"/> This page is a placeholder. Detailed charts and data visualizations are planned.
+          <AlertTriangle className="h-4 w-4"/> Some metrics are placeholders. Detailed charts and data visualizations are planned.
         </span>
       </CardDescription>
 
@@ -48,38 +72,38 @@ export default function UserActivityReportsPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{sampleUserStats.totalUsers}</div>
+            <div className="text-2xl font-bold">{userStats.totalUsers}</div>
             <p className="text-xs text-muted-foreground">All registered accounts</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">New Today</CardTitle>
+            <CardTitle className="text-sm font-medium">New Today (Mock)</CardTitle>
             <UserPlus className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{sampleUserStats.newRegistrationsToday}</div>
-            <p className="text-xs text-muted-foreground">Registrations in last 24h</p>
+            <div className="text-2xl font-bold">{userStats.newRegistrationsToday}</div>
+            <p className="text-xs text-muted-foreground">Mock data - requires creation timestamps</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Users (DAU)</CardTitle>
+            <CardTitle className="text-sm font-medium">Active Users (DAU Mock)</CardTitle>
             <BarChartHorizontalBig className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{sampleUserStats.activeUsersDAU}</div>
-            <p className="text-xs text-muted-foreground">Daily active users</p>
+            <div className="text-2xl font-bold">{userStats.activeUsersDAU}</div>
+            <p className="text-xs text-muted-foreground">Mock daily active users</p>
           </CardContent>
         </Card>
          <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Users (MAU)</CardTitle>
+            <CardTitle className="text-sm font-medium">Active Users (MAU Mock)</CardTitle>
             <BarChartHorizontalBig className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{sampleUserStats.activeUsersMAU}</div>
-            <p className="text-xs text-muted-foreground">Monthly active users</p>
+            <div className="text-2xl font-bold">{userStats.activeUsersMAU}</div>
+            <p className="text-xs text-muted-foreground">Mock monthly active users</p>
           </CardContent>
         </Card>
       </div>
@@ -91,16 +115,23 @@ export default function UserActivityReportsPage() {
             <CardDescription>Chart showing new user sign-ups (e.g., daily, weekly, monthly).</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px] flex items-center justify-center bg-muted/50 rounded-md">
-            <p className="text-muted-foreground">[Chart Placeholder: New Registrations]</p>
+            <p className="text-muted-foreground">[Chart Placeholder: New Registrations - Requires Timestamps]</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
             <CardTitle>User Role Distribution</CardTitle>
-            <CardDescription>Pie chart or bar chart showing the breakdown of users by role.</CardDescription>
+            <CardDescription>Breakdown of users by role.</CardDescription>
           </CardHeader>
           <CardContent className="h-[300px] flex items-center justify-center bg-muted/50 rounded-md">
-             <p className="text-muted-foreground">[Chart Placeholder: Role Distribution - Students: {sampleUserStats.roleDistribution.Student}, Teachers: {sampleUserStats.roleDistribution.Teacher}, Admins: {sampleUserStats.roleDistribution.SuperAdmin}]</p>
+             <div className="text-center text-muted-foreground">
+                <p>[Chart Placeholder: Role Distribution]</p>
+                <ul className="mt-2 text-sm">
+                  <li>Students: {userStats.roleDistribution.Student || 0}</li>
+                  <li>Teachers: {userStats.roleDistribution.Teacher || 0}</li>
+                  <li>Super Admins: {userStats.roleDistribution.SuperAdmin || 0}</li>
+                </ul>
+             </div>
           </CardContent>
         </Card>
       </div>
@@ -110,7 +141,7 @@ export default function UserActivityReportsPage() {
         </CardHeader>
         <CardContent>
             <p className="text-center text-muted-foreground">
-                More detailed reports such as user engagement metrics (e.g., session duration, feature usage), cohort analysis, and demographic data will be added here.
+                More detailed reports such as user engagement metrics (e.g., session duration, feature usage), cohort analysis, and demographic data will be added here. This requires additional data tracking.
             </p>
         </CardContent>
       </Card>
