@@ -37,7 +37,7 @@ import {
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 
 
-import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, UpdateAttendanceRecordPayload, Payment, RecordPaymentPayload, UpdatePaymentPayload, DeletePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem, Enrollment, EnrollStudentPayload, EnrollStudentSuccessPayload, UnenrollStudentPayload, UnenrollStudentSuccessPayload, AdminUpdateOrCreateSubmissionPayload, CreateAnnouncementPayload, DirectMessage, CreateDirectMessagePayload, MarkDirectMessageReadPayload } from '@/types';
+import type { AppState, AppAction, User, Course, Lesson, Assignment, Submission, QuizQuestion, QuizAnswer, NotificationMessage, CreateUserPayload, UpdateUserPayload, DeleteUserPayload, Announcement, CreateCoursePayload, UpdateCoursePayload, DeleteCoursePayload, TakeAttendancePayload, Payment, RecordPaymentPayload, UpdatePaymentPayload, DeletePaymentPayload, CreateLessonPayload, UpdateLessonPayload, DeleteLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, DeleteAssignmentPayload, LoginUserPayload, RegisterStudentPayload, SubmitAssignmentPayload, GradeSubmissionPayload, BulkCreateStudentData, BulkCreateStudentsResult, BulkCreateStudentsResultItem, Enrollment, EnrollStudentPayload, EnrollStudentSuccessPayload, UnenrollStudentPayload, UnenrollStudentSuccessPayload, AdminUpdateOrCreateSubmissionPayload, CreateAnnouncementPayload, DirectMessage, CreateDirectMessagePayload, MarkDirectMessageReadPayload, CourseDaySchedule, UpdateCourseDaySchedulePayload, ClearCourseDaySchedulePayload, SaveAttendanceSuccessPayload, AttendanceRecord } from '@/types';
 import { ActionType, UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 import {
   INITIAL_ENROLLMENTS,
@@ -56,6 +56,7 @@ const initialState: AppState = {
   submissions: [],
   enrollments: [],
   attendanceRecords: [],
+  courseSchedules: [],
   payments: [],
   notifications: [],
   announcements: [],
@@ -166,6 +167,57 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.FETCH_SUBMISSIONS_FAILURE:
       return { ...state, isLoading: false, error: action.payload };
 
+    case ActionType.FETCH_ATTENDANCE_RECORDS_REQUEST:
+        return { ...state, isLoading: true, error: null };
+    case ActionType.FETCH_ATTENDANCE_RECORDS_SUCCESS:
+        return { ...state, attendanceRecords: action.payload, isLoading: false, error: null };
+    case ActionType.FETCH_ATTENDANCE_RECORDS_FAILURE:
+        return { ...state, isLoading: false, error: action.payload };
+
+    case ActionType.FETCH_COURSE_SCHEDULE_REQUEST:
+        return { ...state, isLoading: true, error: null };
+    case ActionType.FETCH_COURSE_SCHEDULE_SUCCESS:
+        return { ...state, courseSchedules: action.payload, isLoading: false, error: null };
+    case ActionType.FETCH_COURSE_SCHEDULE_FAILURE:
+        return { ...state, isLoading: false, error: action.payload };
+    
+    case ActionType.UPDATE_COURSE_DAY_SCHEDULE_REQUEST:
+        return { ...state, isLoading: true, error: null, successMessage: null };
+    case ActionType.UPDATE_COURSE_DAY_SCHEDULE_SUCCESS:
+        {
+            const updatedSchedule = action.payload;
+            const existingIndex = state.courseSchedules.findIndex(cs => cs.courseId === updatedSchedule.courseId && cs.id === updatedSchedule.id);
+            let newSchedules;
+            if (existingIndex > -1) {
+                newSchedules = state.courseSchedules.map(cs => cs.id === updatedSchedule.id && cs.courseId === updatedSchedule.courseId ? updatedSchedule : cs);
+            } else {
+                newSchedules = [...state.courseSchedules, updatedSchedule];
+            }
+            return {
+                ...state,
+                courseSchedules: newSchedules,
+                isLoading: false,
+                successMessage: `Day status for ${updatedSchedule.id} updated to ${updatedSchedule.status}.`
+            };
+        }
+    case ActionType.UPDATE_COURSE_DAY_SCHEDULE_FAILURE:
+        return { ...state, isLoading: false, error: action.payload };
+
+    case ActionType.CLEAR_COURSE_DAY_SCHEDULE_REQUEST:
+        return { ...state, isLoading: true, error: null, successMessage: null };
+    case ActionType.CLEAR_COURSE_DAY_SCHEDULE_SUCCESS:
+        {
+            const { courseId, date } = action.payload;
+            return {
+                ...state,
+                courseSchedules: state.courseSchedules.filter(cs => !(cs.courseId === courseId && cs.id === date)),
+                isLoading: false,
+                successMessage: `Day status for ${date} cleared.`
+            };
+        }
+    case ActionType.CLEAR_COURSE_DAY_SCHEDULE_FAILURE:
+        return { ...state, isLoading: false, error: action.payload };
+
 
     case ActionType.FETCH_PAYMENTS_REQUEST:
       return { ...state, isLoading: true, error: null };
@@ -253,6 +305,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.RECORD_PAYMENT_REQUEST:
     case ActionType.UPDATE_PAYMENT_REQUEST:
     case ActionType.DELETE_PAYMENT_REQUEST:
+    case ActionType.SAVE_ATTENDANCE_REQUEST:
       return { ...state, isLoading: true, error: null, successMessage: null };
 
     case ActionType.LOGIN_USER_SUCCESS:
@@ -298,6 +351,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.RECORD_PAYMENT_FAILURE:
     case ActionType.UPDATE_PAYMENT_FAILURE:
     case ActionType.DELETE_PAYMENT_FAILURE:
+    case ActionType.SAVE_ATTENDANCE_FAILURE:
       return { ...state, isLoading: false, error: action.payload, currentUser: state.currentUser === undefined ? null : state.currentUser  };
 
     case ActionType.LOGOUT_USER_SUCCESS:
@@ -629,54 +683,22 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
         return { ...state, error: action.payload.error };
     }
 
-    case ActionType.TAKE_ATTENDANCE: {
-      const { courseId, date, studentStatuses } = action.payload as TakeAttendancePayload;
-      const updatedAttendanceRecords = [...state.attendanceRecords];
-      let recordsAdded = 0;
-      let recordsUpdated = 0;
-
-      studentStatuses.forEach(ss => {
-        const existingRecordIndex = updatedAttendanceRecords.findIndex(
-          ar => ar.courseId === courseId && ar.studentId === ss.studentId && ar.date === date
-        );
-
-        if (existingRecordIndex !== -1) {
-          updatedAttendanceRecords[existingRecordIndex] = {
-            ...updatedAttendanceRecords[existingRecordIndex],
-            status: ss.status,
-            notes: ss.notes,
-          };
-          recordsUpdated++;
-        } else {
-          const newRecord: AttendanceRecord = {
-            id: `att-${courseId}-${ss.studentId}-${date}-${Math.random().toString(36).substring(2, 7)}`,
-            courseId,
-            studentId: ss.studentId,
-            date,
-            status: ss.status,
-            notes: ss.notes,
-          };
-          updatedAttendanceRecords.push(newRecord);
-          recordsAdded++;
-        }
-      });
+    case ActionType.SAVE_ATTENDANCE_SUCCESS:
+      // Merge new/updated records into existing state, avoiding duplicates
+      const updatedRecords = action.payload as AttendanceRecord[];
+      const existingRecordIds = new Set(updatedRecords.map(ur => ur.id));
+      const mergedAttendanceRecords = [
+        ...state.attendanceRecords.filter(ar => !existingRecordIds.has(ar.id)), // Keep old records not in payload
+        ...updatedRecords // Add all new/updated records from payload
+      ];
       return {
         ...state,
-        attendanceRecords: updatedAttendanceRecords,
-        successMessage: `Attendance for ${date} saved. ${recordsAdded} record(s) added, ${recordsUpdated} record(s) updated.`,
+        attendanceRecords: mergedAttendanceRecords,
+        isLoading: false,
+        error: null,
+        successMessage: 'Attendance saved successfully.',
       };
-    }
 
-    case ActionType.UPDATE_ATTENDANCE_RECORD: {
-      const payload = action.payload as UpdateAttendanceRecordPayload;
-      return {
-        ...state,
-        attendanceRecords: state.attendanceRecords.map(ar =>
-          ar.id === payload.id ? { ...ar, ...payload } : ar
-        ),
-        successMessage: `Attendance record ${payload.id} updated.`,
-      };
-    }
 
     case ActionType.RECORD_PAYMENT_SUCCESS: {
       const newPayment = action.payload;
@@ -792,6 +814,12 @@ const AppContext = createContext<{
   handleCreateAnnouncement: (payload: CreateAnnouncementPayload) => Promise<void>;
   handleSendDirectMessage: (payload: CreateDirectMessagePayload) => Promise<void>;
   handleMarkMessageRead: (payload: MarkDirectMessageReadPayload) => Promise<void>;
+  fetchCourseSchedule: (courseId: string) => Promise<void>;
+  handleUpdateCourseDaySchedule: (payload: UpdateCourseDaySchedulePayload) => Promise<void>;
+  handleClearCourseDaySchedule: (payload: ClearCourseDaySchedulePayload) => Promise<void>;
+  handleSaveAttendanceRecords: (payload: TakeAttendancePayload) => Promise<void>;
+  fetchAllAttendanceRecords: () => Promise<void>;
+
 
 } | undefined>(undefined);
 
@@ -802,8 +830,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   useEffect(() => {
     dispatch({ type: ActionType.LOAD_DATA, payload: {
-      // enrollments: INITIAL_ENROLLMENTS, // No longer loading static enrollments
-      attendanceRecords: SAMPLE_ATTENDANCE,
       notifications: SAMPLE_NOTIFICATIONS,
     } });
   }, [dispatch]);
@@ -838,9 +864,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const courseSnapshot = await getDocs(coursesCol);
       const coursesList = courseSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Course));
       dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: coursesList });
+      return coursesList; // Return for chaining
     } catch (error: any) {
       console.error("Error fetching all courses:", error);
       dispatch({ type: ActionType.FETCH_COURSES_FAILURE, payload: error.message || "Failed to fetch all courses." });
+      return [];
     }
   }, [dispatch]);
 
@@ -949,6 +977,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error: any) {
         console.error("Error fetching submissions:", error);
         dispatch({ type: ActionType.FETCH_SUBMISSIONS_FAILURE, payload: error.message || "Failed to fetch submissions." });
+    }
+  }, [dispatch]);
+
+  const fetchAllAttendanceRecords = useCallback(async () => {
+    dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      const attendanceCol = collection(db, "attendanceRecords");
+      const attendanceSnapshot = await getDocs(attendanceCol);
+      const attendanceList = attendanceSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
+      dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_SUCCESS, payload: attendanceList });
+    } catch (error: any) {
+      console.error("Error fetching attendance records:", error);
+      dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_FAILURE, payload: error.message || "Failed to fetch attendance records." });
+    }
+  }, [dispatch]);
+
+
+  const fetchCourseSchedule = useCallback(async (courseId: string) => {
+    dispatch({ type: ActionType.FETCH_COURSE_SCHEDULE_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.FETCH_COURSE_SCHEDULE_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      const scheduleCol = collection(db, "courses", courseId, "schedule");
+      const scheduleSnapshot = await getDocs(scheduleCol);
+      const schedulesList = scheduleSnapshot.docs.map(doc => ({ id: doc.id, courseId, ...doc.data() } as CourseDaySchedule));
+      dispatch({ type: ActionType.FETCH_COURSE_SCHEDULE_SUCCESS, payload: schedulesList });
+    } catch (error: any) {
+      console.error("Error fetching course schedule:", error);
+      dispatch({ type: ActionType.FETCH_COURSE_SCHEDULE_FAILURE, payload: error.message || "Failed to fetch course schedule." });
+    }
+  }, [dispatch]);
+
+  const handleUpdateCourseDaySchedule = useCallback(async (payload: UpdateCourseDaySchedulePayload) => {
+    dispatch({ type: ActionType.UPDATE_COURSE_DAY_SCHEDULE_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.UPDATE_COURSE_DAY_SCHEDULE_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      const scheduleDocRef = doc(db, "courses", payload.courseId, "schedule", payload.date);
+      const scheduleData: Omit<CourseDaySchedule, 'id' | 'courseId'> = {
+        status: payload.status,
+        notes: payload.notes || "",
+      };
+      await setDoc(scheduleDocRef, scheduleData); // Use setDoc to create or overwrite
+      dispatch({ type: ActionType.UPDATE_COURSE_DAY_SCHEDULE_SUCCESS, payload: { ...scheduleData, id: payload.date, courseId: payload.courseId } });
+    } catch (error: any) {
+      dispatch({ type: ActionType.UPDATE_COURSE_DAY_SCHEDULE_FAILURE, payload: error.message || "Failed to update day schedule." });
+    }
+  }, [dispatch]);
+
+  const handleClearCourseDaySchedule = useCallback(async (payload: ClearCourseDaySchedulePayload) => {
+    dispatch({ type: ActionType.CLEAR_COURSE_DAY_SCHEDULE_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.CLEAR_COURSE_DAY_SCHEDULE_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      const scheduleDocRef = doc(db, "courses", payload.courseId, "schedule", payload.date);
+      await deleteDoc(scheduleDocRef);
+      dispatch({ type: ActionType.CLEAR_COURSE_DAY_SCHEDULE_SUCCESS, payload });
+    } catch (error: any) {
+      dispatch({ type: ActionType.CLEAR_COURSE_DAY_SCHEDULE_FAILURE, payload: error.message || "Failed to clear day schedule." });
     }
   }, [dispatch]);
 
@@ -1073,14 +1174,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const userProfile = { id: userDocSnap.id, ...userDocSnap.data() } as User;
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
 
-            // Fetch initial data sequentially or in groups if dependencies exist
-            await fetchAllUsers(); // Depends on nothing
-            const courseData = await fetchAllCourses(); // Depends on nothing
-            await fetchEnrollmentsForUser(userProfile.id); // Depends on userProfile.id
+            await fetchAllUsers(); 
+            await fetchAllCourses(); 
+            await fetchEnrollmentsForUser(userProfile.id); 
             await fetchAllPayments(userProfile); 
             await fetchAllAnnouncements();
             await fetchDirectMessagesForUser(userProfile.id);
-            // Subsequent fetches that depend on courses or assignments will be triggered by useEffects watching state changes
+            await fetchAllAttendanceRecords(); 
           } else {
             await signOut(authInstance); 
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
@@ -1104,11 +1204,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
+        dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_SUCCESS, payload: [] });
+        dispatch({ type: ActionType.FETCH_COURSE_SCHEDULE_SUCCESS, payload: []});
         dispatch({ type: ActionType.SET_LOADING, payload: false });
       }
     });
     return () => unsubscribe();
-  }, [dispatch, fetchAllUsers, fetchAllCourses, fetchEnrollmentsForUser, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser]);
+  }, [dispatch, fetchAllUsers, fetchAllCourses, fetchEnrollmentsForUser, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser, fetchAllAttendanceRecords]);
 
   useEffect(() => {
     if (state.currentUser && state.courses.length > 0) {
@@ -1216,13 +1318,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.error("Firebase Storage service not available for lesson file upload.");
       throw new Error("Firebase Storage not available.");
     }
-    console.log(`[Firebase Storage Upload]: User authenticated: ${!!getFirebaseAuth()?.currentUser?.uid}`);
     const filePath = `lessons/${courseId}/${lessonId}/${file.name}`;
-    console.log(`[Firebase Storage Upload]: Attempting to upload to path: ${filePath}`);
     const fileStorageRef = storageRef(storage, filePath);
     await uploadBytes(fileStorageRef, file);
     const fileUrl = await getDownloadURL(fileStorageRef);
-    console.log(`[Firebase Storage Upload]: File uploaded successfully: ${fileUrl}`);
     return { fileUrl, fileName: file.name };
   }, []);
 
@@ -1931,6 +2030,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch]);
 
+  const handleSaveAttendanceRecords = useCallback(async (payload: TakeAttendancePayload) => {
+    dispatch({ type: ActionType.SAVE_ATTENDANCE_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.SAVE_ATTENDANCE_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      const batch = writeBatch(db);
+      const recordsToUpdateInState: AttendanceRecord[] = [];
+      let recordsAdded = 0;
+      let recordsUpdated = 0;
+
+      for (const ss of payload.studentStatuses) {
+        const attendanceColRef = collection(db, "attendanceRecords");
+        const q = query(attendanceColRef,
+          where("courseId", "==", payload.courseId),
+          where("studentId", "==", ss.studentId),
+          where("date", "==", payload.date)
+        );
+        const querySnapshot = await getDocs(q);
+
+        const recordData = {
+          courseId: payload.courseId,
+          studentId: ss.studentId,
+          date: payload.date,
+          status: ss.status,
+          notes: ss.notes || "",
+        };
+
+        if (!querySnapshot.empty) { // Record exists, update it
+          const existingDoc = querySnapshot.docs[0];
+          batch.update(doc(db, "attendanceRecords", existingDoc.id), { status: ss.status, notes: ss.notes || "" });
+          recordsToUpdateInState.push({ ...recordData, id: existingDoc.id });
+          recordsUpdated++;
+        } else { // Record doesn't exist, create it
+          const newRecordId = doc(collection(db, "attendanceRecords")).id;
+          batch.set(doc(db, "attendanceRecords", newRecordId), { ...recordData, id: newRecordId });
+          recordsToUpdateInState.push({ ...recordData, id: newRecordId });
+          recordsAdded++;
+        }
+      }
+
+      await batch.commit();
+      dispatch({ type: ActionType.SAVE_ATTENDANCE_SUCCESS, payload: recordsToUpdateInState });
+      toast({ title: "Attendance Saved", description: `${recordsAdded} record(s) added, ${recordsUpdated} record(s) updated.`});
+
+    } catch (error: any) {
+      dispatch({ type: ActionType.SAVE_ATTENDANCE_FAILURE, payload: error.message || "Failed to save attendance." });
+    }
+  }, [dispatch, toast]);
+
   const handleRecordPayment = useCallback(async (payload: RecordPaymentPayload) => {
     dispatch({ type: ActionType.RECORD_PAYMENT_REQUEST });
     const db = getFirebaseDb();
@@ -2105,6 +2256,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     handleCreateAnnouncement,
     handleSendDirectMessage,
     handleMarkMessageRead,
+    fetchCourseSchedule,
+    handleUpdateCourseDaySchedule,
+    handleClearCourseDaySchedule,
+    handleSaveAttendanceRecords,
+    fetchAllAttendanceRecords,
   };
 
   return (
@@ -2121,3 +2277,4 @@ export const useAppContext = () => {
   }
   return context;
 };
+

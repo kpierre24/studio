@@ -143,8 +143,24 @@ export enum ActionType {
   ADMIN_UPDATE_OR_CREATE_SUBMISSION_FAILURE = 'ADMIN_UPDATE_OR_CREATE_SUBMISSION_FAILURE',
 
   // Attendance
-  TAKE_ATTENDANCE = 'TAKE_ATTENDANCE',
-  UPDATE_ATTENDANCE_RECORD = 'UPDATE_ATTENDANCE_RECORD',
+  FETCH_ATTENDANCE_RECORDS_REQUEST = 'FETCH_ATTENDANCE_RECORDS_REQUEST',
+  FETCH_ATTENDANCE_RECORDS_SUCCESS = 'FETCH_ATTENDANCE_RECORDS_SUCCESS',
+  FETCH_ATTENDANCE_RECORDS_FAILURE = 'FETCH_ATTENDANCE_RECORDS_FAILURE',
+  SAVE_ATTENDANCE_REQUEST = 'SAVE_ATTENDANCE_REQUEST',
+  SAVE_ATTENDANCE_SUCCESS = 'SAVE_ATTENDANCE_SUCCESS',
+  SAVE_ATTENDANCE_FAILURE = 'SAVE_ATTENDANCE_FAILURE',
+
+  // Course Day Schedule
+  FETCH_COURSE_SCHEDULE_REQUEST = 'FETCH_COURSE_SCHEDULE_REQUEST',
+  FETCH_COURSE_SCHEDULE_SUCCESS = 'FETCH_COURSE_SCHEDULE_SUCCESS',
+  FETCH_COURSE_SCHEDULE_FAILURE = 'FETCH_COURSE_SCHEDULE_FAILURE',
+  UPDATE_COURSE_DAY_SCHEDULE_REQUEST = 'UPDATE_COURSE_DAY_SCHEDULE_REQUEST',
+  UPDATE_COURSE_DAY_SCHEDULE_SUCCESS = 'UPDATE_COURSE_DAY_SCHEDULE_SUCCESS',
+  UPDATE_COURSE_DAY_SCHEDULE_FAILURE = 'UPDATE_COURSE_DAY_SCHEDULE_FAILURE',
+  CLEAR_COURSE_DAY_SCHEDULE_REQUEST = 'CLEAR_COURSE_DAY_SCHEDULE_REQUEST',
+  CLEAR_COURSE_DAY_SCHEDULE_SUCCESS = 'CLEAR_COURSE_DAY_SCHEDULE_SUCCESS',
+  CLEAR_COURSE_DAY_SCHEDULE_FAILURE = 'CLEAR_COURSE_DAY_SCHEDULE_FAILURE',
+
   // UI & Data
   LOAD_DATA = 'LOAD_DATA',
   SET_LOADING = 'SET_LOADING',
@@ -293,10 +309,18 @@ export interface AttendanceRecord {
   id: string;
   studentId: string;
   courseId: string;
-  date: string;
+  date: string; // YYYY-MM-DD
   status: AttendanceStatus;
   notes?: string;
 }
+
+export interface CourseDaySchedule {
+    id: string; // YYYY-MM-DD
+    courseId: string;
+    status: 'class' | 'no_class';
+    notes?: string;
+}
+
 
 export interface Payment {
   id: string;
@@ -351,6 +375,7 @@ export interface AppState {
   submissions: Submission[];
   enrollments: Enrollment[];
   attendanceRecords: AttendanceRecord[];
+  courseSchedules: CourseDaySchedule[];
   payments: Payment[];
   notifications: NotificationMessage[];
   announcements: Announcement[];
@@ -411,10 +436,23 @@ export type AdminUpdateOrCreateSubmissionPayload = {
 
 export type TakeAttendancePayload = {
   courseId: string;
-  date: string;
+  date: string; // YYYY-MM-DD
   studentStatuses: Array<{ studentId: string; status: AttendanceStatus; notes?: string }>;
 };
-export type UpdateAttendanceRecordPayload = Partial<Omit<AttendanceRecord, 'id' | 'courseId' | 'studentId' | 'date'>> & { id: string };
+export type SaveAttendanceSuccessPayload = AttendanceRecord[];
+
+
+export type UpdateCourseDaySchedulePayload = {
+    courseId: string;
+    date: string; // YYYY-MM-DD
+    status: 'class' | 'no_class';
+    notes?: string;
+};
+export type ClearCourseDaySchedulePayload = {
+    courseId: string;
+    date: string; // YYYY-MM-DD
+};
+
 
 export type RecordPaymentPayload = Omit<Payment, 'id'>;
 export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id' | 'studentId' | 'courseId'>>;
@@ -521,8 +559,24 @@ export type AppAction =
   | { type: ActionType.ADMIN_UPDATE_OR_CREATE_SUBMISSION_SUCCESS; payload: Submission }
   | { type: ActionType.ADMIN_UPDATE_OR_CREATE_SUBMISSION_FAILURE; payload: string }
 
-  | { type: ActionType.TAKE_ATTENDANCE; payload: TakeAttendancePayload }
-  | { type: ActionType.UPDATE_ATTENDANCE_RECORD; payload: UpdateAttendanceRecordPayload }
+  | { type: ActionType.FETCH_ATTENDANCE_RECORDS_REQUEST }
+  | { type: ActionType.FETCH_ATTENDANCE_RECORDS_SUCCESS; payload: AttendanceRecord[] }
+  | { type: ActionType.FETCH_ATTENDANCE_RECORDS_FAILURE; payload: string }
+  | { type: ActionType.SAVE_ATTENDANCE_REQUEST }
+  | { type: ActionType.SAVE_ATTENDANCE_SUCCESS; payload: SaveAttendanceSuccessPayload }
+  | { type: ActionType.SAVE_ATTENDANCE_FAILURE; payload: string }
+
+
+  | { type: ActionType.FETCH_COURSE_SCHEDULE_REQUEST }
+  | { type: ActionType.FETCH_COURSE_SCHEDULE_SUCCESS; payload: CourseDaySchedule[] }
+  | { type: ActionType.FETCH_COURSE_SCHEDULE_FAILURE; payload: string }
+  | { type: ActionType.UPDATE_COURSE_DAY_SCHEDULE_REQUEST }
+  | { type: ActionType.UPDATE_COURSE_DAY_SCHEDULE_SUCCESS; payload: CourseDaySchedule }
+  | { type: ActionType.UPDATE_COURSE_DAY_SCHEDULE_FAILURE; payload: string }
+  | { type: ActionType.CLEAR_COURSE_DAY_SCHEDULE_REQUEST }
+  | { type: ActionType.CLEAR_COURSE_DAY_SCHEDULE_SUCCESS; payload: { courseId: string; date: string } }
+  | { type: ActionType.CLEAR_COURSE_DAY_SCHEDULE_FAILURE; payload: string }
+
 
   | { type: ActionType.FETCH_PAYMENTS_REQUEST }
   | { type: ActionType.FETCH_PAYMENTS_SUCCESS; payload: Payment[] }
@@ -584,6 +638,7 @@ export interface GenerateQuizQuestionsOutput {
 
 // Ensure payload for UpdatePaymentPayload is specific for what can be updated
 // export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id' | 'studentId' | 'courseId'>>;
+
 
 
 
