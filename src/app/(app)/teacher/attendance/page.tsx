@@ -10,10 +10,13 @@ import Image from "next/image";
 
 export default function TeacherAttendanceOverviewPage() {
   const { state } = useAppContext();
-  const { currentUser, courses } = state;
+  const { currentUser, courses, isLoading } = state; // Added isLoading
 
+  if (isLoading && !currentUser) { // Added loading check
+    return <p className="text-center text-muted-foreground py-10">Loading user data...</p>;
+  }
   if (!currentUser) {
-    return <p className="text-center text-muted-foreground">Loading user data...</p>;
+    return <p className="text-center text-muted-foreground py-10">Please log in to manage attendance.</p>;
   }
 
   const teacherCourses = courses.filter(course => course.teacherId === currentUser.id);
@@ -29,8 +32,10 @@ export default function TeacherAttendanceOverviewPage() {
           Select a course to manage attendance for its sessions.
         </p>
       </div>
-
-      {teacherCourses.length === 0 ? (
+      {isLoading && teacherCourses.length === 0 ? (
+         <p className="text-center text-muted-foreground py-10">Loading courses...</p>
+      ) :
+      teacherCourses.length === 0 ? (
         <Card>
           <CardContent className="pt-6 text-center">
             <BookOpen className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -44,27 +49,28 @@ export default function TeacherAttendanceOverviewPage() {
             const courseImageSrc = course.bannerImageUrl || `https://placehold.co/600x400.png?text=${encodeURIComponent(course.name)}`;
             return (
               <Card key={course.id} className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <CardHeader className="pb-2">
-                  <div className="aspect-[16/9] relative mb-4 rounded-t-md overflow-hidden">
+                <CardHeader className="pb-0"> {/* Reduced padding */}
+                  <div className="aspect-[16/9] relative mb-3 rounded-md overflow-hidden"> {/* Added rounded corners and margin */}
                       <Image 
                           src={courseImageSrc} 
                           alt={course.name} 
                           layout="fill"
                           objectFit="cover"
                           priority={course.bannerImageUrl ? true : false}
+                          data-ai-hint="course banner"
                       />
                   </div>
-                  <CardTitle className="text-xl hover:text-primary transition-colors">
+                  <CardTitle className="text-xl hover:text-primary transition-colors"> {/* Smaller title */}
                     <Link href={`/teacher/courses/${course.id}/attendance`}>{course.name}</Link>
                   </CardTitle>
-                  <CardDescription className="h-10 overflow-hidden text-ellipsis">{course.description}</CardDescription>
+                  <CardDescription className="h-10 overflow-hidden text-ellipsis text-xs">{course.description}</CardDescription> {/* Smaller description */}
                 </CardHeader>
-                <CardContent className="flex-grow pt-2">
-                  <p className="text-sm text-muted-foreground flex items-center gap-1"><Users className="h-4 w-4" /> {course.studentIds.length} student(s)</p>
-                  <p className="text-sm text-muted-foreground">Category: {course.category || "N/A"}</p>
+                <CardContent className="flex-grow pt-2 space-y-0.5 text-sm"> {/* Reduced padding and spacing */}
+                  <p className="text-muted-foreground text-xs flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {course.studentIds.length} student(s)</p>
+                  <p className="text-muted-foreground text-xs">Category: {course.category || "N/A"}</p>
                 </CardContent>
-                <CardFooter>
-                  <Button asChild className="w-full">
+                <CardFooter className="pt-3"> {/* Reduced padding */}
+                  <Button asChild className="w-full" size="sm" disabled={isLoading}> {/* Smaller button */}
                     <Link href={`/teacher/courses/${course.id}/attendance`}>
                       <CalendarCheck className="mr-2 h-4 w-4" /> Take/View Attendance
                     </Link>

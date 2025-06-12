@@ -13,28 +13,56 @@ export default function StudentLessonPage() {
   const { courseId, lessonId } = useParams() as { courseId: string; lessonId: string };
   const router = useRouter();
   const { state } = useAppContext();
-  const { currentUser, courses, lessons, enrollments } = state;
+  // Renamed isLoading to isAppContextLoading to avoid potential naming conflicts if local loading states are added
+  const { currentUser, courses, lessons, enrollments, isLoading: isAppContextLoading } = state;
 
+  // Broader loading check for initial app state
+  if (isAppContextLoading && !currentUser) {
+    return <p className="text-center text-muted-foreground py-10">Loading user data...</p>;
+  }
+
+  // User must be logged in
   if (!currentUser) {
-    return <p className="text-center text-muted-foreground">Loading user data...</p>;
+    // This should ideally be caught by ProtectedLayout, but serves as a fallback.
+    return <p className="text-center text-muted-foreground py-10">Please log in to view this lesson.</p>;
   }
 
   const course = courses.find(c => c.id === courseId);
   const lesson = lessons.find(l => l.id === lessonId && l.courseId === courseId);
-  const isEnrolled = enrollments.some(e => e.studentId === currentUser.id && e.courseId === courseId);
 
-  if (!course || !lesson) {
+  // If initial app data is still loading or course not found yet
+  if (isAppContextLoading && !course) {
+     return <p className="text-center text-muted-foreground py-10">Loading course information...</p>;
+  }
+
+  if (!course) {
+    return (
+      <div className="text-center py-10">
+        <h2 className="text-2xl font-semibold">Course Not Found</h2>
+        <p className="text-muted-foreground">The course you are looking for (ID: {courseId}) does not exist or is not yet loaded.</p>
+        <Button onClick={() => router.back()} className="mt-4"><ArrowLeft className="mr-2 h-4 w-4" /> Go Back</Button>
+      </div>
+    );
+  }
+  
+  // If initial app data is still loading or lesson not found yet for this course
+  if (isAppContextLoading && !lesson) {
+     return <p className="text-center text-muted-foreground py-10">Loading lesson content for {course.name}...</p>;
+  }
+
+  if (!lesson) {
     return (
       <div className="text-center py-10">
         <h2 className="text-2xl font-semibold">Lesson Not Found</h2>
-        <p className="text-muted-foreground">The lesson you are looking for does not exist in this course.</p>
+        <p className="text-muted-foreground">Lesson (ID: {lessonId}) in course "{course.name}" does not exist or is not yet loaded.</p>
         <Button onClick={() => router.back()} className="mt-4"><ArrowLeft className="mr-2 h-4 w-4" /> Go Back</Button>
       </div>
     );
   }
 
-  if (!isEnrolled) {
-    // This check might be redundant if course detail page already prevents access
+  const isEnrolled = enrollments.some(e => e.studentId === currentUser.id && e.courseId === courseId);
+
+  if (!isEnrolled && !isAppContextLoading) { // Check isLoading here too
     return (
       <div className="text-center py-10">
         <h2 className="text-2xl font-semibold">Access Denied</h2>
@@ -43,33 +71,29 @@ export default function StudentLessonPage() {
       </div>
     );
   }
+  if (isAppContextLoading && !isEnrolled) {
+    return <p className="text-center text-muted-foreground py-10">Verifying enrollment status...</p>;
+  }
+
 
   const courseLessons = lessons.filter(l => l.courseId === courseId).sort((a, b) => a.order - b.order);
   const currentLessonIndex = courseLessons.findIndex(l => l.id === lessonId);
   const prevLesson = currentLessonIndex > 0 ? courseLessons[currentLessonIndex - 1] : null;
   const nextLesson = currentLessonIndex < courseLessons.length - 1 ? courseLessons[currentLessonIndex + 1] : null;
 
-  // Basic Markdown to HTML conversion (replace newlines with <br> and handle simple list items)
-  // For more complex Markdown, a dedicated library like 'react-markdown' would be needed.
   const renderMarkdown = (markdown: string) => {
     if (!markdown) return null;
-    // Simple replacements - this is very basic and won't handle all Markdown features.
-    // It's a placeholder for a proper Markdown parsing solution.
-    // For now, this will at least make paragraphs and basic lists more readable than a single <pre> block.
     const html = markdown
-      .split('\n\n') // Split into paragraphs
+      .split('\n\n') 
       .map(paragraph => {
-        // Handle simple unordered lists
         if (paragraph.startsWith('* ') || paragraph.startsWith('- ')) {
           const listItems = paragraph.split('\n').map(item => `<li>${item.substring(2)}</li>`).join('');
           return `<ul>${listItems}</ul>`;
         }
-        // Handle simple ordered lists
         if (paragraph.match(/^\d+\.\s/)) {
            const listItems = paragraph.split('\n').map(item => `<li>${item.replace(/^\d+\.\s/, '')}</li>`).join('');
            return `<ol>${listItems}</ol>`;
         }
-        // Handle headings (h1 to h6)
         if (paragraph.startsWith('#')) {
           let level = 0;
           while (paragraph[level] === '#') {
@@ -80,7 +104,7 @@ export default function StudentLessonPage() {
             return `<h${level}>${title}</h${level}>`;
           }
         }
-        return `<p>${paragraph.replace(/\n/g, '<br />')}</p>`; // Replace single newlines within paragraphs with <br>
+        return `<p>${paragraph.replace(/\n/g, '<br />')}</p>`; 
       })
       .join('');
     return { __html: html };
@@ -162,3 +186,4 @@ export default function StudentLessonPage() {
     </div>
   );
 }
+

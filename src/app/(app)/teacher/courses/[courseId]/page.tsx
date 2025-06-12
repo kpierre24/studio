@@ -73,9 +73,6 @@ interface GradingFormData {
 
 
 export default function TeacherCourseDetailPage() {
-  // Using useParams hook and destructuring to get specific route parameters.
-  // This pattern is standard for client components and avoids enumerating the entire params object,
-  // which can sometimes trigger Next.js warnings about dynamic APIs.
   const { courseId } = useParams() as { courseId: string };
   const router = useRouter();
   const {
@@ -530,7 +527,7 @@ export default function TeacherCourseDetailPage() {
                         const student = users.find(u => u.id === studentId);
                         return student ? (
                         <li key={student.id} className="p-3 border rounded-md flex items-center gap-3 hover:bg-muted/50 transition-colors">
-                            <Image src={student.avatarUrl || `https://placehold.co/40x40.png`} alt={student.name} width={40} height={40} className="rounded-full" data-ai-hint="student avatar"/>
+                            <Image src={student.avatarUrl || `https://placehold.co/40x40.png?text=${student.name.substring(0,1)}`} alt={student.name} width={40} height={40} className="rounded-full" data-ai-hint="student avatar"/>
                             <div>
                                 <p className="font-medium">{student.name}</p>
                                 <p className="text-sm text-muted-foreground">{student.email}</p>
@@ -542,7 +539,6 @@ export default function TeacherCourseDetailPage() {
                 )}
             </TabsContent>
             
-            {/* Attendance tab content is implicitly handled by navigating to the dedicated attendance page */}
             <TabsContent value="attendance" className="p-6">
                 <p className="text-muted-foreground text-center">Attendance management is handled on a separate page. Click the 'Attendance' tab to navigate.</p>
             </TabsContent>

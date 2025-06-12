@@ -25,10 +25,11 @@ export default function StudentCourseDetailPage() {
   const { courseId } = useParams() as { courseId: string };
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { state, handleStudentSubmissionUpload, handleStudentSubmitAssignment } = useAppContext();
-  const { currentUser, courses, lessons, assignments, submissions, users, enrollments, isLoading } = state; 
+  // Renamed isLoading to isAppContextLoading to avoid potential naming conflicts
+  const { state, handleStudentSubmissionUpload, handleStudentSubmitAssignment, isLoading: isAppContextLoading } = useAppContext();
+  const { currentUser, courses, lessons, assignments, submissions, users, enrollments } = state; 
   const { toast } = useToast();
-  const pathname = usePathname(); // Get current pathname
+  const pathname = usePathname();
 
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const [isSubmissionModalOpen, setIsSubmissionModalOpen] = useState(false);
@@ -48,35 +49,32 @@ export default function StudentCourseDetailPage() {
   }, [searchParams, assignments, courseId]);
 
 
-  if (!currentUser && !isLoading) { 
-    router.push('/auth'); 
-    return <p className="text-center text-muted-foreground">Redirecting...</p>;
-  }
-  if (isLoading && currentUser === undefined) { 
-     return <p className="text-center text-muted-foreground">Loading user data...</p>;
+  if (isAppContextLoading && currentUser === undefined) { 
+     return <p className="text-center text-muted-foreground py-10">Loading user data...</p>;
   }
   if (!currentUser) { 
-    return <p className="text-center text-muted-foreground">Please log in to view this page.</p>;
+    // This case might be handled by ProtectedLayout, but as a fallback
+    router.push('/auth?redirect=' + pathname); 
+    return <p className="text-center text-muted-foreground py-10">Redirecting to login...</p>;
   }
 
 
   const course = courses.find(c => c.id === courseId);
   const isEnrolled = enrollments && enrollments.some(e => e.studentId === currentUser.id && e.courseId === courseId);
 
-
-  if (!course && !isLoading) { 
+  if (isAppContextLoading && (!course || isEnrolled === undefined)) {
+    return <p className="text-center text-muted-foreground py-10">Loading course content...</p>;
+  }
+  if (!course) { 
     return (
       <div className="text-center py-10">
         <h2 className="text-2xl font-semibold">Course Not Found</h2>
-        <p className="text-muted-foreground">The course you are looking for does not exist.</p>
+        <p className="text-muted-foreground">The course you are looking for does not exist or is not yet loaded.</p>
         <Button onClick={() => router.back()} className="mt-4"><ArrowLeft className="mr-2 h-4 w-4" /> Go Back</Button>
       </div>
     );
   }
-  if (!course && isLoading) {
-    return <p className="text-center text-muted-foreground">Loading course details...</p>;
-  }
-  if (!isEnrolled && !isLoading) {
+  if (!isEnrolled) {
     return (
       <div className="text-center py-10">
         <h2 className="text-2xl font-semibold">Access Denied</h2>
@@ -84,9 +82,6 @@ export default function StudentCourseDetailPage() {
         <Button onClick={() => router.push('/student/courses')} className="mt-4">View My Courses</Button>
       </div>
     );
-  }
-  if (isLoading && (!course || isEnrolled === undefined)) {
-    return <p className="text-center text-muted-foreground">Loading course content...</p>;
   }
 
 
@@ -108,7 +103,6 @@ export default function StudentCourseDetailPage() {
         setSubmissionFile(null);
     }
     setIsSubmissionModalOpen(true);
-    // Clear query param to prevent re-opening if modal is closed and reopened
     const params = new URLSearchParams(searchParams.toString());
     params.delete('assignment');
     router.replace(`${pathname}?${params.toString()}`, {scroll: false});
@@ -170,7 +164,7 @@ export default function StudentCourseDetailPage() {
 
   return (
     <div className="space-y-8">
-      <Button variant="outline" onClick={() => router.back()} className="mb-6" disabled={isLoading}>
+      <Button variant="outline" onClick={() => router.back()} className="mb-6" disabled={isAppContextLoading}>
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Courses
       </Button>
 
@@ -182,7 +176,8 @@ export default function StudentCourseDetailPage() {
             fill
             style={{objectFit:"cover"}}
             className="bg-muted"
-            priority={course!.bannerImageUrl ? true : false} 
+            priority={course!.bannerImageUrl ? true : false}
+            data-ai-hint="course banner"
           />
         </div>
         <CardHeader className="pt-6">
@@ -220,8 +215,8 @@ export default function StudentCourseDetailPage() {
               <CardDescription>Access all the learning materials for this course.</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading && courseLessons.length === 0 && <p className="text-muted-foreground text-center py-4">Loading lessons...</p>}
-              {!isLoading && courseLessons.length === 0 ? (
+              {isAppContextLoading && courseLessons.length === 0 && <p className="text-muted-foreground text-center py-4">Loading lessons...</p>}
+              {!isAppContextLoading && courseLessons.length === 0 ? (
                 <p className="text-muted-foreground text-center py-4">No lessons available for this course yet. Check back soon!</p>
               ) : (
                 <Accordion type="single" collapsible className="w-full">
@@ -236,7 +231,7 @@ export default function StudentCourseDetailPage() {
                       <AccordionContent className="p-4 space-y-3 bg-muted/30 rounded-md">
                         <p className="text-sm text-muted-foreground">{lesson.contentMarkdown.substring(0, 150)}{lesson.contentMarkdown.length > 150 ? "..." : ""}</p>
                         {lesson.videoUrl && <p className="text-xs text-blue-500 hover:underline"><ExternalLink className="inline mr-1 h-3 w-3" />Video available</p>}
-                        <Button asChild size="sm" disabled={isLoading}>
+                        <Button asChild size="sm" disabled={isAppContextLoading}>
                           <Link href={`/student/courses/${courseId}/lessons/${lesson.id}`}>
                             Start Lesson <ArrowRight className="ml-2 h-4 w-4" />
                           </Link>
@@ -257,8 +252,8 @@ export default function StudentCourseDetailPage() {
               <CardDescription>View and complete your assignments.</CardDescription>
             </CardHeader>
             <CardContent>
-              {isLoading && courseAssignments.length === 0 && <p className="text-muted-foreground text-center py-4">Loading assignments...</p>}
-              {!isLoading && courseAssignments.length === 0 ? (
+              {isAppContextLoading && courseAssignments.length === 0 && <p className="text-muted-foreground text-center py-4">Loading assignments...</p>}
+              {!isAppContextLoading && courseAssignments.length === 0 ? (
                 <p className="text-muted-foreground text-center py-4">No assignments posted for this course yet. Relax for now!</p>
               ) : (
                 <ul className="space-y-4">
@@ -299,7 +294,7 @@ export default function StudentCourseDetailPage() {
                         </p>
                         {assignment.assignmentFileName && assignment.assignmentFileUrl && (
                             <div className="mt-2">
-                                <Button variant="outline" size="sm" asChild disabled={isLoading}>
+                                <Button variant="outline" size="sm" asChild disabled={isAppContextLoading}>
                                     <a href={assignment.assignmentFileUrl} target="_blank" rel="noopener noreferrer" download={assignment.assignmentFileName}>
                                         <DownloadCloud className="mr-2 h-4 w-4" /> Download Attachment: {assignment.assignmentFileName}
                                     </a>
@@ -308,7 +303,7 @@ export default function StudentCourseDetailPage() {
                         )}
                         {assignment.externalLink && (
                             <div className="mt-2">
-                                <Button variant="outline" size="sm" asChild className="w-full justify-start sm:w-auto" disabled={isLoading}>
+                                <Button variant="outline" size="sm" asChild className="w-full justify-start sm:w-auto" disabled={isAppContextLoading}>
                                     <a href={assignment.externalLink} target="_blank" rel="noopener noreferrer">
                                         <ExternalLink className="mr-2 h-4 w-4" /> View External Resource
                                     </a>
@@ -316,7 +311,7 @@ export default function StudentCourseDetailPage() {
                             </div>
                         )}
                          <div className="mt-3 text-right">
-                            <Button variant="outline" size="sm" onClick={() => handleOpenSubmissionModal(assignment)} disabled={isLoading}>
+                            <Button variant="outline" size="sm" onClick={() => handleOpenSubmissionModal(assignment)} disabled={isAppContextLoading}>
                               {existingSubmission ? (existingSubmission.grade !==undefined ? 'View Graded Submission' : 'View Submission') : (isQuiz ? 'Start Quiz' : 'Submit Assignment')}
                             </Button>
                          </div>
@@ -341,7 +336,7 @@ export default function StudentCourseDetailPage() {
               <p className="text-sm text-muted-foreground pt-2">{selectedAssignment.description}</p>
                {selectedAssignment.assignmentFileName && selectedAssignment.assignmentFileUrl && (
                     <div className="mt-2">
-                        <Button variant="outline" size="sm" asChild className="w-full justify-start" disabled={isLoading || isSubmittingFile}>
+                        <Button variant="outline" size="sm" asChild className="w-full justify-start" disabled={isAppContextLoading || isSubmittingFile}>
                             <a href={selectedAssignment.assignmentFileUrl} target="_blank" rel="noopener noreferrer" download={selectedAssignment.assignmentFileName}>
                                 <DownloadCloud className="mr-2 h-4 w-4" /> Download Assignment File: {selectedAssignment.assignmentFileName}
                             </a>
@@ -350,7 +345,7 @@ export default function StudentCourseDetailPage() {
                 )}
                 {selectedAssignment.externalLink && (
                     <div className="mt-2">
-                        <Button variant="outline" size="sm" asChild className="w-full justify-start" disabled={isLoading || isSubmittingFile}>
+                        <Button variant="outline" size="sm" asChild className="w-full justify-start" disabled={isAppContextLoading || isSubmittingFile}>
                             <a href={selectedAssignment.externalLink} target="_blank" rel="noopener noreferrer">
                                 <ExternalLink className="mr-2 h-4 w-4" /> View External Assignment Resource
                             </a>
@@ -388,7 +383,7 @@ export default function StudentCourseDetailPage() {
                                 <p className="text-muted-foreground italic">Awaiting grading.</p>
                             )}
                              <DialogFooter>
-                                <DialogClose asChild><Button variant="outline" disabled={isLoading || isSubmittingFile}>Close</Button></DialogClose>
+                                <DialogClose asChild><Button variant="outline" disabled={isAppContextLoading || isSubmittingFile}>Close</Button></DialogClose>
                             </DialogFooter>
                         </div>
                         
@@ -402,22 +397,22 @@ export default function StudentCourseDetailPage() {
                                     id="submissionContent" value={submissionContent} 
                                     onChange={(e) => setSubmissionContent(e.target.value)}
                                     placeholder="Type your response here..."
-                                    rows={5} className="mt-1" disabled={isLoading || isSubmittingFile}
+                                    rows={5} className="mt-1" disabled={isAppContextLoading || isSubmittingFile}
                                 />
                             </div>
                             <div>
                                 <Label htmlFor="submissionFile">Upload File (Optional if providing text response)</Label>
                                 <Input 
                                     id="submissionFile" type="file" onChange={handleFileChange}
-                                    className="mt-1" disabled={isLoading || isSubmittingFile}
+                                    className="mt-1" disabled={isAppContextLoading || isSubmittingFile}
                                 />
                                 {submissionFile && <p className="text-xs text-muted-foreground mt-1">Selected: {submissionFile.name}</p>}
                             </div>
                             <DialogFooter>
-                                <DialogClose asChild><Button variant="outline" disabled={isLoading || isSubmittingFile}>Cancel</Button></DialogClose>
-                                <Button type="submit" disabled={isLoading || isSubmittingFile}>
-                                    {(isLoading || isSubmittingFile) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
-                                    {(isLoading || isSubmittingFile) ? "Submitting..." : "Submit Assignment"}
+                                <DialogClose asChild><Button variant="outline" disabled={isAppContextLoading || isSubmittingFile}>Cancel</Button></DialogClose>
+                                <Button type="submit" disabled={isAppContextLoading || isSubmittingFile}>
+                                    {(isAppContextLoading || isSubmittingFile) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UploadCloud className="mr-2 h-4 w-4" />}
+                                    {(isAppContextLoading || isSubmittingFile) ? "Submitting..." : "Submit Assignment"}
                                 </Button>
                             </DialogFooter>
                         </form>

@@ -26,6 +26,7 @@ import { QuizGenerator } from '@/components/features/QuizGenerator';
 import { useToast } from '@/hooks/use-toast';
 import { useSearchParams, useRouter } from 'next/navigation'; 
 import { ScrollArea } from '@/components/ui/scroll-area';
+import Image from 'next/image';
 
 interface CourseFormData {
   id?: string;
@@ -219,41 +220,53 @@ export default function TeacherCoursesPage() {
         </Card>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {teacherCourses.map(course => (
+          {teacherCourses.map(course => {
+            const courseImageSrc = course.bannerImageUrl || `https://placehold.co/600x400.png?text=${encodeURIComponent(course.name)}`;
+            return (
             <Card key={course.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow">
-              <CardHeader>
-                <CardTitle className="hover:text-primary transition-colors">
+              <CardHeader className="pb-0"> {/* Reduced padding */}
+                 <div className="aspect-[16/9] relative mb-3 rounded-md overflow-hidden"> {/* Added rounded corners and margin */}
+                    <Image 
+                        src={courseImageSrc}
+                        alt={course.name} 
+                        layout="fill"
+                        objectFit="cover"
+                        priority={course.bannerImageUrl ? true : false}
+                        data-ai-hint="course banner"
+                    />
+                </div>
+                <CardTitle className="hover:text-primary transition-colors text-xl"> {/* Slightly smaller title */}
                   <Link href={`/teacher/courses/${course.id}`}>{course.name}</Link>
                 </CardTitle>
-                <CardDescription className="h-10 overflow-hidden text-ellipsis">{course.description}</CardDescription>
+                <CardDescription className="h-10 overflow-hidden text-ellipsis text-xs">{course.description}</CardDescription> {/* Smaller description */}
               </CardHeader>
-              <CardContent className="flex-grow pt-2 space-y-1 text-sm">
-                <p className="text-muted-foreground">Category: {course.category || 'N/A'}</p>
-                <div className="flex items-center text-muted-foreground">
-                    <Users className="mr-1.5 h-4 w-4" /> Students: {course.studentIds.length}
+              <CardContent className="flex-grow pt-2 space-y-0.5 text-sm"> {/* Reduced padding and spacing */}
+                <p className="text-muted-foreground text-xs">Category: {course.category || 'N/A'}</p>
+                <div className="flex items-center text-muted-foreground text-xs">
+                    <Users className="mr-1.5 h-3.5 w-3.5" /> Students: {course.studentIds.length} {/* Smaller icon */}
                 </div>
-                <p className="text-muted-foreground">Cost: ${course.cost || 0}</p>
+                <p className="text-muted-foreground text-xs">Cost: ${course.cost || 0}</p>
               </CardContent>
-              <CardFooter className="flex flex-col items-stretch gap-2 pt-4">
-                <Button variant="outline" asChild disabled={isLoading}>
+              <CardFooter className="flex flex-col items-stretch gap-2 pt-3"> {/* Reduced padding */}
+                <Button variant="outline" size="sm" asChild disabled={isLoading}> {/* Smaller button */}
                   <Link href={`/teacher/courses/${course.id}`}>
                     <BookOpen className="mr-2 h-4 w-4" /> Manage Course
                   </Link>
                 </Button>
-                <div className="grid grid-cols-3 gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => handleOpenCourseModal(course)} title="Edit Course" className="flex-1 justify-center" disabled={isLoading}>
+                <div className="grid grid-cols-3 gap-1.5"> {/* Reduced gap */}
+                    <Button variant="ghost" size="sm" onClick={() => handleOpenCourseModal(course)} title="Edit Course" className="flex-1 justify-center px-2" disabled={isLoading}>
                         <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" title="Add Assignment" onClick={() => handleOpenAssignmentModal(course)} className="flex-1 justify-center" disabled={isLoading}>
+                    <Button variant="ghost" size="sm" title="Add Assignment" onClick={() => handleOpenAssignmentModal(course)} className="flex-1 justify-center px-2" disabled={isLoading}>
                         <PlusCircle className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive-foreground hover:bg-destructive flex-1 justify-center" title="Delete Course" onClick={() => confirmDeleteCourse(course.id)} disabled={isLoading || course.studentIds.length > 0}>
+                    <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive-foreground hover:bg-destructive flex-1 justify-center px-2" title="Delete Course" onClick={() => confirmDeleteCourse(course.id)} disabled={isLoading || course.studentIds.length > 0}>
                         <Trash2 className="h-4 w-4" />
                     </Button>
                 </div>
               </CardFooter>
             </Card>
-          ))}
+          )})}
         </div>
       )}
       {currentCourseForAssignment && (

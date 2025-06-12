@@ -47,6 +47,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, Edit, Trash2, Eye, EyeOff, UploadCloud, Loader2, Users as UsersIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import Image from 'next/image';
 
 type UserFormData = Omit<CreateUserPayload, 'avatarUrl'> & { id?: string; confirmPassword?: string };
 
@@ -373,7 +374,7 @@ export default function AdminUsersPage() {
             {users.map((user) => (
               <TableRow key={user.id}>
                 <TableCell className="font-medium flex items-center gap-2">
-                  <img src={user.avatarUrl || `https://placehold.co/32x32.png`} alt={user.name} className="h-8 w-8 rounded-full" data-ai-hint="user avatar"/>
+                  <Image src={user.avatarUrl || `https://placehold.co/32x32.png?text=${user.name.substring(0,1)}`} alt={user.name} width={32} height={32} className="rounded-full" data-ai-hint="user avatar"/>
                   {user.name}
                 </TableCell>
                 <TableCell>{user.email}</TableCell>
@@ -468,3 +469,4 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+
