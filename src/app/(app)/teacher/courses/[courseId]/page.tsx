@@ -547,10 +547,7 @@ export default function TeacherCourseDetailPage() {
               )}
             </TabsContent>
             
-            <TabsContent value="attendance" className="p-6">
-                <p className="text-muted-foreground text-center">Attendance management is handled on a separate page. Click the 'Attendance' tab to navigate.</p>
-            </TabsContent>
-
+            {/* Attendance Tab Content is removed as the trigger is now a direct link */}
 
             <TabsContent value="payments" className="p-6">
               <h3 className="text-xl font-semibold mb-4">Student Payment Status</h3>
