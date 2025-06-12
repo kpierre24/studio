@@ -58,7 +58,9 @@ export default function TeacherDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{teacherCourses.length}</div>
-            <p className="text-xs text-muted-foreground">Actively teaching</p>
+            <Link href="/teacher/courses" className="text-xs text-primary hover:underline">
+              View all courses
+            </Link>
           </CardContent>
         </Card>
         <Card>
@@ -140,3 +142,4 @@ export default function TeacherDashboardPage() {
     </div>
   );
 }
+

@@ -38,6 +38,13 @@ export default function StudentDashboardPage() {
       .slice(0, 3);
   }, [assignments, enrolledCourseIds, currentUser]); // Depend on currentUser
 
+  const nextDueAssignmentLink = useMemo(() => {
+    if (upcomingAssignments.length > 0 && upcomingAssignments[0].courseId && upcomingAssignments[0].id) {
+      return `/student/courses/${upcomingAssignments[0].courseId}?assignment=${upcomingAssignments[0].id}`;
+    }
+    return "/student/courses"; // Fallback to general courses page
+  }, [upcomingAssignments]);
+
   const recentAnnouncements = useMemo(() => {
     if (!currentUser) return []; 
     return (announcements || [])
@@ -107,7 +114,9 @@ export default function StudentDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{upcomingAssignments.length}</div>
-            <Link href={upcomingAssignments.length > 0 && upcomingAssignments[0]?.courseId && upcomingAssignments[0]?.id ? `/student/courses/${upcomingAssignments[0].courseId}?assignment=${upcomingAssignments[0].id}` : "/student/courses"} className="text-xs text-primary hover:underline">View assignments</Link>
+            <Link href={nextDueAssignmentLink} className="text-xs text-primary hover:underline">
+              {upcomingAssignments.length > 0 ? "Go to next assignment" : "View assignments"}
+            </Link>
           </CardContent>
         </Card>
          <Card>

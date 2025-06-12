@@ -328,7 +328,9 @@ export default function AdminUsersPage() {
         <CardHeader>
             <CardTitle>Bulk Add Students via CSV</CardTitle>
             <CardDescription>
-                Upload a CSV file with student data. Required columns: 'email', and ('name' OR 'firstname' & 'lastname'). The 'password' column is optional; if omitted or empty for a user, their password will default to "123456". All users will be created with 'Student' role and Firebase Auth accounts.
+                Upload a CSV file. Required columns: 'email', and either 'name' OR 'firstname' & 'lastname'.
+                The 'password' column is optional; if omitted or empty for a user, their password will default to "123456".
+                All users created via this method will be assigned the 'Student' role and will have Firebase Authentication accounts created.
             </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
