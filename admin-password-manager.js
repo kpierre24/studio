@@ -17,7 +17,7 @@ const auth = admin.auth();
 
 const NEW_PASSWORD_FOR_STUDENTS = '123456';
 const STUDENT_ROLE_IDENTIFIER = 'Student'; // Adjust if your role field/value is different
-const SCHOOL_OF_MINISTRY_COURSE_ID = 'course-1'; // !!! REPLACE THIS WITH YOUR ACTUAL "School of Ministry" COURSE ID !!!
+const SCHOOL_OF_MINISTRY_COURSE_ID = 'vIvjehHXH4e5wOnIJxwF'; // !!! REPLACE THIS WITH YOUR ACTUAL "School of Ministry" COURSE ID !!!
 
 async function resetAllStudentPasswords() {
     console.log(`Starting password reset for all users with role '${STUDENT_ROLE_IDENTIFIER}' to '${NEW_PASSWORD_FOR_STUDENTS}'.`);
@@ -87,7 +87,6 @@ async function checkSchoolOfMinistryEnrollments() {
     }
 
     try {
-        // 1. Fetch the "School of Ministry" course document
         const courseRef = db.collection('courses').doc(SCHOOL_OF_MINISTRY_COURSE_ID);
         const courseDoc = await courseRef.get();
 
@@ -99,7 +98,6 @@ async function checkSchoolOfMinistryEnrollments() {
         const enrolledStudentIdsInCourse = new Set(courseData.studentIds || []);
         console.log(`Course "${courseData.name}" has ${enrolledStudentIdsInCourse.size} student(s) listed in its studentIds array.`);
 
-        // 2. Fetch all users from the 'users' collection
         const usersSnapshot = await db.collection('users').get();
         if (usersSnapshot.empty) {
             console.log("No users found in the 'users' collection.");
@@ -150,26 +148,126 @@ async function checkSchoolOfMinistryEnrollments() {
     }
 }
 
+async function enrollMissingStudentsInSchoolOfMinistry() {
+    console.log(`\nAttempting to enroll missing '${STUDENT_ROLE_IDENTIFIER}' users into course ID '${SCHOOL_OF_MINISTRY_COURSE_ID}' (School of Ministry)...`);
+
+    if (!SCHOOL_OF_MINISTRY_COURSE_ID) {
+        console.error("Error: SCHOOL_OF_MINISTRY_COURSE_ID is not set. Please define it in the script.");
+        return;
+    }
+
+    try {
+        const courseRef = db.collection('courses').doc(SCHOOL_OF_MINISTRY_COURSE_ID);
+        const courseDoc = await courseRef.get();
+
+        if (!courseDoc.exists) {
+            console.error(`Error: Course with ID '${SCHOOL_OF_MINISTRY_COURSE_ID}' not found.`);
+            return;
+        }
+        const courseData = courseDoc.data();
+        const enrolledStudentIdsInCourse = new Set(courseData.studentIds || []);
+        console.log(`Course "${courseData.name}" currently has ${enrolledStudentIdsInCourse.size} student(s).`);
+
+        const usersSnapshot = await db.collection('users').where('role', '==', STUDENT_ROLE_IDENTIFIER).get();
+        if (usersSnapshot.empty) {
+            console.log(`No users found with role '${STUDENT_ROLE_IDENTIFIER}'.`);
+            return;
+        }
+
+        const studentsToEnroll = [];
+        usersSnapshot.forEach(userDoc => {
+            if (!enrolledStudentIdsInCourse.has(userDoc.id)) {
+                studentsToEnroll.push({ id: userDoc.id, name: userDoc.data().name || 'Unknown Name', email: userDoc.data().email || 'N/A' });
+            }
+        });
+
+        if (studentsToEnroll.length === 0) {
+            console.log(`All students with role '${STUDENT_ROLE_IDENTIFIER}' are already enrolled in "${courseData.name}".`);
+            return;
+        }
+
+        console.log(`\nThe following ${studentsToEnroll.length} student(s) will be enrolled into "${courseData.name}":`);
+        studentsToEnroll.forEach(student => {
+            console.log(`  - ${student.name} (${student.email}, ID: ${student.id})`);
+        });
+
+        // Simple confirmation prompt
+        const readline = require('readline').createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+
+        await new Promise(resolve => {
+            readline.question('\nDo you want to proceed with enrolling these students? (yes/no): ', async (answer) => {
+                readline.close();
+                if (answer.toLowerCase() !== 'yes') {
+                    console.log("Enrollment cancelled by user.");
+                    resolve();
+                    return;
+                }
+
+                const batch = db.batch();
+                let enrolledCount = 0;
+
+                for (const student of studentsToEnroll) {
+                    // 1. Update the course's studentIds array
+                    batch.update(courseRef, {
+                        studentIds: admin.firestore.FieldValue.arrayUnion(student.id)
+                    });
+
+                    // 2. Create an enrollment document
+                    const enrollmentId = `enroll-${SCHOOL_OF_MINISTRY_COURSE_ID}-${student.id}`;
+                    const enrollmentRef = db.collection('enrollments').doc(enrollmentId);
+                    batch.set(enrollmentRef, {
+                        id: enrollmentId,
+                        studentId: student.id,
+                        courseId: SCHOOL_OF_MINISTRY_COURSE_ID,
+                        enrollmentDate: new Date().toISOString(), // Or admin.firestore.FieldValue.serverTimestamp()
+                        grade: null // Or some default
+                    });
+                    console.log(`Scheduled enrollment for ${student.name} (ID: ${student.id}).`);
+                    enrolledCount++;
+                }
+
+                try {
+                    await batch.commit();
+                    console.log(`\nSuccessfully enrolled ${enrolledCount} student(s) into "${courseData.name}".`);
+                } catch (batchError) {
+                    console.error("Error committing batch enrollments:", batchError);
+                }
+                resolve();
+            });
+        });
+
+    } catch (error) {
+        console.error('An error occurred during the enrollment process:', error);
+    }
+}
+
 
 // To run a specific function:
 // 1. Save this file.
 // 2. Replace './path/to/your/serviceAccountKey.json' (or the existing path) if needed.
-// 3. Replace SCHOOL_OF_MINISTRY_COURSE_ID with your actual course ID.
+// 3. Replace SCHOOL_OF_MINISTRY_COURSE_ID with your actual course ID if needed.
 // 4. Open your terminal in the directory where you saved the file.
 // 5. Run: node admin-password-manager.js
 // 6. Then, in the Node REPL that appears after "Script loaded...", type the function name and call it:
 //    e.g., resetAllStudentPasswords()
 //    OR
 //    e.g., checkSchoolOfMinistryEnrollments()
+//    OR
+//    e.g., enrollMissingStudentsInSchoolOfMinistry()
 //    and press Enter.
 
 // !! IMPORTANT !!:
 // - Test scripts thoroughly in a development/staging Firebase project first.
-// - Use with extreme caution if modifying data (like resetAllStudentPasswords).
+// - Use with extreme caution if modifying data (like resetAllStudentPasswords or enrollMissingStudentsInSchoolOfMinistry).
 
-console.log("Admin script loaded. Available functions: resetAllStudentPasswords(), checkSchoolOfMinistryEnrollments()");
-console.log("Make sure to set SCHOOL_OF_MINISTRY_COURSE_ID if using checkSchoolOfMinistryEnrollments().");
+console.log("Admin script loaded. Available functions: resetAllStudentPasswords(), checkSchoolOfMinistryEnrollments(), enrollMissingStudentsInSchoolOfMinistry()");
+console.log("Make sure to set SCHOOL_OF_MINISTRY_COURSE_ID if using checkSchoolOfMinistryEnrollments() or enrollMissingStudentsInSchoolOfMinistry().");
 console.log("Ensure you have configured your service account key and understand the risks before running data-modifying functions.");
 
-// Example: To run the enrollment check immediately when the script starts, uncomment the line below:
+// Example: To run a function immediately when the script starts, uncomment the line below:
 // checkSchoolOfMinistryEnrollments();
+// enrollMissingStudentsInSchoolOfMinistry();
+    
