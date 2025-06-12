@@ -4,150 +4,140 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper Functions
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    // DEPRECATED: Use isOwner directly
-    function isStudentOwner(studentId) {
-      return isSignedIn() && request.auth.uid == studentId;
-    }
-
-    function getUserData(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data;
-    }
-
+    // Helper functions
     function isAdmin() {
-      return isSignedIn() && getUserData(request.auth.uid).role == 'SuperAdmin';
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SuperAdmin';
     }
 
     function isTeacher() {
-      // General check if the user is a teacher, not specific to a course yet
-      return isSignedIn() && getUserData(request.auth.uid).role == 'Teacher';
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
+    }
+
+    function isStudent() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Student';
     }
 
     function isTeacherOfCourse(courseId) {
-      return isSignedIn() && getUserData(request.auth.uid).role == 'Teacher' && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid;
+      let course = get(/databases/$(database)/documents/courses/$(courseId)).data;
+      return request.auth.uid == course.teacherId;
     }
 
-    function isEnrolled(courseId) {
-      // Check if a document exists in enrollments linking the current user to the course
-      // This requires knowing the enrollment document ID pattern or querying.
-      // Simpler: Check if studentId is in the course's studentIds array (less secure if studentIds can be manipulated easily, but common)
-      // For a query-based check in rules (more complex):
-      // return isSignedIn() && exists( /databases/$(database)/documents/enrollments?studentId=$(request.auth.uid)&courseId=$(courseId) );
-      // For checking against the course's studentIds array (assuming it's trustworthy):
-      let courseData = get(/databases/$(database)/documents/courses/$(courseId)).data;
-      return isSignedIn() && request.auth.uid in courseData.studentIds;
+    function isEnrolledInCourse(courseId) {
+      // Check if an enrollment document exists for the user and course
+      // Path: /enrollments/enroll-{courseId}-{userId}
+      return exists(/databases/$(database)/documents/enrollments/$(strCat(['enroll-', courseId, '-', request.auth.uid])));
+    }
+    
+    function strCat(parts) {
+      return parts.join('');
     }
 
     // Users Collection
     match /users/{userId} {
-      allow read: if isSignedIn(); // Allow any authenticated user to read profiles (for names, avatars etc.)
-      allow list: if isAdmin();    // Only admins can list all users
-      allow create: if isAdmin();  // Only admins can create users directly through backend rules (students register via specific function)
-      allow update: if isOwner(userId) || isAdmin(); // User can update their own, admin can update any
+      allow read: if request.auth != null; // Any authenticated user can read user profiles (for names, avatars etc.)
+      allow list: if isAdmin(); // Only admins can list all users
+      allow create: if isAdmin(); // Only admins can create users directly here (registration is separate)
+      allow update: if request.auth.uid == userId || isAdmin(); // Users can update their own profile, admins can update any
       allow delete: if isAdmin(); // Only admins can delete users
     }
 
     // Courses Collection
     match /courses/{courseId} {
-      allow list, read: if isSignedIn(); // All signed-in users can see course listings
-      allow create: if isTeacher() || isAdmin(); // Teachers and Admins can create courses
-      allow update: if isTeacherOfCourse(courseId) || isAdmin(); // Teacher of this course or Admin
-      allow delete: if isTeacherOfCourse(courseId) || isAdmin(); // Teacher of this course or Admin
+      allow read: if request.auth != null; // Authenticated users can read course details
+      allow list: if request.auth != null; // Authenticated users can list courses
+      allow create: if isAdmin() || isTeacher(); // Admins or Teachers can create courses
+      allow update: if isAdmin() || isTeacherOfCourse(courseId); // Admins or the teacher of the course can update
+      allow delete: if isAdmin(); // Only admins can delete courses
 
       // Lessons Subcollection
       match /lessons/{lessonId} {
-        allow read: if isEnrolled(courseId) || isTeacherOfCourse(courseId) || isAdmin();
-        allow list: if isEnrolled(courseId) || isTeacherOfCourse(courseId) || isAdmin();
-        allow create, update, delete: if isTeacherOfCourse(courseId) || isAdmin();
+        allow read: if request.auth != null && (isAdmin() || isTeacherOfCourse(courseId) || isEnrolledInCourse(courseId));
+        allow list: if request.auth != null && (isAdmin() || isTeacherOfCourse(courseId) || isEnrolledInCourse(courseId));
+        allow create, update, delete: if isAdmin() || isTeacherOfCourse(courseId);
       }
 
       // Assignments Subcollection
       match /assignments/{assignmentId} {
-        allow read: if isEnrolled(courseId) || isTeacherOfCourse(courseId) || isAdmin();
-        allow list: if isEnrolled(courseId) || isTeacherOfCourse(courseId) || isAdmin();
-        allow create, update, delete: if isTeacherOfCourse(courseId) || isAdmin();
+        allow read: if request.auth != null && (isAdmin() || isTeacherOfCourse(courseId) || isEnrolledInCourse(courseId));
+        allow list: if request.auth != null && (isAdmin() || isTeacherOfCourse(courseId) || isEnrolledInCourse(courseId));
+        allow create, update, delete: if isAdmin() || isTeacherOfCourse(courseId);
 
         // Submissions Subcollection
         match /submissions/{submissionId} {
-          allow read: if isOwner(resource.data.studentId) || isTeacherOfCourse(courseId) || isAdmin();
-          // Students can list their own submissions for an assignment:
-          allow list: if (isOwner(request.query.filters[0][2]) && request.query.filters[0][0] == 'studentId') || isTeacherOfCourse(courseId) || isAdmin();
-          allow create: if isOwner(request.resource.data.studentId) && isEnrolled(courseId);
-          allow update: if isTeacherOfCourse(courseId) || isAdmin(); // For grading
-          allow delete: if isTeacherOfCourse(courseId) || isAdmin();
+          allow read: if request.auth != null && (isAdmin() || isTeacherOfCourse(courseId) || request.auth.uid == resource.data.studentId);
+          allow list: if request.auth != null && (isAdmin() || isTeacherOfCourse(courseId)); // Teachers/Admins list all for an assignment
+          allow create: if request.auth != null && request.auth.uid == request.resource.data.studentId && isEnrolledInCourse(courseId);
+          allow update: if isAdmin() || isTeacherOfCourse(courseId); // For grading
+          allow delete: if isAdmin() || isTeacherOfCourse(courseId);
         }
       }
-      
       // Course Day Schedule Subcollection
-      match /schedule/{scheduleDate} { // scheduleDate is YYYY-MM-DD
-        allow read, list: if isEnrolled(courseId) || isTeacherOfCourse(courseId) || isAdmin();
-        allow create, update, delete: if isTeacherOfCourse(courseId) || isAdmin();
+      match /schedule/{scheduleId} { // scheduleId is YYYY-MM-DD
+        allow read: if request.auth != null && (isAdmin() || isTeacherOfCourse(courseId) || isEnrolledInCourse(courseId));
+        allow list: if request.auth != null && (isAdmin() || isTeacherOfCourse(courseId) || isEnrolledInCourse(courseId));
+        allow create, update, delete: if isAdmin() || isTeacherOfCourse(courseId);
       }
     }
 
     // Enrollments Collection
     match /enrollments/{enrollmentId} {
-      allow read: if isOwner(resource.data.studentId) || isTeacherOfCourse(resource.data.courseId) || isAdmin();
-      // Students can query their own enrollments, teachers for their courses
-      allow list: if isAdmin() || 
-                    (isTeacher() && request.query.filters[0][0] == 'courseId' && isTeacherOfCourse(request.query.filters[0][2])) ||
-                    (isSignedIn() && request.query.filters[0][0] == 'studentId' && isOwner(request.query.filters[0][2]));
-      allow create, update, delete: if isAdmin();
+      allow read: if request.auth != null && (isAdmin() || isTeacherOfCourse(resource.data.courseId) || request.auth.uid == resource.data.studentId);
+      allow list: if request.auth != null && (isAdmin() || isTeacher()); // Teachers can list to find their students, Admin lists all. Student queries specific to their ID.
+      allow create, update, delete: if isAdmin(); // Admins manage enrollments directly
     }
 
-    // Attendance Records Collection
+    // AttendanceRecords Collection
     match /attendanceRecords/{recordId} {
-      allow read: if isOwner(resource.data.studentId) || isTeacherOfCourse(resource.data.courseId) || isAdmin();
-      allow list: if isAdmin() || isTeacher() || (isSignedIn() && request.query.getRules().map(rule, rule.field == 'studentId' && rule.value == request.auth.uid).hasAny());
-                   // Teachers list all and filter client-side for now, or query by courseId if desired.
-                   // Students can list only if querying by their studentId.
-      allow create, update, delete: if isTeacherOfCourse(request.resource.data.courseId) || isAdmin();
+      allow read: if request.auth != null && (isAdmin() || isTeacherOfCourse(resource.data.courseId) || request.auth.uid == resource.data.studentId);
+      // For list, students MUST query by their own studentId. Teachers/Admins can list all.
+      allow list: if request.auth != null && 
+                    (isAdmin() || isTeacher() || 
+                     (isStudent() && request.query.getRules().map(rule, rule.field == 'studentId' && rule.value == request.auth.uid).hasAny()));
+      allow create: if isAdmin() || isTeacherOfCourse(request.resource.data.courseId);
+      allow update: if isAdmin() || isTeacherOfCourse(resource.data.courseId); // Allow update if teacher of the course
+      allow delete: if isAdmin();
     }
 
     // Payments Collection
     match /payments/{paymentId} {
-      allow read: if isOwner(resource.data.studentId) || isAdmin();
-      allow list: if isAdmin() || (isSignedIn() && request.query.getRules().map(rule, rule.field == 'studentId' && rule.value == request.auth.uid).hasAny());
-                  // Admins can list all, students can list their own via specific query.
+      allow read: if request.auth != null && (isAdmin() || request.auth.uid == resource.data.studentId);
+      allow list: if request.auth != null && 
+                    (isAdmin() || 
+                     (isStudent() && request.query.getRules().map(rule, rule.field == 'studentId' && rule.value == request.auth.uid).hasAny()));
       allow create, update, delete: if isAdmin();
     }
 
     // Notifications Collection
     match /notifications/{notificationId} {
-      allow read: if isOwner(resource.data.userId) || isAdmin(); // User can read their own, admin can read any.
-      // Users list their own notifications via query. Admins can list all.
-      allow list: if isAdmin() || (isSignedIn() && request.query.filters[0][0] == 'userId' && isOwner(request.query.filters[0][2]));
-      allow create: if isAdmin(); // Typically system/admin created
-      allow update(writeOnly): if isOwner(resource.data.userId) && request.resource.data.read == true; // User can mark their own as read
-      allow delete: if isAdmin() || isOwner(resource.data.userId); // User can delete their own, admin can delete any.
+      allow read, list: if request.auth != null && request.auth.uid == resource.data.userId; // Users read their own
+      allow create, update, delete: if isAdmin(); // Admins manage notifications
     }
 
     // Announcements Collection
     match /announcements/{announcementId} {
-      allow read, list: if isSignedIn(); // All signed-in users can read/list
-      allow create, update, delete: if isAdmin(); // Only admins manage announcements
+      allow read, list: if request.auth != null; // All authenticated users can read announcements
+      allow create, update, delete: if isAdmin() || isTeacher(); // Admins and Teachers can create announcements
     }
 
-    // Direct Messages Collection
+    // DirectMessages Collection
     match /directMessages/{messageId} {
-      allow read: if isSignedIn() && (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid || isAdmin());
-      // Users can list messages where they are sender or recipient. Admins can list all.
-      allow list: if isAdmin() || 
-                  (isSignedIn() && request.query.filters[0][0] == 'senderId' && isOwner(request.query.filters[0][2])) ||
-                  (isSignedIn() && request.query.filters[0][0] == 'recipientId' && isOwner(request.query.filters[0][2]));
-      allow create: if isSignedIn() && request.resource.data.senderId == request.auth.uid;
-      allow update: if isSignedIn() && request.resource.data.recipientId == request.auth.uid && request.resource.data.read == true && request.resource.data.keys().hasOnly(['read']); // Recipient can mark as read
-      allow delete: if isAdmin() || (isSignedIn() && resource.data.senderId == request.auth.uid); // Sender or Admin can delete. Consider soft delete.
+      allow read: if request.auth != null && 
+                     (request.auth.uid == resource.data.senderId || 
+                      request.auth.uid == resource.data.recipientId || 
+                      isAdmin());
+      // For list, users must query by senderId or recipientId. Admins can list broadly for moderation if needed.
+      allow list: if request.auth != null && 
+                    (isAdmin() || 
+                     request.query.getRules().map(rule, 
+                       (rule.field == 'senderId' && rule.value == request.auth.uid) || 
+                       (rule.field == 'recipientId' && rule.value == request.auth.uid)
+                     ).hasAny());
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.senderId;
+      // Allow recipient to update 'read' status
+      allow update: if request.auth != null && 
+                       request.auth.uid == resource.data.recipientId && 
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isAdmin() || request.auth.uid == resource.data.senderId; // Sender or admin can delete
     }
   }
 }
-
-    
