@@ -1,125 +1,171 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
-    function isAuthenticated() {
-      return request.auth != null;
+    // Helper function to get user data
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
     }
 
-    function isSuperAdmin() {
-      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SuperAdmin';
+    // Helper function to check if user is a teacher for a specific course
+    function isTeacherForCourse(courseId) {
+      let course = get(/databases/$(database)/documents/courses/$(courseId)).data;
+      return request.auth.uid == course.teacherId;
     }
 
-    function isTeacher() {
-      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
-    }
-
-    function isStudent() {
-      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Student';
-    }
-
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
-
-    // Users collection
+    // User Profiles
     match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated(); // Allow any authenticated user to create their own user doc, or admin creates
-      allow update: if isOwner(userId) || isSuperAdmin();
-      allow delete: if isSuperAdmin();
+      allow read: if request.auth.uid != null; // Authenticated users can read user profiles (e.g., teacher names)
+      allow create: if request.auth.uid == userId || getUserData(request.auth.uid).role == 'SuperAdmin'; // User can create their own, Admin can create any
+      allow update: if request.auth.uid == userId || getUserData(request.auth.uid).role == 'SuperAdmin'; // User can update their own, Admin can update any
+      allow delete: if getUserData(request.auth.uid).role == 'SuperAdmin'; // Only SuperAdmin can delete
     }
 
-    // Courses collection
+    // Courses and their subcollections
     match /courses/{courseId} {
-      allow read: if isAuthenticated();
-      allow create: if isTeacher() || isSuperAdmin();
-      allow update: if (isTeacher() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teacherId == request.auth.uid) || isSuperAdmin(); // Original version in PRD had resource.data.teacherId
-      allow delete: if (isTeacher() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teacherId == request.auth.uid && resource.data.studentIds.size() == 0) || (isSuperAdmin() && resource.data.studentIds.size() == 0);
+      allow read: if request.auth.uid != null; // Authenticated users can read course details
+      allow list: if request.auth.uid != null; // Authenticated users can list courses
+      allow create: if request.auth.uid != null && (getUserData(request.auth.uid).role == 'Teacher' || getUserData(request.auth.uid).role == 'SuperAdmin');
+      allow update: if request.auth.uid != null && (isTeacherForCourse(courseId) || getUserData(request.auth.uid).role == 'SuperAdmin');
+      allow delete: if request.auth.uid != null && (isTeacherForCourse(courseId) || getUserData(request.auth.uid).role == 'SuperAdmin');
 
       // Lessons subcollection
       match /lessons/{lessonId} {
-        allow read: if isAuthenticated() && (
-                        request.auth.uid == get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId ||
-                        (request.auth.uid in get(/databases/$(database)/documents/courses/$(courseId)).data.studentIds) ||
-                        isSuperAdmin()
+        allow read: if request.auth.uid != null && (
+                        getUserData(request.auth.uid).role == 'SuperAdmin' ||
+                        isTeacherForCourse(courseId) ||
+                        (getUserData(request.auth.uid).role == 'Student' && courseId in getUserData(request.auth.uid).enrolledCourseIds) // Assumes student doc has enrolledCourseIds
+                        // Alternative for student read: check enrollments collection
+                        || (getUserData(request.auth.uid).role == 'Student' && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + courseId)))
                       );
-        allow create, update, delete: if (isTeacher() && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid) || isSuperAdmin();
+        allow list: if request.auth.uid != null && (
+                        getUserData(request.auth.uid).role == 'SuperAdmin' ||
+                        isTeacherForCourse(courseId) ||
+                        (getUserData(request.auth.uid).role == 'Student' && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + courseId)))
+                      );
+      allow create, update, delete: if request.auth.uid != null && (isTeacherForCourse(courseId) || getUserData(request.auth.uid).role == 'SuperAdmin');
       }
 
       // Assignments subcollection
       match /assignments/{assignmentId} {
-        allow read: if isAuthenticated() && (
-                        request.auth.uid == get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId ||
-                        (request.auth.uid in get(/databases/$(database)/documents/courses/$(courseId)).data.studentIds) ||
-                        isSuperAdmin()
+        allow read: if request.auth.uid != null && (
+                        getUserData(request.auth.uid).role == 'SuperAdmin' ||
+                        isTeacherForCourse(courseId) ||
+                        (getUserData(request.auth.uid).role == 'Student' && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + courseId)))
                       );
-        allow create, update, delete: if (isTeacher() && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid) || isSuperAdmin();
+        allow list: if request.auth.uid != null && (
+                        getUserData(request.auth.uid).role == 'SuperAdmin' ||
+                        isTeacherForCourse(courseId) ||
+                        (getUserData(request.auth.uid).role == 'Student' && exists(/databases/$(database)/documents/enrollments/$(request.auth.uid + '_' + courseId)))
+                      );
+        allow create, update, delete: if request.auth.uid != null && (isTeacherForCourse(courseId) || getUserData(request.auth.uid).role == 'SuperAdmin');
 
         // Submissions subcollection
         match /submissions/{submissionId} {
-          allow read: if isAuthenticated() && (
-                          request.auth.uid == resource.data.studentId || // Student owns their submission
-                          request.auth.uid == get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId || // Teacher of the course
-                          isSuperAdmin()
+          allow read: if request.auth.uid != null && (
+                          getUserData(request.auth.uid).role == 'SuperAdmin' ||
+                          isTeacherForCourse(courseId) ||
+                          resource.data.studentId == request.auth.uid
                         );
-          allow create: if isStudent() && request.auth.uid == request.resource.data.studentId; // Student can only create their own
-          allow update: if (isTeacher() && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid) || isSuperAdmin(); // Teacher or Admin can update (grade)
-          allow delete: if isSuperAdmin();
+          allow list: if request.auth.uid != null && ( // Teachers and Admins can list all for an assignment
+                          getUserData(request.auth.uid).role == 'SuperAdmin' ||
+                          isTeacherForCourse(courseId)
+                        );
+           allow list: if request.auth.uid != null && // Students can list their own submission for an assignment
+                          request.query.filters[0][0] == 'studentId' && request.query.filters[0][2] == request.auth.uid;
+          allow create: if request.auth.uid != null && getUserData(request.auth.uid).role == 'Student' && request.resource.data.studentId == request.auth.uid;
+          allow update: if request.auth.uid != null && (isTeacherForCourse(courseId) || getUserData(request.auth.uid).role == 'SuperAdmin'); // For grading
+          allow delete: if request.auth.uid != null && (isTeacherForCourse(courseId) || getUserData(request.auth.uid).role == 'SuperAdmin');
         }
       }
-      // Course Schedule subcollection
-      match /schedule/{dateId} {
-        allow read: if isAuthenticated();
-        allow create, update, delete: if (isTeacher() && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid) || isSuperAdmin();
+       // Schedule subcollection for a course
+      match /schedule/{dateId} { // dateId is YYYY-MM-DD
+        allow read: if request.auth.uid != null; // All authenticated users can read schedules
+        allow list: if request.auth.uid != null;
+        allow create, update, delete: if request.auth.uid != null && (isTeacherForCourse(courseId) || getUserData(request.auth.uid).role == 'SuperAdmin');
       }
     }
 
-    // Enrollments collection
+    // Enrollments
     match /enrollments/{enrollmentId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.studentId || isTeacher() || isSuperAdmin());
-      allow create, delete: if isSuperAdmin();
-    }
-
-    // AttendanceRecords collection
-    match /attendanceRecords/{recordId} {
-      allow read: if isAuthenticated() && (
-                      request.auth.uid == resource.data.studentId ||
-                      (isTeacher() && get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.teacherId == request.auth.uid) ||
-                      isSuperAdmin()
+      allow read: if request.auth.uid != null && (
+                      getUserData(request.auth.uid).role == 'SuperAdmin' ||
+                      getUserData(request.auth.uid).role == 'Teacher' || // Teachers might need to see enrollments broadly
+                      request.auth.uid == resource.data.studentId
                     );
-      allow create, update: if (isTeacher() && get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.teacherId == request.auth.uid) || isSuperAdmin();
-      allow delete: if isSuperAdmin();
+      allow list: if request.auth.uid != null && (
+                      getUserData(request.auth.uid).role == 'SuperAdmin' ||
+                      getUserData(request.auth.uid).role == 'Teacher'
+                    );
+       allow list: if request.auth.uid != null && request.query.getRules().size() == 1 && request.query.getRules()[0].field == 'studentId' && request.query.getRules()[0].value == request.auth.uid;
+
+      allow create, update, delete: if request.auth.uid != null && getUserData(request.auth.uid).role == 'SuperAdmin';
     }
 
-    // Payments collection
+    // Attendance Records
+    match /attendanceRecords/{recordId} {
+      allow read: if request.auth.uid != null && (
+                      getUserData(request.auth.uid).role == 'SuperAdmin' ||
+                      (getUserData(request.auth.uid).role == 'Teacher' && isTeacherForCourse(get(/databases/$(database)/documents/attendanceRecords/$(recordId)).data.courseId)) ||
+                      request.auth.uid == resource.data.studentId
+                    );
+      allow create: if request.auth.uid != null && (
+                      getUserData(request.auth.uid).role == 'SuperAdmin' ||
+                      (getUserData(request.auth.uid).role == 'Teacher' && isTeacherForCourse(request.resource.data.courseId))
+                    );
+      allow update, delete: if request.auth.uid != null && (
+                      getUserData(request.auth.uid).role == 'SuperAdmin' ||
+                      (getUserData(request.auth.uid).role == 'Teacher' && isTeacherForCourse(get(/databases/$(database)/documents/attendanceRecords/$(recordId)).data.courseId))
+                    );
+    }
+     match /attendanceRecords {
+        // Admins and Teachers can list all (teachers filter client-side or specific page queries)
+        allow list: if request.auth.uid != null && (getUserData(request.auth.uid).role == 'SuperAdmin' || getUserData(request.auth.uid).role == 'Teacher');
+        // Students can list records ONLY IF the query specifically filters by their studentId
+        allow list: if request.auth.uid != null && request.query.getRules().size() > 0 && request.query.getRules().map(rule, rule.field == 'studentId' && rule.value == request.auth.uid).hasAny();
+    }
+
+
+    // Payments
     match /payments/{paymentId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.studentId || isSuperAdmin());
-      allow create, update, delete: if isSuperAdmin();
+      allow read: if request.auth.uid != null && (
+                      getUserData(request.auth.uid).role == 'SuperAdmin' ||
+                      request.auth.uid == resource.data.studentId
+                    );
+      allow list: if request.auth.uid != null && getUserData(request.auth.uid).role == 'SuperAdmin';
+      allow list: if request.auth.uid != null && request.query.getRules().size() == 1 && request.query.getRules()[0].field == 'studentId' && request.query.getRules()[0].value == request.auth.uid;
+      allow create, update, delete: if request.auth.uid != null && getUserData(request.auth.uid).role == 'SuperAdmin';
     }
 
-    // Notifications collection
+    // Notifications
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated() && (resource.data.userId == null || request.auth.uid == resource.data.userId || isSuperAdmin());
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated() && (request.auth.uid == resource.data.userId || isSuperAdmin());
-      allow delete: if isSuperAdmin();
+      allow read, update: if request.auth.uid != null && request.auth.uid == resource.data.userId; // Users can read/update their own notifications
+      allow list: if request.auth.uid != null && request.query.getRules().size() == 1 && request.query.getRules()[0].field == 'userId' && request.query.getRules()[0].value == request.auth.uid;
+      allow create: if request.auth.uid != null && (getUserData(request.auth.uid).role == 'SuperAdmin' || getUserData(request.auth.uid).role == 'Teacher'); // System/Admin/Teacher can create
+      allow delete: if request.auth.uid != null && request.auth.uid == resource.data.userId; // User can delete their own
     }
 
-    // Announcements collection
+    // Announcements
     match /announcements/{announcementId} {
-      allow read: if isAuthenticated();
-      allow create, update, delete: if isSuperAdmin() || isTeacher();
+      allow read: if request.auth.uid != null; // All authenticated users can read announcements
+      allow list: if request.auth.uid != null;
+      allow create, update, delete: if request.auth.uid != null && (getUserData(request.auth.uid).role == 'SuperAdmin' || getUserData(request.auth.uid).role == 'Teacher');
     }
 
-    // DirectMessages collection
+    // Direct Messages
     match /directMessages/{messageId} {
-      allow read: if isAuthenticated() && (request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.recipientId || isSuperAdmin());
-      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.senderId;
-      allow update: if isAuthenticated() && request.auth.uid == resource.data.recipientId; // For marking as read
-      allow delete: if isSuperAdmin();
+      allow read: if request.auth.uid != null && (request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.recipientId);
+      allow list: if request.auth.uid != null && (
+                    (request.query.getRules().map(rule, rule.field == 'senderId' && rule.value == request.auth.uid).hasAny()) ||
+                    (request.query.getRules().map(rule, rule.field == 'recipientId' && rule.value == request.auth.uid).hasAny())
+                  );
+      allow create: if request.auth.uid != null && request.auth.uid == request.resource.data.senderId;
+      allow update: if request.auth.uid != null && request.auth.uid == request.resource.data.recipientId && request.resource.data.read == true; // Only recipient can mark as read
+      // No delete for now, or implement soft delete
     }
   }
 }
+
+    

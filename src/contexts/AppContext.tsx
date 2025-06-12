@@ -831,7 +831,7 @@ type AppContextType = {
   handleUpdateCourseDaySchedule: (payload: UpdateCourseDaySchedulePayload) => Promise<void>;
   handleClearCourseDaySchedule: (payload: ClearCourseDaySchedulePayload) => Promise<void>;
   handleSaveAttendanceRecords: (payload: TakeAttendancePayload) => Promise<void>;
-  fetchAllAttendanceRecords: () => Promise<void>;
+  fetchCurrentUserAttendanceRecords: () => Promise<void>;
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -993,23 +993,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch]);
 
-  const fetchAllAttendanceRecords = useCallback(async () => {
+  const fetchCurrentUserAttendanceRecords = useCallback(async () => {
+    const currentUser = state.currentUser; // Get current user from state at call time
+    if (!currentUser) {
+        dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_SUCCESS, payload: [] });
+        return;
+    }
+
     dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_REQUEST });
     const db = getFirebaseDb();
     if (!db) {
-      dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_FAILURE, payload: "Firestore not available." });
-      return;
+        dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_FAILURE, payload: "Firestore not available." });
+        return;
     }
     try {
-      const attendanceCol = collection(db, "attendanceRecords");
-      const attendanceSnapshot = await getDocs(attendanceCol);
-      const attendanceList = attendanceSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
-      dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_SUCCESS, payload: attendanceList });
+        const attendanceCol = collection(db, "attendanceRecords");
+        let q;
+        if (currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.TEACHER) {
+            q = query(attendanceCol); // Admins and Teachers fetch all
+        } else if (currentUser.role === UserRole.STUDENT) {
+            q = query(attendanceCol, where("studentId", "==", currentUser.id)); // Students fetch only their own
+        } else {
+            dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_SUCCESS, payload: [] }); // Should not happen
+            return;
+        }
+        
+        const attendanceSnapshot = await getDocs(q);
+        const attendanceList = attendanceSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord));
+        dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_SUCCESS, payload: attendanceList });
     } catch (error: any) {
-      console.error("Error fetching attendance records:", error);
-      dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_FAILURE, payload: error.message || "Failed to fetch attendance records." });
+        console.error("Error fetching attendance records for current user:", error);
+        dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_FAILURE, payload: error.message || "Failed to fetch attendance records." });
     }
-  }, [dispatch]);
+  }, [dispatch, state.currentUser]); // Add state.currentUser as a dependency
 
 
   const fetchCourseSchedule = useCallback(async (courseId: string) => {
@@ -1215,17 +1231,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
 
             await fetchAllUsers(); 
-            const fetchedCourses = await fetchAllCourses(); // Wait for courses to be fetched
+            const fetchedCourses = await fetchAllCourses(); 
             if (fetchedCourses && fetchedCourses.length > 0) {
-                await fetchAllCourseSchedules(fetchedCourses); // Then fetch schedules
+                await fetchAllCourseSchedules(fetchedCourses); 
             } else {
-                dispatch({ type: ActionType.FETCH_ALL_COURSE_SCHEDULES_SUCCESS, payload: [] }); // Ensure schedules are cleared if no courses
+                dispatch({ type: ActionType.FETCH_ALL_COURSE_SCHEDULES_SUCCESS, payload: [] }); 
             }
             await fetchEnrollmentsForUser(userProfile.id); 
             await fetchAllPayments(userProfile); 
             await fetchAllAnnouncements();
             await fetchDirectMessagesForUser(userProfile.id);
-            await fetchAllAttendanceRecords(); 
+            await fetchCurrentUserAttendanceRecords(); 
           } else {
             await signOut(authInstance); 
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
@@ -1255,7 +1271,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
     return () => unsubscribe();
-  }, [dispatch, fetchAllUsers, fetchAllCourses, fetchAllCourseSchedules, fetchEnrollmentsForUser, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser, fetchAllAttendanceRecords]);
+  }, [dispatch, fetchAllUsers, fetchAllCourses, fetchAllCourseSchedules, fetchEnrollmentsForUser, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser, fetchCurrentUserAttendanceRecords]);
 
   useEffect(() => {
     if (state.currentUser && state.courses.length > 0) {
@@ -2343,7 +2359,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     handleUpdateCourseDaySchedule,
     handleClearCourseDaySchedule,
     handleSaveAttendanceRecords,
-    fetchAllAttendanceRecords,
+    fetchCurrentUserAttendanceRecords,
   };
 
   return (
@@ -2361,3 +2377,5 @@ export const useAppContext = () => {
   return context;
 };
 
+
+    
