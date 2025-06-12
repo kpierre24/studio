@@ -13,24 +13,19 @@ export default function StudentLessonPage() {
   const { courseId, lessonId } = useParams() as { courseId: string; lessonId: string };
   const router = useRouter();
   const { state } = useAppContext();
-  // Renamed isLoading to isAppContextLoading to avoid potential naming conflicts if local loading states are added
   const { currentUser, courses, lessons, enrollments, isLoading: isAppContextLoading } = state;
 
-  // Broader loading check for initial app state
   if (isAppContextLoading && !currentUser) {
     return <p className="text-center text-muted-foreground py-10">Loading user data...</p>;
   }
 
-  // User must be logged in
   if (!currentUser) {
-    // This should ideally be caught by ProtectedLayout, but serves as a fallback.
     return <p className="text-center text-muted-foreground py-10">Please log in to view this lesson.</p>;
   }
 
   const course = courses.find(c => c.id === courseId);
   const lesson = lessons.find(l => l.id === lessonId && l.courseId === courseId);
 
-  // If initial app data is still loading or course not found yet
   if (isAppContextLoading && !course) {
      return <p className="text-center text-muted-foreground py-10">Loading course information...</p>;
   }
@@ -45,7 +40,6 @@ export default function StudentLessonPage() {
     );
   }
   
-  // If initial app data is still loading or lesson not found yet for this course
   if (isAppContextLoading && !lesson) {
      return <p className="text-center text-muted-foreground py-10">Loading lesson content for {course.name}...</p>;
   }
@@ -62,7 +56,7 @@ export default function StudentLessonPage() {
 
   const isEnrolled = enrollments.some(e => e.studentId === currentUser.id && e.courseId === courseId);
 
-  if (!isEnrolled && !isAppContextLoading) { // Check isLoading here too
+  if (!isEnrolled && !isAppContextLoading) { 
     return (
       <div className="text-center py-10">
         <h2 className="text-2xl font-semibold">Access Denied</h2>

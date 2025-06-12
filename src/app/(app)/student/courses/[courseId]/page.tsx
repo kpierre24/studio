@@ -25,7 +25,6 @@ export default function StudentCourseDetailPage() {
   const { courseId } = useParams() as { courseId: string };
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Renamed isLoading to isAppContextLoading to avoid potential naming conflicts
   const { state, handleStudentSubmissionUpload, handleStudentSubmitAssignment, isLoading: isAppContextLoading } = useAppContext();
   const { currentUser, courses, lessons, assignments, submissions, users, enrollments } = state; 
   const { toast } = useToast();
@@ -53,28 +52,26 @@ export default function StudentCourseDetailPage() {
      return <p className="text-center text-muted-foreground py-10">Loading user data...</p>;
   }
   if (!currentUser) { 
-    // This case might be handled by ProtectedLayout, but as a fallback
     router.push('/auth?redirect=' + pathname); 
     return <p className="text-center text-muted-foreground py-10">Redirecting to login...</p>;
   }
-
 
   const course = courses.find(c => c.id === courseId);
   const isEnrolled = enrollments && enrollments.some(e => e.studentId === currentUser.id && e.courseId === courseId);
 
   if (isAppContextLoading && (!course || isEnrolled === undefined)) {
-    return <p className="text-center text-muted-foreground py-10">Loading course content...</p>;
+    return <p className="text-center text-muted-foreground py-10">Loading course content and verifying enrollment...</p>;
   }
   if (!course) { 
     return (
       <div className="text-center py-10">
         <h2 className="text-2xl font-semibold">Course Not Found</h2>
-        <p className="text-muted-foreground">The course you are looking for does not exist or is not yet loaded.</p>
+        <p className="text-muted-foreground">The course you are looking for (ID: {courseId}) does not exist or is not yet loaded.</p>
         <Button onClick={() => router.back()} className="mt-4"><ArrowLeft className="mr-2 h-4 w-4" /> Go Back</Button>
       </div>
     );
   }
-  if (!isEnrolled) {
+  if (!isEnrolled && !isAppContextLoading) { // Check isAppContextLoading here as well
     return (
       <div className="text-center py-10">
         <h2 className="text-2xl font-semibold">Access Denied</h2>
@@ -82,6 +79,9 @@ export default function StudentCourseDetailPage() {
         <Button onClick={() => router.push('/student/courses')} className="mt-4">View My Courses</Button>
       </div>
     );
+  }
+  if (isAppContextLoading && !isEnrolled) { // Loading but not confirmed enrolled yet
+    return <p className="text-center text-muted-foreground py-10">Verifying enrollment status...</p>;
   }
 
 

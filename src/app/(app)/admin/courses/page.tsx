@@ -283,7 +283,7 @@ export default function AdminCoursesPage() {
                           <AlertDialogCancel onClick={() => setCourseToDelete(null)} disabled={isLoading}>Cancel</AlertDialogCancel>
                           <AlertDialogAction 
                               onClick={confirmDeleteCourse}
-                              disabled={(courseToDelete && courseToDelete.studentIds.length > 0) || isLoading}
+                              disabled={isLoading || (courseToDelete != null && courseToDelete.studentIds.length > 0)}
                           >
                               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>}
                               Yes, delete course
@@ -300,3 +300,4 @@ export default function AdminCoursesPage() {
     </div>
   );
 }
+

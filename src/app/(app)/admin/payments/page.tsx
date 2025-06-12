@@ -92,6 +92,7 @@ export default function AdminPaymentsPage() {
   useEffect(() => {
     if (!isPaymentModalOpen) {
         setStudentCourseBalanceInfo(null);
+        setEditingPaymentId(null); 
         return;
     }
 
@@ -103,30 +104,43 @@ export default function AdminPaymentsPage() {
         }
 
         const courseCost = course.cost || 0;
-        const paidPayments = payments.filter(p => 
+        // Consider only 'Paid' payments for calculating total paid, excluding the current one if editing
+        const paidPaymentsForBalance = payments.filter(p => 
             p.studentId === paymentFormData.studentId && 
             p.courseId === paymentFormData.courseId && 
             p.status === PaymentStatus.PAID &&
-            (!editingPaymentId || p.id !== editingPaymentId) // Exclude current payment if editing
+            (!editingPaymentId || p.id !== editingPaymentId) 
         );
-        const totalPaid = paidPayments.reduce((sum, p) => sum + p.amount, 0);
-        const amountOwed = Math.max(0, courseCost - totalPaid);
-        const isFullyPaid = amountOwed === 0 && courseCost > 0;
+        const totalPaidForBalance = paidPaymentsForBalance.reduce((sum, p) => sum + p.amount, 0);
+        
+        let amountOwed = Math.max(0, courseCost - totalPaidForBalance);
+        let isFullyPaid = amountOwed <= 0 && courseCost > 0;
         
         let warningMessage = '';
         const currentPaymentAmount = Number(paymentFormData.amount) || 0;
+        const currentPaymentStatus = paymentFormData.status;
 
-        if (isFullyPaid && currentPaymentAmount > 0 && (!editingPaymentId || payments.find(p=>p.id === editingPaymentId)?.amount !== currentPaymentAmount)) {
-             warningMessage = "This course is already fully paid. Recording another payment will result in overpayment.";
-        } else if (!isFullyPaid && totalPaid + currentPaymentAmount > courseCost) {
-             warningMessage = `This payment of $${currentPaymentAmount.toFixed(2)} will result in an overpayment of $${((totalPaid + currentPaymentAmount) - courseCost).toFixed(2)}.`;
+        // Check if this specific payment being edited was originally 'Paid'
+        const originalPaymentBeingEdited = editingPaymentId ? payments.find(p=>p.id === editingPaymentId) : null;
+        const wasOriginalPaymentPaid = originalPaymentBeingEdited?.status === PaymentStatus.PAID;
+
+
+        if (isFullyPaid && currentPaymentStatus === PaymentStatus.PAID && currentPaymentAmount > 0) {
+            if (!editingPaymentId) { // New payment on already paid course
+                 warningMessage = "This course is already fully paid. Recording another 'Paid' payment will result in overpayment.";
+            } else if (editingPaymentId && (!wasOriginalPaymentPaid || originalPaymentBeingEdited?.amount !== currentPaymentAmount)) {
+                // Editing an existing payment to 'Paid' or changing its amount, on an already (otherwise) paid course
+                warningMessage = "This course is already fully paid (excluding this payment if it wasn't 'Paid' before). This change might result in overpayment.";
+            }
+        } else if (!isFullyPaid && currentPaymentStatus === PaymentStatus.PAID && (totalPaidForBalance + currentPaymentAmount > courseCost) ) {
+             warningMessage = `This 'Paid' payment of $${currentPaymentAmount.toFixed(2)} will result in an overpayment of $${((totalPaidForBalance + currentPaymentAmount) - courseCost).toFixed(2)}.`;
         }
 
 
         setStudentCourseBalanceInfo({
             courseCost,
-            totalPaid,
-            amountOwed: isFullyPaid && currentPaymentAmount > 0 && editingPaymentId && payments.find(p=>p.id === editingPaymentId)?.amount === currentPaymentAmount ? 0 : amountOwed,
+            totalPaid: totalPaidForBalance,
+            amountOwed,
             isFullyPaid,
             warningMessage,
         });
@@ -134,7 +148,7 @@ export default function AdminPaymentsPage() {
     } else {
         setStudentCourseBalanceInfo(null);
     }
-  }, [paymentFormData.studentId, paymentFormData.courseId, paymentFormData.amount, isPaymentModalOpen, courses, payments, editingPaymentId]);
+  }, [paymentFormData.studentId, paymentFormData.courseId, paymentFormData.amount, paymentFormData.status, isPaymentModalOpen, courses, payments, editingPaymentId]);
 
 
   const filteredPayments = useMemo(() => {
@@ -290,15 +304,19 @@ export default function AdminPaymentsPage() {
                 <Card className="bg-muted/50 p-3 text-sm">
                   <CardContent className="p-0 space-y-1">
                     <p>Course Cost: <span className="font-semibold">${studentCourseBalanceInfo.courseCost.toFixed(2)}</span></p>
-                    <p>Total Paid (excluding this payment if editing): <span className="font-semibold text-green-600">${studentCourseBalanceInfo.totalPaid.toFixed(2)}</span></p>
+                    <p>Total Paid (for this course, excluding this transaction if editing): <span className="font-semibold text-green-600">${studentCourseBalanceInfo.totalPaid.toFixed(2)}</span></p>
                     <p>Amount Currently Owed: <span className={`font-bold ${studentCourseBalanceInfo.amountOwed > 0 ? 'text-red-600' : 'text-green-600'}`}>
                       ${studentCourseBalanceInfo.amountOwed.toFixed(2)}
                     </span></p>
-                    {studentCourseBalanceInfo.isFullyPaid && !editingPaymentId && (
+                    {(studentCourseBalanceInfo.isFullyPaid && !editingPaymentId && studentCourseBalanceInfo.courseCost > 0) && (
                       <Badge className="bg-green-500 mt-1">Course Fully Paid</Badge>
                     )}
-                    {studentCourseBalanceInfo.isFullyPaid && editingPaymentId && studentCourseBalanceInfo.amountOwed === 0 && (
-                      <Badge className="bg-green-500 mt-1">Course Fully Paid</Badge>
+                    {/* For editing, if the course is paid considering this payment: */}
+                    {editingPaymentId && studentCourseBalanceInfo.courseCost > 0 && (paymentFormData.status === PaymentStatus.PAID && Number(paymentFormData.amount) >= studentCourseBalanceInfo.amountOwed && studentCourseBalanceInfo.amountOwed > 0) && (
+                       <Badge className="bg-green-500 mt-1">This payment makes the course fully paid</Badge>
+                    )}
+                     {editingPaymentId && studentCourseBalanceInfo.isFullyPaid && studentCourseBalanceInfo.courseCost > 0 && (
+                       <Badge className="bg-green-500 mt-1">Course appears fully paid</Badge>
                     )}
                   </CardContent>
                 </Card>
@@ -476,3 +494,4 @@ export default function AdminPaymentsPage() {
     </div>
   );
 }
+
