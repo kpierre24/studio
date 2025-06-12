@@ -34,7 +34,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare, UploadCloud, Eye, FileArchive, CheckCircle, AlertCircle, Send, Paperclip, Loader2, Settings, ExternalLink, DollarSign } from 'lucide-react';
+import { ArrowLeft, PlusCircle, Edit, Trash2, FileText, BookOpen, BotMessageSquare, UserSquare, UploadCloud, Eye, FileArchive, CheckCircle, AlertCircle, Send, Paperclip, Loader2, Settings, ExternalLink, DollarSign, CalendarCheck } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { QuizGenerator } from '@/components/features/QuizGenerator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -399,10 +399,13 @@ export default function TeacherCourseDetailPage() {
         </CardHeader>
         <CardContent className="p-0">
           <Tabs defaultValue="lessons" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 rounded-none border-b">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 rounded-none border-b">
               <TabsTrigger value="lessons" className="rounded-none py-3"><FileText className="mr-2" />Lessons ({courseLessons.length})</TabsTrigger>
               <TabsTrigger value="assignments" className="rounded-none py-3"><BookOpen className="mr-2" />Assignments ({courseAssignments.length})</TabsTrigger>
               <TabsTrigger value="students" className="rounded-none py-3"><UserSquare className="mr-2" />Students ({course.studentIds.length})</TabsTrigger>
+              <TabsTrigger value="attendance" asChild className="rounded-none py-3">
+                <Link href={`/teacher/courses/${courseId}/attendance`}><CalendarCheck className="mr-2" />Attendance</Link>
+              </TabsTrigger>
               <TabsTrigger value="payments" className="rounded-none py-3"><DollarSign className="mr-2" />Payments</TabsTrigger>
               <TabsTrigger value="settings" className="rounded-none py-3"><Settings className="mr-2" />Settings</TabsTrigger>
             </TabsList>
@@ -527,7 +530,7 @@ export default function TeacherCourseDetailPage() {
                         const student = users.find(u => u.id === studentId);
                         return student ? (
                         <li key={student.id} className="p-3 border rounded-md flex items-center gap-3 hover:bg-muted/50 transition-colors">
-                            <Image src={student.avatarUrl || `https://placehold.co/40x40.png?text=${student.name.substring(0,1)}`} alt={student.name} width={40} height={40} className="rounded-full" data-ai-hint="student avatar"/>
+                            <Image src={student.avatarUrl || `https://placehold.co/40x40.png`} alt={student.name} width={40} height={40} className="rounded-full" data-ai-hint="student avatar"/>
                             <div>
                                 <p className="font-medium">{student.name}</p>
                                 <p className="text-sm text-muted-foreground">{student.email}</p>
@@ -538,6 +541,12 @@ export default function TeacherCourseDetailPage() {
                     </ul>
                 )}
             </TabsContent>
+            
+            {/* Attendance tab content is implicitly handled by navigating to the dedicated attendance page */}
+            <TabsContent value="attendance" className="p-6">
+                <p className="text-muted-foreground text-center">Attendance management is handled on a separate page. Click the 'Attendance' tab to navigate.</p>
+            </TabsContent>
+
 
             <TabsContent value="payments" className="p-6">
               <h3 className="text-xl font-semibold mb-4">Student Payment Status</h3>
