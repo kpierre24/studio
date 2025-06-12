@@ -1,72 +1,106 @@
 
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type ComponentProps } from 'react';
 import { useAppContext } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar'; // Shadcn Calendar
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, isSameMonth, isSameDay, getDay, parseISO } from 'date-fns';
+import { format, addMonths, subMonths, isSameDay, parseISO } from 'date-fns';
 import Link from 'next/link';
-import { UserRole } from '@/types';
+import { UserRole, type Assignment, type CourseDaySchedule } from '@/types';
+
+// Custom DayContent component to render assignments
+function CustomDayContent(props: ComponentProps<"div"> & { date: Date; displayMonth: Date }) {
+  const { state } = useAppContext();
+  const { assignments, currentUser, courses, enrollments } = state;
+
+  const relevantCourseIds = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === UserRole.SUPER_ADMIN) return courses.map(c => c.id);
+    if (currentUser.role === UserRole.TEACHER) return courses.filter(c => c.teacherId === currentUser.id).map(c => c.id);
+    if (currentUser.role === UserRole.STUDENT) return enrollments.filter(e => e.studentId === currentUser.id).map(e => e.courseId);
+    return [];
+  }, [currentUser, courses, enrollments]);
+
+  const getAssignmentsForDay = (day: Date): Assignment[] => {
+    if (!currentUser) return [];
+    return assignments.filter(a => 
+      relevantCourseIds.includes(a.courseId) && 
+      isSameDay(new Date(a.dueDate), day)
+    );
+  };
+  
+  const dayAssignments = getAssignmentsForDay(props.date);
+
+  // Default styling from react-day-picker for the day number
+  const dayNumberStyle: React.CSSProperties = {
+    position: 'absolute',
+    top: '0.25rem',
+    right: '0.25rem',
+    fontSize: '0.75rem', // text-xs
+    fontWeight: isSameDay(props.date, new Date()) ? 'bold' : 'normal',
+    color: isSameDay(props.date, new Date()) ? 'hsl(var(--primary))' : undefined,
+  };
+
+
+  return (
+    <div className="relative w-full h-full min-h-[100px] sm:min-h-[120px] p-1 pt-5 overflow-hidden">
+       {/* react-day-picker handles rendering the day number itself, we just add content */}
+      <div className="space-y-1 overflow-y-auto max-h-[80px] sm:max-h-[95px] text-xs">
+        {dayAssignments.map(assignment => (
+          <Link 
+            key={assignment.id} 
+            href={currentUser?.role === UserRole.STUDENT ? `/student/courses/${assignment.courseId}?assignment=${assignment.id}` : `/teacher/courses/${assignment.courseId}`}
+            className="block p-1 bg-accent text-accent-foreground rounded-sm hover:opacity-80 truncate"
+            title={assignment.title}
+          >
+            {assignment.title}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 
 export default function CalendarPage() {
   const { state } = useAppContext();
-  const { assignments, currentUser, courses, enrollments, courseSchedules } = state;
+  const { currentUser, courses, enrollments, courseSchedules } = state;
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const relevantCourseIds = useMemo(() => {
     if (!currentUser) return [];
-    if (currentUser.role === UserRole.SUPER_ADMIN) {
-      return courses.map(c => c.id);
-    }
-    if (currentUser.role === UserRole.TEACHER) {
-      return courses.filter(c => c.teacherId === currentUser.id).map(c => c.id);
-    }
-    if (currentUser.role === UserRole.STUDENT) {
-      return enrollments.filter(e => e.studentId === currentUser.id).map(e => e.courseId);
-    }
+    if (currentUser.role === UserRole.SUPER_ADMIN) return courses.map(c => c.id);
+    if (currentUser.role === UserRole.TEACHER) return courses.filter(c => c.teacherId === currentUser.id).map(c => c.id);
+    if (currentUser.role === UserRole.STUDENT) return enrollments.filter(e => e.studentId === currentUser.id).map(e => e.courseId);
     return [];
   }, [currentUser, courses, enrollments]);
 
-  const relevantAssignments = useMemo(() => {
-    if (!currentUser) return [];
-    return assignments.filter(assignment => relevantCourseIds.includes(assignment.courseId));
-  }, [assignments, currentUser, relevantCourseIds]);
-
-  const daysInMonth = eachDayOfInterval({
-    start: startOfWeek(startOfMonth(currentMonth)),
-    end: endOfWeek(endOfMonth(currentMonth)),
-  });
-
-  const getAssignmentsForDay = (day: Date) => {
-    return relevantAssignments.filter(a => isSameDay(new Date(a.dueDate), day));
-  };
-
   const calendarDayInfo = useMemo(() => {
-    const classDays = new Set<string>();
-    const noClassDays = new Set<string>();
+    const classDaysSet = new Set<string>();
+    const noClassDaysSet = new Set<string>();
 
     courseSchedules
       .filter(cs => relevantCourseIds.includes(cs.courseId))
       .forEach(cs => {
-        const dateStr = format(parseISO(cs.id), 'yyyy-MM-dd'); // cs.id is already YYYY-MM-DD
+        // cs.id is already YYYY-MM-DD from Firestore doc ID
+        const dateStr = cs.id; 
         if (cs.status === 'class') {
-          classDays.add(dateStr);
+          classDaysSet.add(dateStr);
         } else if (cs.status === 'no_class') {
-          noClassDays.add(dateStr);
+          noClassDaysSet.add(dateStr);
         }
       });
+    
+    // Prevent a day being both a class day and no class day; class day takes precedence
+    const finalNoClassDays = Array.from(noClassDaysSet).filter(dateStr => !classDaysSet.has(dateStr));
 
-    // If a day is a class day for any relevant course, it's a class day overall for display.
-    // A day is only a "no class day" if it's marked as such for ALL relevant courses scheduled on that day AND it's not a class day for any.
-    // This simplified logic: class day takes precedence.
-    const finalClassDays = Array.from(classDays).map(dateStr => parseISO(dateStr));
-    const finalNoClassDays = Array.from(noClassDays)
-      .filter(dateStr => !classDays.has(dateStr)) // Only if not a class day for any other course
-      .map(dateStr => parseISO(dateStr));
-      
-    return { classDays: finalClassDays, noClassDays: finalNoClassDays };
+    return { 
+      classDays: Array.from(classDaysSet).map(dateStr => parseISO(dateStr)), 
+      noClassDays: finalNoClassDays.map(dateStr => parseISO(dateStr))
+    };
   }, [courseSchedules, relevantCourseIds]);
 
 
@@ -74,15 +108,17 @@ export default function CalendarPage() {
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const today = () => setCurrentMonth(new Date());
 
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   const calendarModifiers = {
     classDay: calendarDayInfo.classDays,
     noClassDay: calendarDayInfo.noClassDays,
+    // today is handled by react-day-picker by default
   };
+
   const calendarModifiersClassNames = {
-    classDay: 'bg-green-500/20 text-green-800 dark:bg-green-500/30 dark:text-green-200 font-semibold rounded',
-    noClassDay: 'bg-red-500/20 text-red-800 dark:bg-red-500/30 dark:text-red-200 line-through rounded opacity-70',
+    classDay: 'bg-green-500/20 text-green-700 dark:bg-green-500/30 dark:text-green-200 font-semibold',
+    noClassDay: 'bg-red-500/20 text-red-700 dark:bg-red-500/30 dark:text-red-200 line-through opacity-70',
+    // today default style: bg-accent text-accent-foreground
   };
 
 
@@ -97,50 +133,36 @@ export default function CalendarPage() {
         </div>
       </div>
       
-      <Card>
+      <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="text-center text-2xl font-semibold">{format(currentMonth, 'MMMM yyyy')}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-7 gap-px border-t border-l border-border bg-border overflow-hidden rounded-lg">
-            {dayNames.map(dayName => (
-              <div key={dayName} className="py-2 text-center font-medium text-sm bg-muted text-muted-foreground">{dayName}</div>
-            ))}
-            {daysInMonth.map((day, dayIdx) => (
-              <div
-                key={day.toString()}
-                className={`p-2 min-h-[100px] sm:min-h-[120px] border-b border-r border-border relative transition-colors duration-150
-                  ${isSameMonth(day, currentMonth) ? 'bg-card hover:bg-muted/50' : 'bg-muted/30 text-muted-foreground hover:bg-muted/50'}
-                  ${isSameDay(day, new Date()) ? 'bg-primary/10 ring-2 ring-primary z-10' : ''}
-                `}
-              >
-                <time dateTime={format(day, 'yyyy-MM-dd')} className={`absolute top-2 right-2 text-xs font-semibold ${isSameDay(day, new Date()) ? 'text-primary' : ''}`}>
-                  {format(day, 'd')}
-                </time>
-                <div className="mt-6 space-y-1 overflow-y-auto max-h-[80px] sm:max-h-[100px]">
-                  {getAssignmentsForDay(day).map(assignment => (
-                    <Link 
-                      key={assignment.id} 
-                      href={`/student/courses/${assignment.courseId}?assignment=${assignment.id}`}
-                      className="block p-1.5 text-xs bg-accent text-accent-foreground rounded-md hover:opacity-80 truncate"
-                      title={assignment.title}
-                    >
-                      {assignment.title}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-           <div className="mt-4 flex flex-wrap gap-4 text-xs">
+          <Calendar
+            mode="single" // Keeps single day selectable, good for potential future features
+            month={currentMonth}
+            onMonthChange={setCurrentMonth}
+            modifiers={calendarModifiers}
+            modifiersClassNames={calendarModifiersClassNames}
+            components={{
+              DayContent: CustomDayContent,
+            }}
+            className="p-0 [&_button[name=day]]:min-h-[100px] sm:[&_button[name=day]]:min-h-[120px] [&_button[name=day]]:h-full [&_button[name=day]]:items-start [&_button[name=day]]:pt-5"
+            // Styles to make day cells taller and align content.
+            // Actual day number rendering and selected day state are handled by react-day-picker
+          />
+           <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2 text-xs">
             <div className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-sm bg-green-500/20 border border-green-600"></span> Class Day
+                <span className="h-3 w-3 rounded-sm bg-green-500/20 border border-green-600/50"></span> Class Day
             </div>
             <div className="flex items-center gap-1.5">
-                <span className="h-3 w-3 rounded-sm bg-red-500/20 border border-red-600"></span> No Class Day
+                <span className="h-3 w-3 rounded-sm bg-red-500/20 border border-red-600/50"></span> No Class Day
             </div>
              <div className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded-sm bg-accent"></span> Assignment Due
+            </div>
+            <div className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm bg-primary/10 border border-primary/50"></span> Today
             </div>
           </div>
         </CardContent>
@@ -149,3 +171,4 @@ export default function CalendarPage() {
   );
 }
 
+    
