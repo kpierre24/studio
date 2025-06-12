@@ -10,9 +10,9 @@ import Image from "next/image";
 
 export default function TeacherAttendanceOverviewPage() {
   const { state } = useAppContext();
-  const { currentUser, courses, isLoading } = state; // Added isLoading
+  const { currentUser, courses, isLoading } = state;
 
-  if (isLoading && !currentUser) { // Added loading check
+  if (isLoading && !currentUser) {
     return <p className="text-center text-muted-foreground py-10">Loading user data...</p>;
   }
   if (!currentUser) {
@@ -49,28 +49,28 @@ export default function TeacherAttendanceOverviewPage() {
             const courseImageSrc = course.bannerImageUrl || `https://placehold.co/600x400.png?text=${encodeURIComponent(course.name)}`;
             return (
               <Card key={course.id} className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <CardHeader className="pb-0"> {/* Reduced padding */}
-                  <div className="aspect-[16/9] relative mb-3 rounded-md overflow-hidden"> {/* Added rounded corners and margin */}
+                <CardHeader className="pb-0">
+                  <div className="aspect-[16/9] relative mb-3 rounded-md overflow-hidden">
                       <Image 
                           src={courseImageSrc} 
                           alt={course.name} 
-                          layout="fill"
-                          objectFit="cover"
+                          fill
+                          style={{objectFit:"cover"}}
                           priority={course.bannerImageUrl ? true : false}
                           data-ai-hint="course banner"
                       />
                   </div>
-                  <CardTitle className="text-xl hover:text-primary transition-colors"> {/* Smaller title */}
+                  <CardTitle className="text-xl hover:text-primary transition-colors">
                     <Link href={`/teacher/courses/${course.id}/attendance`}>{course.name}</Link>
                   </CardTitle>
-                  <CardDescription className="h-10 overflow-hidden text-ellipsis text-xs">{course.description}</CardDescription> {/* Smaller description */}
+                  <CardDescription className="h-10 overflow-hidden text-ellipsis text-xs">{course.description}</CardDescription>
                 </CardHeader>
-                <CardContent className="flex-grow pt-2 space-y-0.5 text-sm"> {/* Reduced padding and spacing */}
+                <CardContent className="flex-grow pt-2 space-y-0.5 text-sm">
                   <p className="text-muted-foreground text-xs flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {course.studentIds.length} student(s)</p>
                   <p className="text-muted-foreground text-xs">Category: {course.category || "N/A"}</p>
                 </CardContent>
-                <CardFooter className="pt-3"> {/* Reduced padding */}
-                  <Button asChild className="w-full" size="sm" disabled={isLoading}> {/* Smaller button */}
+                <CardFooter className="pt-3">
+                  <Button asChild className="w-full" size="sm" disabled={isLoading}>
                     <Link href={`/teacher/courses/${course.id}/attendance`}>
                       <CalendarCheck className="mr-2 h-4 w-4" /> Take/View Attendance
                     </Link>

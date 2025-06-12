@@ -135,7 +135,6 @@ export default function TeacherCoursesPage() {
         toast({ title: "Error", description: "Assignment title and due date are required.", variant: "destructive"});
         return;
     }
-    // The `totalPoints` will be calculated in the context handler before saving
     await handleCreateAssignment({ ...assignmentFormData, courseId: currentCourseForAssignment.id });
     
     if (!state.error) {
@@ -229,8 +228,8 @@ export default function TeacherCoursesPage() {
                     <Image 
                         src={courseImageSrc}
                         alt={course.name} 
-                        layout="fill"
-                        objectFit="cover"
+                        fill
+                        style={{objectFit:"cover"}}
                         priority={course.bannerImageUrl ? true : false}
                         data-ai-hint="course banner"
                     />

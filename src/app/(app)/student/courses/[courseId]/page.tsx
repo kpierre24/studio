@@ -71,7 +71,7 @@ export default function StudentCourseDetailPage() {
       </div>
     );
   }
-  if (!isEnrolled && !isAppContextLoading) { // Check isAppContextLoading here as well
+  if (!isEnrolled && !isAppContextLoading) {
     return (
       <div className="text-center py-10">
         <h2 className="text-2xl font-semibold">Access Denied</h2>
@@ -80,7 +80,7 @@ export default function StudentCourseDetailPage() {
       </div>
     );
   }
-  if (isAppContextLoading && !isEnrolled) { // Loading but not confirmed enrolled yet
+  if (isAppContextLoading && !isEnrolled) {
     return <p className="text-center text-muted-foreground py-10">Verifying enrollment status...</p>;
   }
 

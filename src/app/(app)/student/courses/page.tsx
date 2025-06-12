@@ -5,7 +5,7 @@ import { useAppContext } from "@/contexts/AppContext";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { BookOpen, ArrowRight, Users } from "lucide-react"; // Added Users icon
+import { BookOpen, ArrowRight, Users } from "lucide-react";
 import Image from "next/image";
 
 export default function StudentCoursesPage() {
@@ -55,30 +55,32 @@ export default function StudentCoursesPage() {
             const courseImageSrc = course.bannerImageUrl || `https://placehold.co/600x400.png?text=${encodeURIComponent(course.name)}`;
             return (
               <Card key={course.id} className="flex flex-col overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <CardHeader className="pb-0"> {/* Reduced padding */}
-                  <div className="aspect-[16/9] relative mb-3 rounded-md overflow-hidden"> {/* Added rounded corners and margin */}
+                <CardHeader className="pb-0">
+                  <div className="aspect-[16/9] relative mb-3 rounded-md overflow-hidden">
                       <Image 
                           src={courseImageSrc}
                           alt={course.name} 
-                          layout="fill"
-                          objectFit="cover"
+                          fill
+                          style={{objectFit:"cover"}}
                           priority={course.bannerImageUrl ? true : false}
                           data-ai-hint="course banner"
                       />
                   </div>
-                  <CardTitle className="text-xl hover:text-primary transition-colors"> {/* Slightly smaller title */}
+                  <CardTitle className="text-xl hover:text-primary transition-colors">
                     <Link href={`/student/courses/${course.id}`}>{course.name}</Link>
                   </CardTitle>
-                  <CardDescription className="h-10 overflow-hidden text-ellipsis text-xs">{course.description}</CardDescription> {/* Smaller description */}
+                  <CardDescription className="h-10 overflow-hidden text-ellipsis text-xs">{course.description}</CardDescription>
                 </CardHeader>
-                <CardContent className="flex-grow pt-2 space-y-0.5 text-sm"> {/* Reduced padding and spacing */}
+                <CardContent className="flex-grow pt-2 space-y-0.5 text-sm">
                   <p className="text-muted-foreground text-xs flex items-center"><Users className="mr-1.5 h-3.5 w-3.5"/> Instructor: {getTeacherName(course.teacherId)}</p>
                   <p className="text-muted-foreground text-xs">Category: {course.category || "N/A"}</p>
                 </CardContent>
-                <CardFooter className="pt-3"> {/* Reduced padding */}
-                  <Button asChild variant="outline" size="sm" className="w-full" disabled={isLoading}> {/* Smaller button */}
+                <CardFooter className="pt-3">
+                  <Button asChild variant="outline" size="sm" className="w-full" disabled={isLoading}>
                     <Link href={`/student/courses/${course.id}`}>
-                      View Course <ArrowRight className="ml-2 h-4 w-4" />
+                      <span className="flex items-center justify-center w-full">
+                        View Course <ArrowRight className="ml-2 h-4 w-4" />
+                      </span>
                     </Link>
                   </Button>
                 </CardFooter>

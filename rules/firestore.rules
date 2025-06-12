@@ -1,0 +1,125 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'SuperAdmin';
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Teacher';
+    }
+
+    function isStudent() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Student';
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated(); // Allow any authenticated user to create their own user doc, or admin creates
+      allow update: if isOwner(userId) || isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // Courses collection
+    match /courses/{courseId} {
+      allow read: if isAuthenticated();
+      allow create: if isTeacher() || isSuperAdmin();
+      allow update: if (isTeacher() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teacherId == request.auth.uid) || isSuperAdmin(); // Original version in PRD had resource.data.teacherId
+      allow delete: if (isTeacher() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.teacherId == request.auth.uid && resource.data.studentIds.size() == 0) || (isSuperAdmin() && resource.data.studentIds.size() == 0);
+
+      // Lessons subcollection
+      match /lessons/{lessonId} {
+        allow read: if isAuthenticated() && (
+                        request.auth.uid == get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId ||
+                        (request.auth.uid in get(/databases/$(database)/documents/courses/$(courseId)).data.studentIds) ||
+                        isSuperAdmin()
+                      );
+        allow create, update, delete: if (isTeacher() && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid) || isSuperAdmin();
+      }
+
+      // Assignments subcollection
+      match /assignments/{assignmentId} {
+        allow read: if isAuthenticated() && (
+                        request.auth.uid == get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId ||
+                        (request.auth.uid in get(/databases/$(database)/documents/courses/$(courseId)).data.studentIds) ||
+                        isSuperAdmin()
+                      );
+        allow create, update, delete: if (isTeacher() && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid) || isSuperAdmin();
+
+        // Submissions subcollection
+        match /submissions/{submissionId} {
+          allow read: if isAuthenticated() && (
+                          request.auth.uid == resource.data.studentId || // Student owns their submission
+                          request.auth.uid == get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId || // Teacher of the course
+                          isSuperAdmin()
+                        );
+          allow create: if isStudent() && request.auth.uid == request.resource.data.studentId; // Student can only create their own
+          allow update: if (isTeacher() && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid) || isSuperAdmin(); // Teacher or Admin can update (grade)
+          allow delete: if isSuperAdmin();
+        }
+      }
+      // Course Schedule subcollection
+      match /schedule/{dateId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if (isTeacher() && get(/databases/$(database)/documents/courses/$(courseId)).data.teacherId == request.auth.uid) || isSuperAdmin();
+      }
+    }
+
+    // Enrollments collection
+    match /enrollments/{enrollmentId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.studentId || isTeacher() || isSuperAdmin());
+      allow create, delete: if isSuperAdmin();
+    }
+
+    // AttendanceRecords collection
+    match /attendanceRecords/{recordId} {
+      allow read: if isAuthenticated() && (
+                      request.auth.uid == resource.data.studentId ||
+                      (isTeacher() && get(/databases/$(database)/documents/courses/$(resource.data.courseId)).data.teacherId == request.auth.uid) ||
+                      isSuperAdmin()
+                    );
+      allow create, update: if (isTeacher() && get(/databases/$(database)/documents/courses/$(request.resource.data.courseId)).data.teacherId == request.auth.uid) || isSuperAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    // Payments collection
+    match /payments/{paymentId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.studentId || isSuperAdmin());
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (resource.data.userId == null || request.auth.uid == resource.data.userId || isSuperAdmin());
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.userId || isSuperAdmin());
+      allow delete: if isSuperAdmin();
+    }
+
+    // Announcements collection
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isSuperAdmin() || isTeacher();
+    }
+
+    // DirectMessages collection
+    match /directMessages/{messageId} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.senderId || request.auth.uid == resource.data.recipientId || isSuperAdmin());
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.senderId;
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.recipientId; // For marking as read
+      allow delete: if isSuperAdmin();
+    }
+  }
+}
