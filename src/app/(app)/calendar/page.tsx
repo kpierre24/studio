@@ -6,42 +6,33 @@ import { useAppContext } from '@/contexts/AppContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, isSameMonth, isSameDay, getDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, isSameMonth, isSameDay, getDay, parseISO } from 'date-fns';
 import Link from 'next/link';
+import { UserRole } from '@/types';
 
 export default function CalendarPage() {
   const { state } = useAppContext();
-  const { assignments, currentUser } = state;
+  const { assignments, currentUser, courses, enrollments, courseSchedules } = state;
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  const enrolledCourseIds = useMemo(() => {
+  const relevantCourseIds = useMemo(() => {
     if (!currentUser) return [];
-    return state.enrollments
-      .filter(e => e.studentId === currentUser.id)
-      .map(e => e.courseId);
-  }, [currentUser, state.enrollments]);
-
-  const teacherCourseIds = useMemo(() => {
-    if(!currentUser || currentUser.role !== 'Teacher') return [];
-    return state.courses
-        .filter(c => c.teacherId === currentUser.id)
-        .map(c => c.id);
-  }, [currentUser, state.courses]);
-  
+    if (currentUser.role === UserRole.SUPER_ADMIN) {
+      return courses.map(c => c.id);
+    }
+    if (currentUser.role === UserRole.TEACHER) {
+      return courses.filter(c => c.teacherId === currentUser.id).map(c => c.id);
+    }
+    if (currentUser.role === UserRole.STUDENT) {
+      return enrollments.filter(e => e.studentId === currentUser.id).map(e => e.courseId);
+    }
+    return [];
+  }, [currentUser, courses, enrollments]);
 
   const relevantAssignments = useMemo(() => {
     if (!currentUser) return [];
-    return assignments.filter(assignment => {
-      if (currentUser.role === 'SuperAdmin') return true;
-      if (currentUser.role === 'Student') {
-        return enrolledCourseIds.includes(assignment.courseId);
-      }
-      if (currentUser.role === 'Teacher') {
-        return teacherCourseIds.includes(assignment.courseId);
-      }
-      return false;
-    });
-  }, [assignments, currentUser, enrolledCourseIds, teacherCourseIds]);
+    return assignments.filter(assignment => relevantCourseIds.includes(assignment.courseId));
+  }, [assignments, currentUser, relevantCourseIds]);
 
   const daysInMonth = eachDayOfInterval({
     start: startOfWeek(startOfMonth(currentMonth)),
@@ -52,11 +43,48 @@ export default function CalendarPage() {
     return relevantAssignments.filter(a => isSameDay(new Date(a.dueDate), day));
   };
 
+  const calendarDayInfo = useMemo(() => {
+    const classDays = new Set<string>();
+    const noClassDays = new Set<string>();
+
+    courseSchedules
+      .filter(cs => relevantCourseIds.includes(cs.courseId))
+      .forEach(cs => {
+        const dateStr = format(parseISO(cs.id), 'yyyy-MM-dd'); // cs.id is already YYYY-MM-DD
+        if (cs.status === 'class') {
+          classDays.add(dateStr);
+        } else if (cs.status === 'no_class') {
+          noClassDays.add(dateStr);
+        }
+      });
+
+    // If a day is a class day for any relevant course, it's a class day overall for display.
+    // A day is only a "no class day" if it's marked as such for ALL relevant courses scheduled on that day AND it's not a class day for any.
+    // This simplified logic: class day takes precedence.
+    const finalClassDays = Array.from(classDays).map(dateStr => parseISO(dateStr));
+    const finalNoClassDays = Array.from(noClassDays)
+      .filter(dateStr => !classDays.has(dateStr)) // Only if not a class day for any other course
+      .map(dateStr => parseISO(dateStr));
+      
+    return { classDays: finalClassDays, noClassDays: finalNoClassDays };
+  }, [courseSchedules, relevantCourseIds]);
+
+
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const today = () => setCurrentMonth(new Date());
 
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  const calendarModifiers = {
+    classDay: calendarDayInfo.classDays,
+    noClassDay: calendarDayInfo.noClassDays,
+  };
+  const calendarModifiersClassNames = {
+    classDay: 'bg-green-500/20 text-green-800 dark:bg-green-500/30 dark:text-green-200 font-semibold rounded',
+    noClassDay: 'bg-red-500/20 text-red-800 dark:bg-red-500/30 dark:text-red-200 line-through rounded opacity-70',
+  };
+
 
   return (
     <div className="space-y-6">
@@ -103,6 +131,17 @@ export default function CalendarPage() {
                 </div>
               </div>
             ))}
+          </div>
+           <div className="mt-4 flex flex-wrap gap-4 text-xs">
+            <div className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm bg-green-500/20 border border-green-600"></span> Class Day
+            </div>
+            <div className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm bg-red-500/20 border border-red-600"></span> No Class Day
+            </div>
+             <div className="flex items-center gap-1.5">
+                <span className="h-3 w-3 rounded-sm bg-accent"></span> Assignment Due
+            </div>
           </div>
         </CardContent>
       </Card>

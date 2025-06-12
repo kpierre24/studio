@@ -151,9 +151,12 @@ export enum ActionType {
   SAVE_ATTENDANCE_FAILURE = 'SAVE_ATTENDANCE_FAILURE',
 
   // Course Day Schedule
-  FETCH_COURSE_SCHEDULE_REQUEST = 'FETCH_COURSE_SCHEDULE_REQUEST',
-  FETCH_COURSE_SCHEDULE_SUCCESS = 'FETCH_COURSE_SCHEDULE_SUCCESS',
-  FETCH_COURSE_SCHEDULE_FAILURE = 'FETCH_COURSE_SCHEDULE_FAILURE',
+  FETCH_COURSE_SCHEDULE_REQUEST = 'FETCH_COURSE_SCHEDULE_REQUEST', // For single course
+  FETCH_COURSE_SCHEDULE_SUCCESS = 'FETCH_COURSE_SCHEDULE_SUCCESS', // For single course
+  FETCH_COURSE_SCHEDULE_FAILURE = 'FETCH_COURSE_SCHEDULE_FAILURE', // For single course
+  FETCH_ALL_COURSE_SCHEDULES_REQUEST = 'FETCH_ALL_COURSE_SCHEDULES_REQUEST',
+  FETCH_ALL_COURSE_SCHEDULES_SUCCESS = 'FETCH_ALL_COURSE_SCHEDULES_SUCCESS',
+  FETCH_ALL_COURSE_SCHEDULES_FAILURE = 'FETCH_ALL_COURSE_SCHEDULES_FAILURE',
   UPDATE_COURSE_DAY_SCHEDULE_REQUEST = 'UPDATE_COURSE_DAY_SCHEDULE_REQUEST',
   UPDATE_COURSE_DAY_SCHEDULE_SUCCESS = 'UPDATE_COURSE_DAY_SCHEDULE_SUCCESS',
   UPDATE_COURSE_DAY_SCHEDULE_FAILURE = 'UPDATE_COURSE_DAY_SCHEDULE_FAILURE',
@@ -567,9 +570,12 @@ export type AppAction =
   | { type: ActionType.SAVE_ATTENDANCE_FAILURE; payload: string }
 
 
-  | { type: ActionType.FETCH_COURSE_SCHEDULE_REQUEST }
-  | { type: ActionType.FETCH_COURSE_SCHEDULE_SUCCESS; payload: CourseDaySchedule[] }
-  | { type: ActionType.FETCH_COURSE_SCHEDULE_FAILURE; payload: string }
+  | { type: ActionType.FETCH_COURSE_SCHEDULE_REQUEST } // Single course
+  | { type: ActionType.FETCH_COURSE_SCHEDULE_SUCCESS; payload: CourseDaySchedule[] } // Single course, payload contains schedules for THAT course
+  | { type: ActionType.FETCH_COURSE_SCHEDULE_FAILURE; payload: string } // Single course
+  | { type: ActionType.FETCH_ALL_COURSE_SCHEDULES_REQUEST }
+  | { type: ActionType.FETCH_ALL_COURSE_SCHEDULES_SUCCESS; payload: CourseDaySchedule[] } // Contains ALL schedules
+  | { type: ActionType.FETCH_ALL_COURSE_SCHEDULES_FAILURE; payload: string }
   | { type: ActionType.UPDATE_COURSE_DAY_SCHEDULE_REQUEST }
   | { type: ActionType.UPDATE_COURSE_DAY_SCHEDULE_SUCCESS; payload: CourseDaySchedule }
   | { type: ActionType.UPDATE_COURSE_DAY_SCHEDULE_FAILURE; payload: string }
@@ -638,6 +644,7 @@ export interface GenerateQuizQuestionsOutput {
 
 // Ensure payload for UpdatePaymentPayload is specific for what can be updated
 // export type UpdatePaymentPayload = Pick<Payment, 'id'> & Partial<Omit<Payment, 'id' | 'studentId' | 'courseId'>>;
+
 
 
 

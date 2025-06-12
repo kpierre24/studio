@@ -174,11 +174,22 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case ActionType.FETCH_ATTENDANCE_RECORDS_FAILURE:
         return { ...state, isLoading: false, error: action.payload };
 
-    case ActionType.FETCH_COURSE_SCHEDULE_REQUEST:
+    case ActionType.FETCH_COURSE_SCHEDULE_REQUEST: // For single course
         return { ...state, isLoading: true, error: null };
-    case ActionType.FETCH_COURSE_SCHEDULE_SUCCESS:
+    case ActionType.FETCH_COURSE_SCHEDULE_SUCCESS: // For single course
+        { // Merge with existing schedules, ensure no duplicates for the same courseId and date
+            const newSchedulesForCourse = action.payload;
+            const otherSchedules = state.courseSchedules.filter(cs => cs.courseId !== newSchedulesForCourse[0]?.courseId);
+            return { ...state, courseSchedules: [...otherSchedules, ...newSchedulesForCourse], isLoading: false, error: null };
+        }
+    case ActionType.FETCH_COURSE_SCHEDULE_FAILURE: // For single course
+        return { ...state, isLoading: false, error: action.payload };
+
+    case ActionType.FETCH_ALL_COURSE_SCHEDULES_REQUEST:
+        return { ...state, isLoading: true, error: null };
+    case ActionType.FETCH_ALL_COURSE_SCHEDULES_SUCCESS:
         return { ...state, courseSchedules: action.payload, isLoading: false, error: null };
-    case ActionType.FETCH_COURSE_SCHEDULE_FAILURE:
+    case ActionType.FETCH_ALL_COURSE_SCHEDULES_FAILURE:
         return { ...state, isLoading: false, error: action.payload };
     
     case ActionType.UPDATE_COURSE_DAY_SCHEDULE_REQUEST:
@@ -814,7 +825,8 @@ const AppContext = createContext<{
   handleCreateAnnouncement: (payload: CreateAnnouncementPayload) => Promise<void>;
   handleSendDirectMessage: (payload: CreateDirectMessagePayload) => Promise<void>;
   handleMarkMessageRead: (payload: MarkDirectMessageReadPayload) => Promise<void>;
-  fetchCourseSchedule: (courseId: string) => Promise<void>;
+  fetchCourseSchedule: (courseId: string) => Promise<void>; // For fetching single course schedule
+  fetchAllCourseSchedules: (allCourses: Course[]) => Promise<void>; // For fetching all
   handleUpdateCourseDaySchedule: (payload: UpdateCourseDaySchedulePayload) => Promise<void>;
   handleClearCourseDaySchedule: (payload: ClearCourseDaySchedulePayload) => Promise<void>;
   handleSaveAttendanceRecords: (payload: TakeAttendancePayload) => Promise<void>;
@@ -852,12 +864,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [dispatch]);
 
-  const fetchAllCourses = useCallback(async () => {
+  const fetchAllCourses = useCallback(async (): Promise<Course[]> => {
     dispatch({ type: ActionType.FETCH_COURSES_REQUEST });
     const db = getFirebaseDb();
     if (!db) {
       dispatch({ type: ActionType.FETCH_COURSES_FAILURE, payload: "Firestore not available to fetch courses." });
-      return;
+      return [];
     }
     try {
       const coursesCol = collection(db, "courses");
@@ -1010,10 +1022,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const scheduleCol = collection(db, "courses", courseId, "schedule");
       const scheduleSnapshot = await getDocs(scheduleCol);
       const schedulesList = scheduleSnapshot.docs.map(doc => ({ id: doc.id, courseId, ...doc.data() } as CourseDaySchedule));
-      dispatch({ type: ActionType.FETCH_COURSE_SCHEDULE_SUCCESS, payload: schedulesList });
+      dispatch({ type: ActionType.FETCH_COURSE_SCHEDULE_SUCCESS, payload: schedulesList }); // This will merge
     } catch (error: any) {
-      console.error("Error fetching course schedule:", error);
+      console.error("Error fetching course schedule for course " + courseId + ":", error);
       dispatch({ type: ActionType.FETCH_COURSE_SCHEDULE_FAILURE, payload: error.message || "Failed to fetch course schedule." });
+    }
+  }, [dispatch]);
+  
+  const fetchAllCourseSchedules = useCallback(async (allCourses: Course[]) => {
+    if (!allCourses || allCourses.length === 0) {
+      dispatch({ type: ActionType.FETCH_ALL_COURSE_SCHEDULES_SUCCESS, payload: [] });
+      return;
+    }
+    dispatch({ type: ActionType.FETCH_ALL_COURSE_SCHEDULES_REQUEST });
+    const db = getFirebaseDb();
+    if (!db) {
+      dispatch({ type: ActionType.FETCH_ALL_COURSE_SCHEDULES_FAILURE, payload: "Firestore not available." });
+      return;
+    }
+    try {
+      const combinedSchedules: CourseDaySchedule[] = [];
+      for (const course of allCourses) {
+        const scheduleCol = collection(db, "courses", course.id, "schedule");
+        const scheduleSnapshot = await getDocs(scheduleCol);
+        scheduleSnapshot.forEach(doc => {
+          combinedSchedules.push({ id: doc.id, courseId: course.id, ...doc.data() } as CourseDaySchedule);
+        });
+      }
+      dispatch({ type: ActionType.FETCH_ALL_COURSE_SCHEDULES_SUCCESS, payload: combinedSchedules });
+    } catch (error: any) {
+      console.error("Error fetching all course schedules:", error);
+      dispatch({ type: ActionType.FETCH_ALL_COURSE_SCHEDULES_FAILURE, payload: error.message || "Failed to fetch all course schedules." });
     }
   }, [dispatch]);
 
@@ -1175,7 +1214,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
 
             await fetchAllUsers(); 
-            await fetchAllCourses(); 
+            const fetchedCourses = await fetchAllCourses(); // Wait for courses to be fetched
+            if (fetchedCourses && fetchedCourses.length > 0) {
+                await fetchAllCourseSchedules(fetchedCourses); // Then fetch schedules
+            } else {
+                dispatch({ type: ActionType.FETCH_ALL_COURSE_SCHEDULES_SUCCESS, payload: [] }); // Ensure schedules are cleared if no courses
+            }
             await fetchEnrollmentsForUser(userProfile.id); 
             await fetchAllPayments(userProfile); 
             await fetchAllAnnouncements();
@@ -1205,12 +1249,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
         dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_SUCCESS, payload: [] });
-        dispatch({ type: ActionType.FETCH_COURSE_SCHEDULE_SUCCESS, payload: []});
+        dispatch({ type: ActionType.FETCH_ALL_COURSE_SCHEDULES_SUCCESS, payload: []});
         dispatch({ type: ActionType.SET_LOADING, payload: false });
       }
     });
     return () => unsubscribe();
-  }, [dispatch, fetchAllUsers, fetchAllCourses, fetchEnrollmentsForUser, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser, fetchAllAttendanceRecords]);
+  }, [dispatch, fetchAllUsers, fetchAllCourses, fetchAllCourseSchedules, fetchEnrollmentsForUser, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser, fetchAllAttendanceRecords]);
 
   useEffect(() => {
     if (state.currentUser && state.courses.length > 0) {
@@ -2257,6 +2301,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     handleSendDirectMessage,
     handleMarkMessageRead,
     fetchCourseSchedule,
+    fetchAllCourseSchedules,
     handleUpdateCourseDaySchedule,
     handleClearCourseDaySchedule,
     handleSaveAttendanceRecords,
