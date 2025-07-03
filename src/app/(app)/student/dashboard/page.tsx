@@ -98,7 +98,7 @@ export default function StudentDashboardPage() {
       <p className="text-muted-foreground">Your learning journey continues here. Stay on top of your courses and assignments.</p>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
+        <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Enrolled Courses</CardTitle>
             <BookOpen className="h-5 w-5 text-muted-foreground" />
@@ -108,7 +108,7 @@ export default function StudentDashboardPage() {
             <Link href="/student/courses" className="text-xs text-primary hover:underline">View all courses</Link>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Upcoming Assignments</CardTitle>
             <Edit3 className="h-5 w-5 text-muted-foreground" />
@@ -120,7 +120,7 @@ export default function StudentDashboardPage() {
             </Link>
           </CardContent>
         </Card>
-         <Card>
+         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Recent Grades</CardTitle>
             <GraduationCap className="h-5 w-5 text-muted-foreground" />

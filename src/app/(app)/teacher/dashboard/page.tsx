@@ -39,10 +39,10 @@ export default function TeacherDashboardPage() {
 
 
   const quickActions = [
-    { name: "Create New Course", queryParam: "?action=create", href: "/teacher/courses", icon: PlusCircle },
-    { name: "View My Courses", href: "/teacher/courses", icon: BookOpen },
-    { name: "Grade Submissions", href: "/teacher/grading", icon: Edit3 }, // This page doesn't exist yet
-    { name: "Manage Attendance", href: "/teacher/attendance", icon: CalendarCheck },
+    { name: "Create New Course", queryParam: "?action=create", href: "/teacher/courses", icon: PlusCircle, description: "Start a new course from scratch." },
+    { name: "View My Courses", href: "/teacher/courses", icon: BookOpen, description: "Manage lessons and assignments." },
+    { name: "Grade Submissions", href: "/teacher/grading", icon: Edit3, description: "Review and grade student work." }, 
+    { name: "Manage Attendance", href: "/teacher/attendance", icon: CalendarCheck, description: "Take or view class attendance." },
   ];
 
   return (
@@ -51,7 +51,7 @@ export default function TeacherDashboardPage() {
       <p className="text-muted-foreground">Here's an overview of your teaching activities.</p>
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
+        <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Your Courses</CardTitle>
             <BookOpen className="h-5 w-5 text-muted-foreground" />
@@ -63,7 +63,7 @@ export default function TeacherDashboardPage() {
             </Link>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending Submissions</CardTitle>
             <Edit3 className="h-5 w-5 text-muted-foreground" />
@@ -73,7 +73,7 @@ export default function TeacherDashboardPage() {
             <p className="text-xs text-muted-foreground">Awaiting grading</p>
           </CardContent>
         </Card>
-         <Card>
+         <Card className="shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Students</CardTitle>
             <Users className="h-5 w-5 text-muted-foreground" />
@@ -91,18 +91,18 @@ export default function TeacherDashboardPage() {
         <CardHeader>
           <CardTitle>Quick Actions</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {quickActions.map((action) => (
             <Button 
               key={action.name} 
               variant="outline" 
               onClick={() => router.push(action.href + (action.queryParam || ''))}
-              className="justify-start text-left h-auto py-3"
+              className="justify-start text-left h-auto py-3 hover:bg-accent/50 transition-colors"
             >
-              <action.icon className="mr-3 h-5 w-5 text-primary" />
+              <action.icon className="mr-3 h-6 w-6 text-primary" />
               <span className="flex flex-col">
-                <span className="font-semibold">{action.name}</span>
-                {/* <span className="text-xs text-muted-foreground">Quick access</span> */}
+                <span className="font-semibold text-base">{action.name}</span>
+                <span className="text-xs text-muted-foreground">{action.description}</span>
               </span>
             </Button>
           ))}
@@ -142,4 +142,3 @@ export default function TeacherDashboardPage() {
     </div>
   );
 }
-
