@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect } from 'react';
@@ -8,6 +7,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Skeleton } from "@/components/ui/skeleton";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from '@/components/layout/AppSidebar';
+import { APP_NAME } from '@/lib/constants';
 
 export default function ProtectedLayout({
   children,
