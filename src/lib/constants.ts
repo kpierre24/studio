@@ -1,7 +1,7 @@
 
 
 import type { User, Course, Lesson, Assignment, Submission, Payment, AttendanceRecord, NotificationMessage, Enrollment, QuizQuestion, RubricCriterion, Announcement } from '@/types';
-import { UserRole, AssignmentType, QuestionType, AttendanceStatus } from '@/types';
+import { UserRole, AssignmentType, QuestionType, AttendanceStatus, PaymentStatus } from '@/types';
 
 export const APP_NAME = "School of Ministry";
 
@@ -172,14 +172,60 @@ export const SAMPLE_SUBMISSIONS: Submission[] = [
 
 export const SAMPLE_PAYMENTS: Payment[] = [
   {
-    id: 'payment-1',
+    id: 'payment-c1-s1',
     studentId: 'user-student-1',
     courseId: 'course-1',
     amount: 100,
-    status: 'Paid',
+    status: PaymentStatus.PAID,
+    paymentDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    transactionId: 'ch_123abc',
+  },
+   {
+    id: 'payment-c2-s1',
+    studentId: 'user-student-1',
+    courseId: 'course-2',
+    amount: 100,
+    status: PaymentStatus.PAID,
+    paymentDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+    transactionId: 'ch_456def',
+  },
+  {
+    id: 'payment-c2-s1-pending',
+    studentId: 'user-student-1',
+    courseId: 'course-2',
+    amount: 50,
+    status: PaymentStatus.PENDING,
     paymentDate: new Date().toISOString(),
+    notes: 'Awaiting bank transfer confirmation.'
+  },
+  {
+    id: 'payment-c1-s2',
+    studentId: 'user-student-2',
+    courseId: 'course-1',
+    amount: 50,
+    status: PaymentStatus.PAID,
+    paymentDate: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+   {
+    id: 'payment-c1-s2-failed',
+    studentId: 'user-student-2',
+    courseId: 'course-1',
+    amount: 50,
+    status: PaymentStatus.FAILED,
+    paymentDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    notes: 'Card declined.'
+  },
+  {
+    id: 'payment-c1-s3',
+    studentId: 'user-student-3',
+    courseId: 'course-1',
+    amount: 100,
+    status: PaymentStatus.PAID,
+    paymentDate: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
+    transactionId: 'ch_789ghi',
   },
 ];
+
 
 const today = new Date().toISOString().split('T')[0];
 const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
