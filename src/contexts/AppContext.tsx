@@ -847,21 +847,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } });
   }, [dispatch]);
 
-  const fetchAllUsers = useCallback(async () => {
+  const fetchAllUsers = useCallback(async (): Promise<User[]> => {
     dispatch({ type: ActionType.FETCH_USERS_REQUEST });
     const db = getFirebaseDb();
     if (!db) {
       dispatch({ type: ActionType.FETCH_USERS_FAILURE, payload: "Firestore not available to fetch users." });
-      return;
+      return [];
     }
     try {
       const usersCol = collection(db, "users");
       const userSnapshot = await getDocs(usersCol);
       const usersList = userSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
       dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: usersList });
+      return usersList;
     } catch (error: any) {
       console.error("Error fetching all users:", error);
       dispatch({ type: ActionType.FETCH_USERS_FAILURE, payload: error.message || "Failed to fetch all users." });
+      return [];
     }
   }, [dispatch]);
 
@@ -1208,101 +1210,105 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!authInstance) {
       console.error("Firebase Auth instance not available.");
       dispatch({ type: ActionType.SET_ERROR, payload: "Firebase initialization failed." });
-      dispatch({ type: ActionType.SET_LOADING, payload: false }); 
+      dispatch({ type: ActionType.SET_LOADING, payload: false });
       return;
     }
 
     const dbInstance = getFirebaseDb();
     if (!dbInstance) {
-        console.error("Firebase Firestore instance not available.");
-         dispatch({ type: ActionType.SET_ERROR, payload: "Firebase Firestore not initialized." });
-         dispatch({ type: ActionType.SET_LOADING, payload: false }); 
-         return;
+      console.error("Firebase Firestore instance not available.");
+      dispatch({ type: ActionType.SET_ERROR, payload: "Firebase Firestore not initialized." });
+      dispatch({ type: ActionType.SET_LOADING, payload: false });
+      return;
     }
     dispatch({ type: ActionType.SET_LOADING, payload: true });
 
     const unsubscribe = onAuthStateChanged(authInstance, async (firebaseUser: FirebaseUser | null) => {
-      if (firebaseUser) {
-        try {
-          const userDocRef = doc(dbInstance, "users", firebaseUser.uid);
-          const userDocSnap = await getDoc(userDocRef);
+        if (firebaseUser) {
+            try {
+                const userDocRef = doc(dbInstance, "users", firebaseUser.uid);
+                const userDocSnap = await getDoc(userDocRef);
 
-          if (userDocSnap.exists()) {
-            const userProfile = { id: userDocSnap.id, ...userDocSnap.data() } as User;
-            dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
+                if (userDocSnap.exists()) {
+                    const userProfile = { id: userDocSnap.id, ...userDocSnap.data() } as User;
+                    dispatch({ type: ActionType.SET_CURRENT_USER, payload: userProfile });
 
-            // Start data fetching cascade
-            if (userProfile.role === UserRole.SUPER_ADMIN) {
-              await fetchAllUsers();
+                    // --- OPTIMIZATION: Parallelize data fetching ---
+
+                    // Stage 1: Fetch independent data concurrently
+                    const independentFetchesPromise = Promise.all([
+                        fetchAllUsers(),
+                        fetchAllAnnouncements(),
+                        fetchDirectMessagesForUser(userProfile.id),
+                        fetchCurrentUserAttendanceRecords(userProfile),
+                        fetchAllPayments(userProfile),
+                    ]);
+
+                    // Stage 2: Fetch data with dependencies (courses -> enrollments -> assignments -> submissions)
+                    const [allCoursesSystem, enrollments] = await Promise.all([
+                        fetchAllCourses(),
+                        (async () => {
+                            if (userProfile.role === UserRole.STUDENT) {
+                                return fetchEnrollmentsForUser(userProfile.id);
+                            } else {
+                                const enrollmentsCol = collection(dbInstance, "enrollments");
+                                const snapshot = await getDocs(enrollmentsCol);
+                                const allEnrollments = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Enrollment));
+                                dispatch({ type: ActionType.FETCH_ENROLLMENTS_SUCCESS, payload: allEnrollments });
+                                return allEnrollments;
+                            }
+                        })()
+                    ]);
+                    
+                    // Determine which courses are relevant to the current user
+                    let relevantCourses: Course[] = [];
+                    if (userProfile.role === UserRole.SUPER_ADMIN) {
+                        relevantCourses = allCoursesSystem;
+                    } else if (userProfile.role === UserRole.TEACHER) {
+                        relevantCourses = allCoursesSystem.filter(c => c.teacherId === userProfile.id);
+                    } else if (userProfile.role === UserRole.STUDENT) {
+                        const enrolledCourseIds = enrollments.map(e => e.courseId);
+                        relevantCourses = allCoursesSystem.filter(c => enrolledCourseIds.includes(c.id));
+                    }
+                    
+                    const relevantAssignments = await fetchAllAssignments(relevantCourses);
+                    
+                    // Stage 3: Fetch final dependent data and await independent fetches
+                    await Promise.all([
+                        fetchAllLessons(relevantCourses),
+                        fetchAllSubmissions(userProfile, relevantAssignments),
+                        fetchAllCourseSchedules(relevantCourses),
+                        independentFetchesPromise // Ensure all initial promises have resolved
+                    ]);
+
+                } else {
+                    await signOut(authInstance);
+                    dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
+                    dispatch({ type: ActionType.SET_ERROR, payload: "User profile not found. Signed out." });
+                }
+            } catch (error: any) {
+                console.error("Error during auth state change processing:", error);
+                dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
+                dispatch({ type: ActionType.SET_ERROR, payload: error.message || "Failed to load user profile." });
+            } finally {
+                dispatch({ type: ActionType.SET_LOADING, payload: false });
             }
-            const allCoursesSystem = await fetchAllCourses();
-            
-            let relevantCourses: Course[] = [];
-            let studentEnrollments: Enrollment[] = [];
-
-            if (userProfile.role === UserRole.SUPER_ADMIN) {
-              relevantCourses = allCoursesSystem;
-            } else if (userProfile.role === UserRole.TEACHER) {
-              relevantCourses = allCoursesSystem.filter(c => c.teacherId === userProfile.id);
-            } else if (userProfile.role === UserRole.STUDENT) {
-              studentEnrollments = await fetchEnrollmentsForUser(userProfile.id);
-              const enrolledCourseIds = studentEnrollments.map(e => e.courseId);
-              relevantCourses = allCoursesSystem.filter(c => enrolledCourseIds.includes(c.id));
-            }
-            
-            // If enrollments were fetched for student, dispatch them now.
-            // Admins/Teachers will get all enrollments if a separate fetchAllEnrollments is implemented.
-            // For now, only student's enrollments are loaded here.
-            if (userProfile.role === UserRole.STUDENT) {
-                 dispatch({ type: ActionType.FETCH_ENROLLMENTS_SUCCESS, payload: studentEnrollments });
-            } else {
-                // For Admin/Teacher, fetch all enrollments if needed by their views
-                // This could be a separate function `fetchAllEnrollments()`
-                // For now, they might not have all enrollments in state unless explicitly fetched by their pages
-                const enrollmentsCol = collection(dbInstance, "enrollments");
-                const enrollmentSnapshot = await getDocs(enrollmentsCol);
-                const allEnrollmentsList = enrollmentSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Enrollment));
-                dispatch({ type: ActionType.FETCH_ENROLLMENTS_SUCCESS, payload: allEnrollmentsList });
-            }
-
-
-            await fetchAllLessons(relevantCourses);
-            const relevantAssignments = await fetchAllAssignments(relevantCourses);
-            await fetchAllSubmissions(userProfile, relevantAssignments);
-            await fetchCurrentUserAttendanceRecords(userProfile);
-            await fetchAllCourseSchedules(relevantCourses); // Pass relevantCourses
-            await fetchAllPayments(userProfile);
-            await fetchAllAnnouncements();
-            await fetchDirectMessagesForUser(userProfile.id);
-
-          } else {
-            await signOut(authInstance); 
+        } else {
+            // User is logged out, reset relevant parts of the state
             dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-            dispatch({ type: ActionType.SET_ERROR, payload: "User profile not found. Signed out." });
-          }
-        } catch (error: any) {
-          console.error("Error during auth state change processing:", error);
-          dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-          dispatch({ type: ActionType.SET_ERROR, payload: error.message || "Failed to load user profile." });
-        } finally {
-            dispatch({ type: ActionType.SET_LOADING, payload: false }); 
+            dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_ENROLLMENTS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_SUCCESS, payload: [] });
+            dispatch({ type: ActionType.FETCH_ALL_COURSE_SCHEDULES_SUCCESS, payload: []});
+            dispatch({ type: ActionType.SET_LOADING, payload: false });
         }
-      } else { 
-        // User is logged out, reset relevant parts of the state
-        dispatch({ type: ActionType.SET_CURRENT_USER, payload: null });
-        dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [] });
-        dispatch({ type: ActionType.FETCH_COURSES_SUCCESS, payload: [] });
-        dispatch({ type: ActionType.FETCH_ENROLLMENTS_SUCCESS, payload: [] });
-        dispatch({ type: ActionType.FETCH_LESSONS_SUCCESS, payload: [] });
-        dispatch({ type: ActionType.FETCH_ASSIGNMENTS_SUCCESS, payload: [] });
-        dispatch({ type: ActionType.FETCH_SUBMISSIONS_SUCCESS, payload: [] });
-        dispatch({ type: ActionType.FETCH_PAYMENTS_SUCCESS, payload: [] });
-        dispatch({ type: ActionType.FETCH_ANNOUNCEMENTS_SUCCESS, payload: [] });
-        dispatch({ type: ActionType.FETCH_DIRECT_MESSAGES_SUCCESS, payload: [] });
-        dispatch({ type: ActionType.FETCH_ATTENDANCE_RECORDS_SUCCESS, payload: [] });
-        dispatch({ type: ActionType.FETCH_ALL_COURSE_SCHEDULES_SUCCESS, payload: []});
-        dispatch({ type: ActionType.SET_LOADING, payload: false });
-      }
     });
     return () => unsubscribe();
   }, [dispatch, fetchAllUsers, fetchAllCourses, fetchEnrollmentsForUser, fetchAllLessons, fetchAllAssignments, fetchAllSubmissions, fetchCurrentUserAttendanceRecords, fetchAllCourseSchedules, fetchAllPayments, fetchAllAnnouncements, fetchDirectMessagesForUser]);
