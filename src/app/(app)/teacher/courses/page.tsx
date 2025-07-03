@@ -222,7 +222,7 @@ export default function TeacherCoursesPage() {
           {teacherCourses.map(course => {
             const courseImageSrc = course.bannerImageUrl || `https://placehold.co/600x400.png?text=${encodeURIComponent(course.name)}`;
             return (
-            <Card key={course.id} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow">
+            <Card key={course.id} className="flex flex-col shadow-md transition-all duration-300 ease-in-out hover:shadow-xl hover:-translate-y-1">
               <CardHeader className="pb-0"> 
                  <div className="aspect-[16/9] relative mb-3 rounded-md overflow-hidden">
                     <Image 

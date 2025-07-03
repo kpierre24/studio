@@ -51,7 +51,7 @@ export default function TeacherDashboardPage() {
       <p className="text-muted-foreground">Here's an overview of your teaching activities.</p>
       
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="shadow-md hover:shadow-lg transition-shadow">
+        <Card className="shadow-md transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Your Courses</CardTitle>
             <BookOpen className="h-5 w-5 text-muted-foreground" />
@@ -63,7 +63,7 @@ export default function TeacherDashboardPage() {
             </Link>
           </CardContent>
         </Card>
-        <Card className="shadow-md hover:shadow-lg transition-shadow">
+        <Card className="shadow-md transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending Submissions</CardTitle>
             <Edit3 className="h-5 w-5 text-muted-foreground" />
@@ -73,7 +73,7 @@ export default function TeacherDashboardPage() {
             <p className="text-xs text-muted-foreground">Awaiting grading</p>
           </CardContent>
         </Card>
-         <Card className="shadow-md hover:shadow-lg transition-shadow">
+         <Card className="shadow-md transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Students</CardTitle>
             <Users className="h-5 w-5 text-muted-foreground" />
