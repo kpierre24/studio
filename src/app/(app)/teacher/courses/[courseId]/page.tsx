@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, ChangeEvent } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAppContext } from '@/contexts/AppContext';
 import type { Course, Lesson, Assignment, CreateLessonPayload, UpdateLessonPayload, CreateAssignmentPayload, UpdateAssignmentPayload, QuizQuestion, Submission, GradeSubmissionPayload, DeleteLessonPayload, DeleteAssignmentPayload, Payment } from '@/types';
-import { ActionType, UserRole, AssignmentType, PaymentStatus } from '@/types';
+import { ActionType, UserRole, AssignmentType, QuestionType, PaymentStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -240,7 +240,7 @@ export default function TeacherCourseDetailPage() {
         id: assignment.id, title: assignment.title, description: assignment.description,
         dueDate: assignment.dueDate ? format(new Date(assignment.dueDate), "yyyy-MM-dd'T'HH:mm") : '', 
         type: assignment.type, questions: assignment.questions || [],
-        manualTotalPoints: assignment.type === AssignmentType.STANDARD ? assignment.totalPoints : assignment.manualTotalPoints, 
+        manualTotalPoints: assignment.type === AssignmentType.STANDARD ? assignment.totalPoints : undefined, 
         assignmentFileUrl: assignment.assignmentFileUrl, assignmentFileName: assignment.assignmentFileName,
         externalLink: assignment.externalLink || '',
         assignmentFile: null,
@@ -388,7 +388,7 @@ export default function TeacherCourseDetailPage() {
             fill
             style={{objectFit:"cover"}}
             className="bg-muted"
-            priority={course.bannerImageUrl ? true : false}
+            priority={!!course.bannerImageUrl}
             data-ai-hint="course banner"
           />
         </div>
@@ -402,16 +402,28 @@ export default function TeacherCourseDetailPage() {
         </CardHeader>
         <CardContent className="p-0">
           <Tabs defaultValue="lessons" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 rounded-none border-b">
-              <TabsTrigger value="lessons" className="rounded-none py-3"><FileText className="mr-2" />Lessons ({courseLessons.length})</TabsTrigger>
-              <TabsTrigger value="assignments" className="rounded-none py-3"><BookOpen className="mr-2" />Assignments ({courseAssignments.length})</TabsTrigger>
-              <TabsTrigger value="students" className="rounded-none py-3"><UserSquare className="mr-2" />Students ({enrolledStudentsData.length})</TabsTrigger>
-              <TabsTrigger value="attendance" asChild className="rounded-none py-3">
-                <Link href={`/teacher/courses/${courseId}/attendance`}><CalendarCheck className="mr-2" />Attendance</Link>
-              </TabsTrigger>
-              <TabsTrigger value="payments" className="rounded-none py-3"><DollarSign className="mr-2" />Payments</TabsTrigger>
-              <TabsTrigger value="settings" className="rounded-none py-3"><Settings className="mr-2" />Settings</TabsTrigger>
-            </TabsList>
+            <div className="relative w-full overflow-x-auto border-b">
+                <TabsList className="inline-flex h-auto p-0 w-max rounded-none bg-transparent">
+                  <TabsTrigger value="lessons" className="flex-shrink-0 rounded-none py-3 px-4 data-[state=active]:bg-muted data-[state=active]:shadow-none">
+                      <FileText className="mr-2" />Lessons ({courseLessons.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="assignments" className="flex-shrink-0 rounded-none py-3 px-4 data-[state=active]:bg-muted data-[state=active]:shadow-none">
+                      <BookOpen className="mr-2" />Assignments ({courseAssignments.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="students" className="flex-shrink-0 rounded-none py-3 px-4 data-[state=active]:bg-muted data-[state=active]:shadow-none">
+                      <UserSquare className="mr-2" />Students ({enrolledStudentsData.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="attendance" asChild className="flex-shrink-0 rounded-none py-3 px-4 data-[state=active]:bg-muted data-[state=active]:shadow-none hover:bg-muted/80">
+                      <Link href={`/teacher/courses/${courseId}/attendance`}><CalendarCheck className="mr-2" />Attendance</Link>
+                  </TabsTrigger>
+                  <TabsTrigger value="payments" className="flex-shrink-0 rounded-none py-3 px-4 data-[state=active]:bg-muted data-[state=active]:shadow-none">
+                      <DollarSign className="mr-2" />Payments
+                  </TabsTrigger>
+                  <TabsTrigger value="settings" className="flex-shrink-0 rounded-none py-3 px-4 data-[state=active]:bg-muted data-[state=active]:shadow-none">
+                      <Settings className="mr-2" />Settings
+                  </TabsTrigger>
+                </TabsList>
+            </div>
 
             <TabsContent value="lessons" className="p-6">
               <div className="flex justify-between items-center mb-4">
@@ -547,8 +559,6 @@ export default function TeacherCourseDetailPage() {
               )}
             </TabsContent>
             
-            {/* Attendance Tab Content is removed as the trigger is now a direct link */}
-
             <TabsContent value="payments" className="p-6">
               <h3 className="text-xl font-semibold mb-4">Student Payment Status</h3>
               {isLoading && studentPaymentInfo.length === 0 && course.studentIds.length > 0 ? (
@@ -889,4 +899,3 @@ export default function TeacherCourseDetailPage() {
     </div>
   );
 }
-

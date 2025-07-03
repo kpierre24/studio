@@ -7,7 +7,7 @@ import { useAppContext } from '@/contexts/AppContext';
 import { ActionType, UserRole, type NotificationMessage } from '@/types';
 import { Button } from '@/components/ui/button';
 import { APP_NAME } from '@/lib/constants';
-import { Bell, LogOut, UserCircle, Settings, LayoutDashboard, BookOpen, Edit3, BarChart2, DollarSign, Users, GraduationCap, AnnoyedIcon, CalendarDays, CalendarCheck, MessageSquare, Video } from 'lucide-react';
+import { Bell, LogOut, UserCircle, Settings, LayoutDashboard, BookOpen, Edit3, BarChart2, DollarSign, Users, GraduationCap, AnnoyedIcon, CalendarDays, CalendarCheck, MessageSquare, Video, Menu } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -23,18 +24,17 @@ import { formatDistanceToNowStrict } from 'date-fns';
 
 
 export function Navbar() {
-  const { state, dispatch, handleLogoutUser: contextHandleLogoutUser } = useAppContext(); // Renamed to avoid conflict in this file
+  const { state, dispatch, handleLogoutUser: contextHandleLogoutUser } = useAppContext();
   const { currentUser, notifications, directMessages } = state;
   const router = useRouter();
 
   const handleLogout = async () => {
-    await contextHandleLogoutUser(); // Use the async logout handler from context
-    router.push('/auth'); // Explicitly redirect to auth page after logout completes
+    await contextHandleLogoutUser();
+    router.push('/auth');
   };
 
   const unreadNotificationsCount = notifications.filter(n => !n.read).length;
   const unreadMessagesCount = directMessages.filter(dm => dm.recipientId === currentUser?.id && !dm.read).length;
-
 
   const handleNotificationClick = (notification: NotificationMessage) => {
     if (!notification.read) {
@@ -61,6 +61,47 @@ export function Navbar() {
     }
   };
 
+  const navLinks = [
+    // Common
+    { name: 'Announcements', href: '/announcements', roles: [UserRole.SUPER_ADMIN, UserRole.TEACHER, UserRole.STUDENT] },
+    { name: 'Calendar', href: '/calendar', roles: [UserRole.SUPER_ADMIN, UserRole.TEACHER, UserRole.STUDENT] },
+    { name: 'Messages', href: '/messages', roles: [UserRole.SUPER_ADMIN, UserRole.TEACHER, UserRole.STUDENT], messageCount: unreadMessagesCount },
+    // Admin
+    { name: 'Dashboard', href: '/admin/dashboard', roles: [UserRole.SUPER_ADMIN] },
+    { name: 'Users', href: '/admin/users', roles: [UserRole.SUPER_ADMIN] },
+    { name: 'Courses', href: '/admin/courses', roles: [UserRole.SUPER_ADMIN] },
+    { name: 'Attendance', href: '/admin/attendance', roles: [UserRole.SUPER_ADMIN] },
+    { name: 'Payments', href: '/admin/payments', roles: [UserRole.SUPER_ADMIN] },
+    { name: 'Reports', href: '/admin/reports', roles: [UserRole.SUPER_ADMIN] },
+    // Teacher
+    { name: 'Dashboard', href: '/teacher/dashboard', roles: [UserRole.TEACHER] },
+    { name: 'My Courses', href: '/teacher/courses', roles: [UserRole.TEACHER] },
+    { name: 'Attendance', href: '/teacher/attendance', roles: [UserRole.TEACHER] },
+    { name: 'Reports', href: '/teacher/reports', roles: [UserRole.TEACHER] },
+    // Student
+    { name: 'Dashboard', href: '/student/dashboard', roles: [UserRole.STUDENT] },
+    { name: 'Courses', href: '/student/courses', roles: [UserRole.STUDENT] },
+    { name: 'Live Class', href: '/student/live-class', roles: [UserRole.STUDENT], icon: <Video className="mr-1 h-4 w-4" /> },
+    { name: 'Attendance', href: '/student/attendance', roles: [UserRole.STUDENT] },
+    { name: 'Payments', href: '/student/payments', roles: [UserRole.STUDENT] },
+  ];
+
+  const filteredNavLinks = currentUser ? navLinks.filter(link => link.roles.includes(currentUser.role)) : [];
+
+  const renderNavLinks = (isMobile = false) => (
+    filteredNavLinks.map((link) => (
+      <Button key={link.href + link.name} variant={isMobile ? "ghost" : "link"} asChild className={isMobile ? "justify-start" : "text-sm font-medium text-foreground hover:text-primary transition-colors p-0 h-auto"}>
+        <Link href={link.href} className="relative flex items-center">
+            {link.icon}{link.name}
+            {!!link.messageCount && link.messageCount > 0 && (
+              <Badge variant="destructive" className="ml-2 h-4 w-4 p-0 flex items-center justify-center text-xs rounded-full">
+                {link.messageCount}
+              </Badge>
+            )}
+        </Link>
+      </Button>
+    ))
+  );
 
   return (
     <nav className="bg-card shadow-md sticky top-0 z-50">
@@ -71,54 +112,8 @@ export function Navbar() {
               {APP_NAME}
             </Link>
           </div>
-          <div className="hidden md:flex items-center space-x-3">
-            {currentUser ? (
-              <>
-                {/* Common Links */}
-                <Link href="/announcements" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Announcements</Link>
-                <Link href="/calendar" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Calendar</Link>
-                <Link href="/messages" className="text-sm font-medium text-foreground hover:text-primary transition-colors relative">
-                  Messages
-                  {unreadMessagesCount > 0 && (
-                    <Badge variant="destructive" className="absolute -top-2 -right-3 h-4 w-4 p-0 flex items-center justify-center text-xs rounded-full">
-                      {unreadMessagesCount}
-                    </Badge>
-                  )}
-                </Link>
-
-
-                {/* Role-Specific Links */}
-                {currentUser.role === UserRole.SUPER_ADMIN && (
-                  <>
-                    <Link href="/admin/dashboard" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Dashboard</Link>
-                    <Link href="/admin/users" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Users</Link>
-                    <Link href="/admin/courses" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Courses</Link>
-                    <Link href="/admin/attendance" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Attendance</Link>
-                    <Link href="/admin/payments" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Payments</Link>
-                    <Link href="/admin/reports" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Reports</Link>
-                  </>
-                )}
-                {currentUser.role === UserRole.TEACHER && (
-                  <>
-                    <Link href="/teacher/dashboard" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Dashboard</Link>
-                    <Link href="/teacher/courses" className="text-sm font-medium text-foreground hover:text-primary transition-colors">My Courses</Link>
-                    <Link href="/teacher/attendance" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Attendance</Link>
-                    <Link href="/teacher/reports" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Reports</Link>
-                  </>
-                )}
-                {currentUser.role === UserRole.STUDENT && (
-                  <>
-                    <Link href="/student/dashboard" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Dashboard</Link>
-                    <Link href="/student/courses" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Courses</Link>
-                    <Link href="/student/live-class" className="text-sm font-medium text-foreground hover:text-primary transition-colors flex items-center">
-                      <Video className="mr-1 h-4 w-4" /> Live Class
-                    </Link>
-                    <Link href="/student/attendance" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Attendance</Link>
-                    <Link href="/student/payments" className="text-sm font-medium text-foreground hover:text-primary transition-colors">Payments</Link>
-                  </>
-                )}
-              </>
-            ) : null}
+          <div className="hidden md:flex items-center space-x-4">
+            {currentUser && renderNavLinks()}
           </div>
           <div className="flex items-center space-x-2">
              {currentUser ? (
@@ -192,27 +187,31 @@ export function Navbar() {
                        Settings
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    {/* Mobile specific nav items can be shown here or in a separate mobile menu */}
-                    <div className="md:hidden"> 
-                      <DropdownMenuSeparator />
-                       <DropdownMenuLabel>Navigation</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => router.push('/announcements')}>Announcements</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => router.push('/calendar')}>Calendar</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => router.push('/messages')}>Messages</DropdownMenuItem>
-                        {currentUser.role === UserRole.STUDENT && <DropdownMenuItem onClick={() => router.push('/student/live-class')}>Live Class</DropdownMenuItem>}
-                        {currentUser.role === UserRole.STUDENT && <DropdownMenuItem onClick={() => router.push('/student/attendance')}>Attendance</DropdownMenuItem>}
-                        {currentUser.role === UserRole.STUDENT && <DropdownMenuItem onClick={() => router.push('/student/payments')}>Payments</DropdownMenuItem>}
-                        {currentUser.role === UserRole.SUPER_ADMIN && <DropdownMenuItem onClick={() => router.push('/admin/attendance')}>Attendance</DropdownMenuItem>}
-                        {currentUser.role === UserRole.SUPER_ADMIN && <DropdownMenuItem onClick={() => router.push('/admin/payments')}>Payments</DropdownMenuItem>}
-                        {currentUser.role === UserRole.SUPER_ADMIN && <DropdownMenuItem onClick={() => router.push('/admin/reports')}>Reports</DropdownMenuItem>}
-                      <DropdownMenuSeparator />
-                    </div>
                     <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive focus:bg-destructive/10">
                       <LogOut className="mr-2 h-4 w-4" />
                       Logout
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+
+                <div className="md:hidden">
+                    <Sheet>
+                        <SheetTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                                <Menu className="h-6 w-6"/>
+                                <span className="sr-only">Toggle Menu</span>
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="left" className="w-[300px] p-4">
+                           <Link href="/" className="text-2xl font-headline font-bold text-primary mb-6 block">
+                                {APP_NAME}
+                            </Link>
+                            <div className="flex flex-col space-y-2">
+                               {renderNavLinks(true)}
+                            </div>
+                        </SheetContent>
+                    </Sheet>
+                </div>
                 </>
             ) : (
               <Button onClick={() => router.push('/auth')}>Login / Sign Up</Button>
@@ -223,4 +222,3 @@ export function Navbar() {
     </nav>
   );
 }
-
