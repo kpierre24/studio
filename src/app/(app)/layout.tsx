@@ -6,6 +6,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAppContext } from '@/contexts/AppContext';
 import { Navbar } from '@/components/layout/Navbar';
 import { Skeleton } from "@/components/ui/skeleton";
+import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { AppSidebar } from '@/components/layout/AppSidebar';
 
 export default function ProtectedLayout({
   children,
@@ -31,32 +33,49 @@ export default function ProtectedLayout({
   // Show loading skeleton if auth state is still being determined OR if redirecting.
   if (state.currentUser === undefined || (!state.currentUser && pathname !== '/auth')) {
     return (
-      <div className="flex flex-col min-h-screen">
-        <Navbar />
-        <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="space-y-4">
-            <Skeleton className="h-12 w-1/3" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-64 w-full" />
+      <div className="flex min-h-screen">
+        <div className="hidden md:block border-r bg-muted/40">
+          <div className="w-64 p-4 space-y-4">
+            <Skeleton className="h-8 w-3/4" />
+            <Skeleton className="h-6 w-full mt-8" />
+            <Skeleton className="h-6 w-full" />
+            <Skeleton className="h-6 w-full" />
+             <Skeleton className="h-6 w-full" />
           </div>
-        </main>
-        <footer className="py-4 text-center text-sm text-muted-foreground border-t">
-          © {new Date().getFullYear()} ClassroomHQ. All rights reserved.
-        </footer>
+        </div>
+        <div className="flex-grow">
+            <header className="flex items-center justify-between h-16 px-8 border-b">
+                <Skeleton className="h-8 w-8 md:hidden" />
+                <div className="flex items-center gap-4 ml-auto">
+                    <Skeleton className="h-8 w-8 rounded-full" />
+                    <Skeleton className="h-9 w-9 rounded-full" />
+                </div>
+            </header>
+            <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <div className="space-y-4">
+                <Skeleton className="h-12 w-1/3" />
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-64 w-full" />
+              </div>
+            </main>
+        </div>
       </div>
     );
   }
   
   // If currentUser exists, render the layout with children.
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <Navbar />
-      <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
-      </main>
-      <footer className="py-6 text-center text-sm text-muted-foreground border-t">
-        © {new Date().getFullYear()} ClassroomHQ. All rights reserved.
-      </footer>
-    </div>
+    <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+            <Navbar />
+            <main className="flex-grow p-4 sm:p-6 lg:p-8">
+                {children}
+            </main>
+            <footer className="py-6 text-center text-sm text-muted-foreground border-t">
+                © {new Date().getFullYear()} {APP_NAME}. All rights reserved.
+            </footer>
+        </SidebarInset>
+    </SidebarProvider>
   );
 }

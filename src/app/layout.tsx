@@ -3,9 +3,10 @@ import './globals.css';
 import { AppProvider } from '@/contexts/AppContext';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/layout/ThemeProvider';
+import { APP_NAME } from '@/lib/constants';
 
 export const metadata: Metadata = {
-  title: 'ClassroomHQ',
+  title: APP_NAME,
   description: 'A comprehensive classroom management application for teachers and students, featuring course management, lessons, assignments, grading, attendance, payments, and reporting.',
 };
 
