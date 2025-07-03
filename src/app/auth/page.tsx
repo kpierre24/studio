@@ -12,11 +12,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { APP_NAME } from '@/lib/constants';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 function AuthPageContent() {
   const { state, handleLoginUser, handleRegisterStudent } = useAppContext();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { toast } = useToast();
   const redirect = searchParams.get('redirect') || '/';
 
   const [email, setEmail] = useState('');
@@ -29,7 +31,7 @@ function AuthPageContent() {
   const onLoginSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      alert("Email and password are required.");
+      toast({ variant: "destructive", title: "Missing Fields", description: "Email and password are required." });
       return;
     }
     const payload: LoginUserPayload = { email, password };
@@ -39,15 +41,15 @@ function AuthPageContent() {
   const onRegisterSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password || !confirmPassword) {
-      alert("All fields are required for registration.");
+      toast({ variant: "destructive", title: "Missing Fields", description: "All fields are required for registration." });
       return;
     }
     if (password !== confirmPassword) {
-      alert("Passwords do not match.");
+      toast({ variant: "destructive", title: "Password Mismatch", description: "The passwords you entered do not match." });
       return;
     }
     if (!/\S+@\S+\.\S+/.test(email)) {
-        alert("Please enter a valid email address.");
+        toast({ variant: "destructive", title: "Invalid Email", description: "Please enter a valid email address." });
         return;
     }
     const payload: RegisterStudentPayload = { name, email, password };

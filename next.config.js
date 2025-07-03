@@ -1,28 +1,6 @@
-// next.config.js
+// This file is intentionally kept simple to avoid conflicts with next.config.ts.
+// All configurations should be done in next.config.ts.
 /** @type {import('next').NextConfig} */
-const nextConfigJs = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'placehold.co',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'scontent.fpos1-1.fna.fbcdn.net',
-        port: '',
-        pathname: '/**',
-      },
-    ],
-  },
-};
+const nextConfig = {};
 
-module.exports = nextConfigJs;
+module.exports = nextConfig;
