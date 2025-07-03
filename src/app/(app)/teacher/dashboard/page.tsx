@@ -121,9 +121,9 @@ export default function TeacherDashboardPage() {
             <ul className="space-y-3">
               {upcomingTeacherAssignments.map(assign => (
                 <li key={assign.id} className="p-3 border rounded-md hover:bg-muted/50 transition-colors">
-                  <Link href={`/teacher/courses/${assign.courseId}`} className="block"> {/* Consider linking to assignment detail/grading later */}
+                  <Link href={`/teacher/courses/${assign.courseId}`} className="block" title={assign.title}>
                     <div className="flex justify-between items-center">
-                      <span className="font-medium">{assign.title}</span>
+                      <span className="font-medium truncate">{assign.title}</span>
                       <Badge variant="secondary" className="text-xs">
                         <Clock className="mr-1 h-3 w-3" />
                         Due: {format(new Date(assign.dueDate), "MMM d, p")}

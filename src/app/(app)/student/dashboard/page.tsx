@@ -133,9 +133,10 @@ export default function StudentDashboardPage() {
                     key={sub.id} 
                     href={sub.courseId ? `/student/courses/${sub.courseId}?assignment=${sub.assignmentId}` : "/student/courses"} 
                     className="text-xs text-primary hover:underline block"
+                    title={sub.assignmentTitle}
                   >
                      <div className="flex justify-between items-center">
-                        <span className="truncate w-3/4" title={sub.assignmentTitle}>{sub.assignmentTitle}</span>
+                        <span className="truncate w-3/4">{sub.assignmentTitle}</span>
                         <span className="font-semibold">{sub.grade}/{sub.totalPoints}</span>
                      </div>
                   </Link>
@@ -177,8 +178,8 @@ export default function StudentDashboardPage() {
               <ul className="space-y-3">
                 {recentAnnouncements.map(ann => (
                   <li key={ann.id} className="text-sm p-3 border rounded-md hover:bg-muted/50 transition-colors">
-                    <Link href={ann.link || "/announcements"} className="block">
-                      <div className="font-semibold">{ann.message.substring(0,50)}{ann.message.length > 50 ? '...' : ''}</div>
+                    <Link href={ann.link || "/announcements"} className="block" title={ann.message}>
+                      <div className="font-semibold truncate">{ann.message}</div>
                       <div className="text-xs text-muted-foreground">{new Date(ann.timestamp).toLocaleDateString()}</div>
                     </Link>
                   </li>
@@ -196,4 +197,3 @@ export default function StudentDashboardPage() {
     </div>
   );
 }
-    

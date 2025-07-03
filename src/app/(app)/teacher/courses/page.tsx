@@ -234,7 +234,7 @@ export default function TeacherCoursesPage() {
                         data-ai-hint="course banner"
                     />
                 </div>
-                <CardTitle className="hover:text-primary transition-colors text-xl"> 
+                <CardTitle className="hover:text-primary transition-colors text-xl truncate" title={course.name}> 
                   <Link href={`/teacher/courses/${course.id}`}>{course.name}</Link>
                 </CardTitle>
                 <CardDescription className="h-10 overflow-hidden text-ellipsis text-xs">{course.description}</CardDescription>

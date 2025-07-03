@@ -140,8 +140,12 @@ export default function AdminEnrollmentsPage() {
                             <TableCell>
                                 <Image src={student.avatarUrl || `https://placehold.co/32x32.png?text=${student.name.substring(0,1)}`} alt={student.name} width={32} height={32} className="rounded-full" data-ai-hint="student avatar" />
                             </TableCell>
-                            <TableCell>{student.name}</TableCell>
-                            <TableCell className="text-xs">{student.email}</TableCell>
+                            <TableCell>
+                              <div className="max-w-[120px] truncate" title={student.name}>{student.name}</div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="max-w-[120px] truncate text-xs" title={student.email}>{student.email}</div>
+                            </TableCell>
                             <TableCell className="text-right">
                               <Button 
                                 variant="outline" 
@@ -200,8 +204,12 @@ export default function AdminEnrollmentsPage() {
                             <TableCell>
                                 <Image src={student.avatarUrl || `https://placehold.co/32x32.png?text=${student.name.substring(0,1)}`} alt={student.name} width={32} height={32} className="rounded-full" data-ai-hint="student avatar" />
                             </TableCell>
-                            <TableCell>{student.name}</TableCell>
-                            <TableCell className="text-xs">{student.email}</TableCell>
+                            <TableCell>
+                               <div className="max-w-[120px] truncate" title={student.name}>{student.name}</div>
+                            </TableCell>
+                            <TableCell>
+                               <div className="max-w-[120px] truncate text-xs" title={student.email}>{student.email}</div>
+                            </TableCell>
                             <TableCell className="text-right">
                               <Button 
                                 size="sm" 
@@ -235,4 +243,3 @@ export default function AdminEnrollmentsPage() {
     </div>
   );
 }
-

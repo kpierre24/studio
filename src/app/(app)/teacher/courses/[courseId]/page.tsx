@@ -441,7 +441,7 @@ export default function TeacherCourseDetailPage() {
                     <li key={lesson.id} className="p-4 border rounded-md flex justify-between items-center hover:bg-muted/50 hover:shadow-sm transition-all">
                       <div>
                         <h4 className="font-medium">{lesson.order}. {lesson.title}</h4>
-                        <p className="text-xs text-muted-foreground truncate max-w-md">{lesson.contentMarkdown.substring(0,100)}...</p>
+                        <p className="text-xs text-muted-foreground truncate max-w-md" title={lesson.contentMarkdown}>{lesson.contentMarkdown}</p>
                         {lesson.fileName && <p className="text-xs text-blue-500"><FileText className="inline h-3 w-3 mr-1"/>{lesson.fileName}</p>}
                         {lesson.fileUrl && lesson.fileUrl.startsWith("simulated-storage/") && <Badge variant="outline" className="text-yellow-600 border-yellow-500 ml-2">Mock File</Badge>}
                       </div>
@@ -486,47 +486,52 @@ export default function TeacherCourseDetailPage() {
               ) : (
                 <ul className="space-y-3">
                   {courseAssignments.map(assignment => (
-                    <li key={assignment.id} className="p-4 border rounded-md flex justify-between items-center hover:bg-muted/50 hover:shadow-sm transition-all">
-                      <div>
-                        <h4 className="font-medium">{assignment.title} <Badge variant="secondary" className="capitalize">{assignment.type}</Badge></h4>
-                        <p className="text-xs text-muted-foreground">Due: {format(new Date(assignment.dueDate), "PPP p")} - {assignment.totalPoints} pts</p>
-                         {assignment.assignmentFileName && (
-                           <a href={assignment.assignmentFileUrl || '#'} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1 mt-1">
+                    <li key={assignment.id} className="p-4 border rounded-md hover:bg-muted/50 hover:shadow-sm transition-all">
+                      <div className="flex flex-col sm:flex-row justify-between items-start">
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium truncate" title={assignment.title}>{assignment.title} <Badge variant="secondary" className="capitalize">{assignment.type}</Badge></h4>
+                          <p className="text-xs text-muted-foreground">Due: {format(new Date(assignment.dueDate), "PPP p")} - {assignment.totalPoints} pts</p>
+                          <p className="text-sm text-muted-foreground mt-1 truncate" title={assignment.description}>
+                            {assignment.description}
+                          </p>
+                          {assignment.assignmentFileName && (
+                            <a href={assignment.assignmentFileUrl || '#'} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1 mt-1">
                                 <Paperclip className="h-3 w-3"/> {assignment.assignmentFileName}
-                           </a>
-                        )}
-                        {assignment.externalLink && (
+                            </a>
+                          )}
+                          {assignment.externalLink && (
                             <Button variant="link" size="sm" asChild className="p-0 h-auto mt-1 text-xs ml-0 pl-0">
                               <a href={assignment.externalLink} target="_blank" rel="noopener noreferrer">
                                 <ExternalLink className="mr-1 h-3 w-3" /> View External Link
                               </a>
                             </Button>
                           )}
-                      </div>
-                      <div className="space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => handleOpenGradingModal(assignment)} title="View Submissions & Grade" disabled={isLoading}>
-                            <FileArchive className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleOpenAssignmentModal(assignment)} title="Edit Assignment" disabled={isLoading}><Edit className="h-4 w-4" /></Button>
-                        <AlertDialog open={!!assignmentToDelete && assignmentToDelete.id === assignment.id} onOpenChange={(isOpen) => !isOpen && setAssignmentToDelete(null)}>
-                           <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm" onClick={() => setAssignmentToDelete(assignment)} title="Delete Assignment" disabled={isLoading}><Trash2 className="h-4 w-4" /></Button>
-                           </AlertDialogTrigger>
-                           <AlertDialogContent>
-                            <AlertDialogHeader><AlertDialogTitle>Delete Assignment?</AlertDialogTitle></AlertDialogHeader>
-                            <AlertDialogDescription>
-                                Are you sure you want to delete the assignment "{assignmentToDelete?.title}"? This will also delete all student submissions for it from local state.
-                                <br/><strong className="text-destructive mt-2 block">Note:</strong> The associated assignment file and any submitted files in Firebase Storage will not be automatically deleted and will need manual cleanup from the Storage console. This action cannot be undone.
-                            </AlertDialogDescription>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel onClick={() => setAssignmentToDelete(null)} disabled={isLoading}>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={confirmDeleteAssignment} disabled={isLoading}>
-                                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Delete
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                           </AlertDialogContent>
-                        </AlertDialog>
+                        </div>
+                        <div className="space-x-2 mt-2 sm:mt-0 sm:ml-4 flex-shrink-0">
+                          <Button variant="outline" size="sm" onClick={() => handleOpenGradingModal(assignment)} title="View Submissions & Grade" disabled={isLoading}>
+                              <FileArchive className="h-4 w-4" />
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleOpenAssignmentModal(assignment)} title="Edit Assignment" disabled={isLoading}><Edit className="h-4 w-4" /></Button>
+                          <AlertDialog open={!!assignmentToDelete && assignmentToDelete.id === assignment.id} onOpenChange={(isOpen) => !isOpen && setAssignmentToDelete(null)}>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm" onClick={() => setAssignmentToDelete(assignment)} title="Delete Assignment" disabled={isLoading}><Trash2 className="h-4 w-4" /></Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader><AlertDialogTitle>Delete Assignment?</AlertDialogTitle></AlertDialogHeader>
+                              <AlertDialogDescription>
+                                  Are you sure you want to delete the assignment "{assignmentToDelete?.title}"? This will also delete all student submissions for it from local state.
+                                  <br/><strong className="text-destructive mt-2 block">Note:</strong> The associated assignment file and any submitted files in Firebase Storage will not be automatically deleted and will need manual cleanup from the Storage console. This action cannot be undone.
+                              </AlertDialogDescription>
+                              <AlertDialogFooter>
+                                  <AlertDialogCancel onClick={() => setAssignmentToDelete(null)} disabled={isLoading}>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={confirmDeleteAssignment} disabled={isLoading}>
+                                      {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                      Delete
+                                  </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </div>
                     </li>
                   ))}
@@ -548,9 +553,9 @@ export default function TeacherCourseDetailPage() {
                           <AvatarImage src={student.avatarUrl} alt={student.name} data-ai-hint="student avatar" />
                           <AvatarFallback>{student.name.substring(0, 2).toUpperCase()}</AvatarFallback>
                         </Avatar>
-                        <div>
-                          <p className="font-medium">{student.name}</p>
-                          <p className="text-sm text-muted-foreground">{student.email}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate" title={student.name}>{student.name}</p>
+                          <p className="text-sm text-muted-foreground truncate" title={student.email}>{student.email}</p>
                         </div>
                       </li>
                     ))}
@@ -581,8 +586,8 @@ export default function TeacherCourseDetailPage() {
                     <TableBody>
                       {studentPaymentInfo.map(info => (
                         <TableRow key={info.studentId}>
-                          <TableCell>{info.studentName}</TableCell>
-                          <TableCell className="text-xs">{info.studentEmail}</TableCell>
+                          <TableCell><div className="truncate max-w-[150px]" title={info.studentName}>{info.studentName}</div></TableCell>
+                          <TableCell><div className="truncate max-w-[150px] text-xs" title={info.studentEmail}>{info.studentEmail}</div></TableCell>
                           <TableCell className="text-right">${course.cost.toFixed(2)}</TableCell>
                           <TableCell className="text-right text-green-600">${info.totalPaid.toFixed(2)}</TableCell>
                           <TableCell className={`text-right font-semibold ${info.amountOwed > 0 ? 'text-red-600' : 'text-green-600'}`}>

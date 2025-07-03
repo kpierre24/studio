@@ -377,9 +377,13 @@ export default function AdminUsersPage() {
               <TableRow key={user.id}>
                 <TableCell className="font-medium flex items-center gap-2">
                   <Image src={user.avatarUrl || `https://placehold.co/32x32.png?text=${user.name.substring(0,1)}`} alt={user.name} width={32} height={32} className="rounded-full" data-ai-hint="user avatar"/>
-                  {user.name}
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate" title={user.name}>{user.name}</p>
+                  </div>
                 </TableCell>
-                <TableCell>{user.email}</TableCell>
+                <TableCell>
+                    <div className="max-w-[200px] truncate" title={user.email}>{user.email}</div>
+                </TableCell>
                 <TableCell>
                   <span className={`px-2 py-1 text-xs rounded-full ${
                     user.role === UserRole.SUPER_ADMIN ? 'bg-red-100 text-red-700 dark:bg-red-700/30 dark:text-red-200' :
