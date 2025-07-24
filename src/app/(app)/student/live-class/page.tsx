@@ -19,61 +19,72 @@ const EMBED_URL = LIVE_CLASS_ZOOM_URL.replace("/j/", "/wc/join/") + "&prefer=1&u
 
 export default function StudentLiveClassPage() {
   return (
-    <div className="space-y-8 max-w-3xl mx-auto"> {/* Increased max-width for iframe */}
+    <div className="space-y-8 max-w-4xl mx-auto">
       <h1 className="text-3xl font-headline font-bold flex items-center gap-2">
         <Video className="h-8 w-8 text-primary" />
         Join Live Class Session
       </h1>
       
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl">Connect to: {LIVE_CLASS_NAME}</CardTitle>
-          <CardDescription>
-            Your live class session is typically held every Wednesday. You can attempt to join via the embedded window below or use the direct link.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="aspect-video w-full bg-muted rounded-md overflow-hidden border shadow-inner">
-            <iframe
-              src={EMBED_URL} // Using the modified embed URL
-              title={`Live Class Session: ${LIVE_CLASS_NAME}`}
-              className="w-full h-full border-0"
-              allow="camera; microphone; fullscreen; display-capture; autoplay"
-            ></iframe>
-          </div>
-
-          <div className="p-3 my-4 text-sm bg-yellow-100 border border-yellow-300 text-yellow-700 rounded-md flex items-start gap-2">
-            <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5" />
-            <span>
-              <strong>Note on Embedded View:</strong> Direct embedding of live Zoom meetings can be limited. If you see a join page or encounter issues with the embedded window, please use the "Join Directly via Zoom" button below for the best experience.
-            </span>
-          </div>
-          
-          <div className="text-center">
-            <Button asChild size="lg" className="w-full sm:w-auto">
-              <a href={LIVE_CLASS_ZOOM_URL} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="mr-2 h-5 w-5" />
-                Join Directly via Zoom
-              </a>
-            </Button>
-          </div>
-
-          {(LIVE_CLASS_MEETING_ID || LIVE_CLASS_PASSCODE) && (
-            <div className="mt-6 pt-4 border-t text-sm text-muted-foreground">
-              <h3 className="font-semibold text-foreground mb-2">Session Details (for manual join):</h3>
-              {LIVE_CLASS_MEETING_ID && <p>Meeting ID: <span className="font-medium text-foreground">{LIVE_CLASS_MEETING_ID}</span></p>}
-              {LIVE_CLASS_PASSCODE && <p>Passcode: <span className="font-medium text-foreground">{LIVE_CLASS_PASSCODE}</span></p>}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="shadow-lg lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-2xl">Connect to: {LIVE_CLASS_NAME}</CardTitle>
+            <CardDescription>
+              Your live class session is typically held every Wednesday. You can attempt to join via the embedded window below or use the direct link.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="aspect-video w-full bg-muted rounded-md overflow-hidden border shadow-inner">
+              <iframe
+                src={EMBED_URL} // Using the modified embed URL
+                title={`Live Class Session: ${LIVE_CLASS_NAME}`}
+                className="w-full h-full border-0"
+                allow="camera; microphone; fullscreen; display-capture; autoplay"
+              ></iframe>
             </div>
+          </CardContent>
+        </Card>
+
+        <div className="space-y-6 lg:col-span-1">
+          <Card>
+            <CardHeader>
+              <CardTitle>Join Directly</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <Button asChild size="lg" className="w-full">
+                  <a href={LIVE_CLASS_ZOOM_URL} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="mr-2 h-5 w-5" />
+                    Open in Zoom App
+                  </a>
+                </Button>
+            </CardContent>
+          </Card>
+          
+          {(LIVE_CLASS_MEETING_ID || LIVE_CLASS_PASSCODE) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Session Details</CardTitle>
+                <CardDescription>For manual join</CardDescription>
+              </CardHeader>
+              <CardContent className="text-sm space-y-2">
+                  {LIVE_CLASS_MEETING_ID && <p>Meeting ID: <span className="font-medium text-foreground block">{LIVE_CLASS_MEETING_ID}</span></p>}
+                  {LIVE_CLASS_PASSCODE && <p>Passcode: <span className="font-medium text-foreground block">{LIVE_CLASS_PASSCODE}</span></p>}
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
 
       <Card className="bg-muted/50 border-dashed">
         <CardHeader>
-          <CardTitle className="text-lg">Having Trouble?</CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2"><AlertTriangle className="h-5 w-5 text-yellow-500" />Having Trouble?</CardTitle>
         </CardHeader>
         <CardContent className="text-sm space-y-2">
-          <p>If the embedded view or button doesn't work, you can manually copy and paste the link into your browser: <Link href={LIVE_CLASS_ZOOM_URL} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{LIVE_CLASS_ZOOM_URL}</Link></p>
+          <p>
+            If you see a join page or encounter issues with the embedded window, please use the "Open in Zoom App" button for the best experience.
+          </p>
+          <p>If the button doesn't work, you can manually copy and paste the link into your browser: <Link href={LIVE_CLASS_ZOOM_URL} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline break-all">{LIVE_CLASS_ZOOM_URL}</Link></p>
           <p>Make sure your internet connection is stable and that you have the Zoom application installed or are prepared to join via your web browser.</p>
           <p>If you continue to experience issues, please contact your instructor or an administrator.</p>
         </CardContent>
