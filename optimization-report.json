@@ -1,0 +1,66 @@
+{
+  "timestamp": "2025-07-24T14:11:12.472Z",
+  "summary": {
+    "performance": 12,
+    "accessibility": 12,
+    "animations": 7,
+    "documentation": 7,
+    "errors": 0
+  },
+  "results": {
+    "performance": [
+      "✅ Bundle analyzer configured",
+      "✅ dashboard-widget.tsx uses React.memo",
+      "✅ virtualized-list.tsx uses React.memo",
+      "⚠️  data-visualization.tsx could benefit from React.memo",
+      "✅ activity-timeline.tsx uses React.memo",
+      "📊 Found 4 useMemo optimizations",
+      "📊 Found 38 useCallback optimizations",
+      "✅ WebP image format configured",
+      "✅ Responsive image sizes configured",
+      "✅ OptimizedImage component available",
+      "✅ Found 1 lazy-loaded components",
+      "📊 Found 21 dynamic imports"
+    ],
+    "accessibility": [
+      "✅ AccessibilityProvider implemented",
+      "✅ Screen reader announcements available",
+      "✅ Skip links implemented",
+      "✅ Accessibility controls available",
+      "📊 Found 20 aria-label attributes",
+      "📊 Found 3 aria-describedby attributes",
+      "📊 Found 9 role attributes",
+      "📊 Found 2 tabIndex attributes",
+      "📊 Found 2 keyboard event handlers",
+      "✅ Focus management hook available",
+      "✅ Color contrast checker available",
+      "✅ High contrast mode support detected"
+    ],
+    "animations": [
+      "✅ Framer Motion installed",
+      "✅ Animation library with 25 variants",
+      "✅ Reduced motion preference in theme context",
+      "✅ CSS prefers-reduced-motion support",
+      "📊 Found 248 transform animations (GPU-accelerated)",
+      "📊 Found 266 opacity animations (GPU-accelerated)",
+      "⚠️  Found 53 potential layout animations (may cause reflow)"
+    ],
+    "documentation": [
+      "📊 Component documentation: 0/0 (0%)",
+      "⚠️  Consider adding more component documentation",
+      "⚠️  Consider adding UI/UX enhancements section to README",
+      "⚠️  Consider adding accessibility section to README",
+      "📊 Found 186 interfaces",
+      "📊 Found 111 type definitions",
+      "✅ Global types directory exists"
+    ],
+    "errors": []
+  },
+  "recommendations": [
+    "Review and address warning items for better optimization",
+    "Continue using React.memo for performance-critical components",
+    "Run bundle analysis regularly to monitor bundle size",
+    "Maintain high accessibility standards with regular audits",
+    "Ensure all animations respect user motion preferences"
+  ]
+}

@@ -32,6 +32,7 @@ import {
 import { useAppContext } from '@/contexts/AppContext';
 import { UserRole } from '@/types';
 import { APP_NAME } from '@/lib/constants';
+import { RecentItemsQuickAccess } from '@/components/ui/recent-items';
 
 export function AppSidebar() {
   const { state, handleLogoutUser } = useAppContext();
@@ -207,6 +208,10 @@ export function AppSidebar() {
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
+        
+        <div className="mt-4 border-t pt-4">
+          <RecentItemsQuickAccess maxItems={5} />
+        </div>
       </SidebarContent>
       <SidebarFooter className="group-data-[collapsible=icon]:-mt-8">
         <div className="flex flex-col gap-2">

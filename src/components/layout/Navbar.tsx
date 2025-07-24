@@ -37,6 +37,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { FavoritesQuickAccess } from '@/components/ui/favorites-quick-access';
 
 export function Navbar() {
   const { state, dispatch, handleLogoutUser: contextHandleLogoutUser } = useAppContext();
@@ -92,6 +93,8 @@ export function Navbar() {
         <div className="flex flex-1 items-center justify-end space-x-2">
              {currentUser ? (
                 <>
+                <FavoritesQuickAccess />
+                
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="relative">

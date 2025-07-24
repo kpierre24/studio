@@ -3,6 +3,8 @@ import './globals.css';
 import { AppProvider } from '@/contexts/AppContext';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/layout/ThemeProvider';
+import { EnhancedThemeProvider } from '@/contexts/ThemeContext';
+import { MotionProvider } from '@/components/motion/MotionProvider';
 import { APP_NAME } from '@/lib/constants';
 
 export const metadata: Metadata = {
@@ -30,10 +32,14 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AppProvider>
-            {children}
-            <Toaster />
-          </AppProvider>
+          <EnhancedThemeProvider>
+            <MotionProvider>
+              <AppProvider>
+                {children}
+                <Toaster />
+              </AppProvider>
+            </MotionProvider>
+          </EnhancedThemeProvider>
         </ThemeProvider>
       </body>
     </html>

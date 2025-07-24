@@ -7,6 +7,12 @@ import { Navbar } from '@/components/layout/Navbar';
 import { Skeleton } from "@/components/ui/skeleton";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { AppSidebar } from '@/components/layout/AppSidebar';
+import { BreadcrumbNavigation } from '@/components/ui/breadcrumb-navigation';
+import { useBreadcrumbData } from '@/hooks/useBreadcrumbData';
+import { RecentItemsTracker } from '@/components/ui/recent-items-tracker';
+import { PageTransition } from '@/components/ui/page-transitions';
+import { NavigationLoader } from '@/components/ui/navigation-loader';
+import { useFocusManagement, useAccessibilityShortcuts } from '@/hooks/useFocusManagement';
 import { APP_NAME } from '@/lib/constants';
 
 export default function ProtectedLayout({
@@ -17,6 +23,11 @@ export default function ProtectedLayout({
   const { state } = useAppContext();
   const router = useRouter();
   const pathname = usePathname();
+  const breadcrumbs = useBreadcrumbData();
+  
+  // Enable focus management and accessibility shortcuts
+  useFocusManagement();
+  useAccessibilityShortcuts();
 
   useEffect(() => {
     // If auth state is still loading (currentUser is undefined), do nothing yet.
@@ -66,11 +77,19 @@ export default function ProtectedLayout({
   // If currentUser exists, render the layout with children.
   return (
     <SidebarProvider>
+        <NavigationLoader showProgressBar={true} />
         <AppSidebar />
         <SidebarInset>
             <Navbar />
             <main className="flex-grow p-4 sm:p-6 lg:p-8">
-                {children}
+                <div className="mb-6">
+                    <BreadcrumbNavigation items={breadcrumbs} />
+                </div>
+                <RecentItemsTracker>
+                    <PageTransition>
+                        {children}
+                    </PageTransition>
+                </RecentItemsTracker>
             </main>
             <footer className="py-6 text-center text-sm text-muted-foreground border-t">
                 © {new Date().getFullYear()} {APP_NAME}. All rights reserved.
