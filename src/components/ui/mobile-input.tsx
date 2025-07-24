@@ -217,7 +217,7 @@ const MobileInput = React.forwardRef<HTMLInputElement, MobileInputProps>(
               )}
               aria-invalid={hasError}
               whileFocus={{ scale: touchOptimized ? 1.02 : 1 }}
-              {...props}
+              {...(props as any)}
             />
 
             {/* Right side icons */}

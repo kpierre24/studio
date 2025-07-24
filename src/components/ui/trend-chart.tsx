@@ -66,7 +66,7 @@ const TrendChartComponent = function TrendChart({
       )}
       
       <ResponsiveContainer width="100%" height={height}>
-        <ChartComponent data={data} onClick={onPointClick}>
+        <ChartComponent data={data} onClick={onPointClick as any}>
           {showGrid && (
             <CartesianGrid 
               strokeDasharray="3 3" 

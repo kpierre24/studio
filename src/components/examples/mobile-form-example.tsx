@@ -267,7 +267,7 @@ export function MobileFormExample() {
                   compressionQuality={0.8}
                   touchOptimized={true}
                   mobileLayout={true}
-                  onCameraCapture={handleCameraCapture}
+                  // onCameraCapture removed as it's not part of MobileFileUploadProps
                 />
               </div>
             </CardContent>

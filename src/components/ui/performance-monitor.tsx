@@ -1,149 +1,270 @@
-'use client';
+/**
+ * Performance Monitor Component for development and debugging
+ */
 
-import React, { ComponentType, useEffect, useRef, memo } from 'react';
-import { PerformanceMonitor } from '@/lib/performance';
+import React, { useState, useEffect } from 'react';
+import { useMemoryMonitor, PerformanceTracker } from '@/lib/performance';
+import { cn } from '@/lib/utils';
 
-// Higher-order component for performance monitoring
-export function withPerformanceMonitoring<P extends object>(
-  WrappedComponent: ComponentType<P>,
-  componentName?: string
-) {
-  const displayName = componentName || WrappedComponent.displayName || WrappedComponent.name || 'Component';
-
-  const PerformanceMonitoredComponent: React.FC<P> = (props) => {
-    const startMarkRef = useRef<string>();
-
-    useEffect(() => {
-      // Start measuring on mount
-      startMarkRef.current = PerformanceMonitor.startMeasure(displayName);
-
-      return () => {
-        // End measuring on unmount
-        if (startMarkRef.current) {
-          PerformanceMonitor.endMeasure(displayName, startMarkRef.current);
-        }
-      };
-    }, []);
-
-    // Measure render time
-    useEffect(() => {
-      if (startMarkRef.current) {
-        PerformanceMonitor.endMeasure(displayName, startMarkRef.current);
-        startMarkRef.current = PerformanceMonitor.startMeasure(displayName);
-      }
-    });
-
-    return <WrappedComponent {...props} />;
-  };
-
-  PerformanceMonitoredComponent.displayName = `withPerformanceMonitoring(${displayName})`;
-
-  return PerformanceMonitoredComponent;
+interface PerformanceMonitorProps {
+  className?: string;
+  showMemory?: boolean;
+  showFPS?: boolean;
+  showBundleSize?: boolean;
+  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 }
 
-// Performance metrics display component
-interface PerformanceMetricsProps {
-  showInProduction?: boolean;
-}
-
-export const PerformanceMetrics: React.FC<PerformanceMetricsProps> = memo(({ 
-  showInProduction = false 
+export const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
+  className,
+  showMemory = true,
+  showFPS = true,
+  showBundleSize = false,
+  position = 'top-right',
 }) => {
-  const [metrics, setMetrics] = React.useState(PerformanceMonitor.getMetrics());
+  const [fps, setFps] = useState(0);
+  const [isVisible, setIsVisible] = useState(false);
+  const memoryInfo = useMemoryMonitor();
 
+  // FPS monitoring
   useEffect(() => {
-    const interval = setInterval(() => {
-      setMetrics(PerformanceMonitor.getMetrics());
-    }, 1000);
+    if (!showFPS) return;
 
-    return () => clearInterval(interval);
-  }, []);
+    let frameCount = 0;
+    let lastTime = performance.now();
+    let animationId: number;
 
-  // Don't show in production unless explicitly enabled
-  if (process.env.NODE_ENV === 'production' && !showInProduction) {
-    return null;
-  }
-
-  const componentStats = metrics.reduce((acc, metric) => {
-    if (!acc[metric.componentName]) {
-      acc[metric.componentName] = {
-        count: 0,
-        totalTime: 0,
-        avgTime: 0,
-        lastRender: 0,
-      };
-    }
-    
-    acc[metric.componentName].count++;
-    acc[metric.componentName].totalTime += metric.renderTime;
-    acc[metric.componentName].avgTime = acc[metric.componentName].totalTime / acc[metric.componentName].count;
-    acc[metric.componentName].lastRender = Math.max(acc[metric.componentName].lastRender, metric.timestamp);
-    
-    return acc;
-  }, {} as Record<string, { count: number; totalTime: number; avgTime: number; lastRender: number }>);
-
-  return (
-    <div className="fixed bottom-4 right-4 bg-black/80 text-white p-4 rounded-lg text-xs max-w-md max-h-64 overflow-auto z-50">
-      <h3 className="font-bold mb-2">Performance Metrics</h3>
-      <div className="space-y-1">
-        {Object.entries(componentStats)
-          .sort(([, a], [, b]) => b.avgTime - a.avgTime)
-          .slice(0, 10)
-          .map(([name, stats]) => (
-            <div key={name} className="flex justify-between">
-              <span className="truncate mr-2">{name}</span>
-              <span>{stats.avgTime.toFixed(2)}ms</span>
-            </div>
-          ))}
-      </div>
-    </div>
-  );
-});
-
-PerformanceMetrics.displayName = 'PerformanceMetrics';
-
-// Memory usage monitor
-export const MemoryMonitor: React.FC<{ showInProduction?: boolean }> = memo(({ 
-  showInProduction = false 
-}) => {
-  const [memoryInfo, setMemoryInfo] = React.useState<MemoryInfo | null>(null);
-
-  useEffect(() => {
-    const updateMemoryInfo = () => {
-      if (typeof performance !== 'undefined' && 'memory' in performance) {
-        setMemoryInfo((performance as any).memory);
+    const measureFPS = () => {
+      frameCount++;
+      const currentTime = performance.now();
+      
+      if (currentTime - lastTime >= 1000) {
+        setFps(Math.round((frameCount * 1000) / (currentTime - lastTime)));
+        frameCount = 0;
+        lastTime = currentTime;
       }
+      
+      animationId = requestAnimationFrame(measureFPS);
     };
 
-    updateMemoryInfo();
-    const interval = setInterval(updateMemoryInfo, 2000);
+    animationId = requestAnimationFrame(measureFPS);
 
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      cancelAnimationFrame(animationId);
+    };
+  }, [showFPS]);
 
-  // Don't show in production unless explicitly enabled
-  if (process.env.NODE_ENV === 'production' && !showInProduction) {
+  // Only show in development
+  if (process.env.NODE_ENV !== 'development') {
     return null;
   }
 
-  if (!memoryInfo) {
-    return null;
-  }
+  const positionClasses = {
+    'top-left': 'top-4 left-4',
+    'top-right': 'top-4 right-4',
+    'bottom-left': 'bottom-4 left-4',
+    'bottom-right': 'bottom-4 right-4',
+  };
 
   const formatBytes = (bytes: number) => {
-    return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
-    <div className="fixed bottom-4 left-4 bg-black/80 text-white p-4 rounded-lg text-xs z-50">
-      <h3 className="font-bold mb-2">Memory Usage</h3>
-      <div className="space-y-1">
-        <div>Used: {formatBytes(memoryInfo.usedJSHeapSize)}</div>
-        <div>Total: {formatBytes(memoryInfo.totalJSHeapSize)}</div>
-        <div>Limit: {formatBytes(memoryInfo.jsHeapSizeLimit)}</div>
+    <div
+      className={cn(
+        'fixed z-50 bg-black/80 text-white text-xs rounded-lg p-3 font-mono',
+        'backdrop-blur-sm border border-white/20',
+        'transition-all duration-200',
+        isVisible ? 'opacity-100' : 'opacity-60 hover:opacity-100',
+        positionClasses[position],
+        className
+      )}
+      onMouseEnter={() => setIsVisible(true)}
+      onMouseLeave={() => setIsVisible(false)}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <span className="font-semibold">⚡ Performance</span>
+        <button
+          onClick={() => setIsVisible(!isVisible)}
+          className="text-white/60 hover:text-white"
+        >
+          {isVisible ? '−' : '+'}
+        </button>
+      </div>
+
+      {isVisible && (
+        <div className="space-y-2 min-w-[200px]">
+          {showFPS && (
+            <div className="flex justify-between">
+              <span>FPS:</span>
+              <span className={cn(
+                fps >= 50 ? 'text-green-400' : 
+                fps >= 30 ? 'text-yellow-400' : 'text-red-400'
+              )}>
+                {fps}
+              </span>
+            </div>
+          )}
+
+          {showMemory && memoryInfo && (
+            <>
+              <div className="flex justify-between">
+                <span>Used:</span>
+                <span>{formatBytes(memoryInfo.usedJSHeapSize)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Total:</span>
+                <span>{formatBytes(memoryInfo.totalJSHeapSize)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Limit:</span>
+                <span>{formatBytes(memoryInfo.jsHeapSizeLimit)}</span>
+              </div>
+              <div className="w-full bg-gray-700 rounded-full h-2">
+                <div
+                  className={cn(
+                    'h-2 rounded-full transition-all duration-300',
+                    (memoryInfo.usedJSHeapSize / memoryInfo.jsHeapSizeLimit) > 0.8
+                      ? 'bg-red-500'
+                      : (memoryInfo.usedJSHeapSize / memoryInfo.jsHeapSizeLimit) > 0.6
+                      ? 'bg-yellow-500'
+                      : 'bg-green-500'
+                  )}
+                  style={{
+                    width: `${(memoryInfo.usedJSHeapSize / memoryInfo.jsHeapSizeLimit) * 100}%`
+                  }}
+                />
+              </div>
+            </>
+          )}
+
+          {showBundleSize && (
+            <div className="border-t border-white/20 pt-2">
+              <div className="text-white/60 mb-1">Bundle Info:</div>
+              <div className="text-xs space-y-1">
+                <div>Check console for details</div>
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-white/20 pt-2">
+            <div className="text-white/60 mb-1">Core Web Vitals:</div>
+            <WebVitalsDisplay />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Web Vitals monitoring component
+const WebVitalsDisplay: React.FC = () => {
+  const [vitals, setVitals] = useState<{
+    CLS?: number;
+    FID?: number;
+    FCP?: number;
+    LCP?: number;
+    TTFB?: number;
+  }>({});
+
+  useEffect(() => {
+    // Import web-vitals dynamically to avoid SSR issues
+    import('web-vitals').then(({ onCLS, onFCP, onLCP, onTTFB }) => {
+      onCLS((metric: any) => setVitals(prev => ({ ...prev, CLS: metric.value })));
+      // onFID is deprecated in web-vitals v3+
+      // onFID((metric: any) => setVitals(prev => ({ ...prev, FID: metric.value })));
+      onFCP((metric: any) => setVitals(prev => ({ ...prev, FCP: metric.value })));
+      onLCP((metric: any) => setVitals(prev => ({ ...prev, LCP: metric.value })));
+      onTTFB((metric: any) => setVitals(prev => ({ ...prev, TTFB: metric.value })));
+    }).catch(() => {
+      // web-vitals not available
+    });
+  }, []);
+
+  const getVitalColor = (metric: string, value: number) => {
+    const thresholds = {
+      CLS: { good: 0.1, poor: 0.25 },
+      FID: { good: 100, poor: 300 },
+      FCP: { good: 1800, poor: 3000 },
+      LCP: { good: 2500, poor: 4000 },
+      TTFB: { good: 800, poor: 1800 },
+    };
+
+    const threshold = thresholds[metric as keyof typeof thresholds];
+    if (!threshold) return 'text-gray-400';
+
+    if (value <= threshold.good) return 'text-green-400';
+    if (value <= threshold.poor) return 'text-yellow-400';
+    return 'text-red-400';
+  };
+
+  return (
+    <div className="text-xs space-y-1">
+      {Object.entries(vitals).map(([metric, value]) => (
+        <div key={metric} className="flex justify-between">
+          <span>{metric}:</span>
+          <span className={getVitalColor(metric, value)}>
+            {metric === 'CLS' ? value.toFixed(3) : Math.round(value)}
+            {metric !== 'CLS' && 'ms'}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// Performance summary component for production insights
+export const PerformanceSummary: React.FC<{
+  className?: string;
+}> = ({ className }) => {
+  const [metrics, setMetrics] = useState<{
+    loadTime: number;
+    renderTime: number;
+    interactionTime: number;
+  } | null>(null);
+
+  useEffect(() => {
+    // Collect performance metrics
+    const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+    
+    if (navigation) {
+      setMetrics({
+        loadTime: navigation.loadEventEnd - navigation.fetchStart,
+        renderTime: navigation.domContentLoadedEventEnd - navigation.fetchStart,
+        interactionTime: navigation.domInteractive - navigation.fetchStart,
+      });
+    }
+  }, []);
+
+  if (!metrics) return null;
+
+  return (
+    <div className={cn('bg-gray-50 rounded-lg p-4', className)}>
+      <h3 className="font-semibold text-gray-900 mb-3">Performance Summary</h3>
+      <div className="grid grid-cols-3 gap-4 text-sm">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-blue-600">
+            {Math.round(metrics.loadTime)}ms
+          </div>
+          <div className="text-gray-600">Load Time</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-bold text-green-600">
+            {Math.round(metrics.renderTime)}ms
+          </div>
+          <div className="text-gray-600">Render Time</div>
+        </div>
+        <div className="text-center">
+          <div className="text-2xl font-bold text-purple-600">
+            {Math.round(metrics.interactionTime)}ms
+          </div>
+          <div className="text-gray-600">Interactive</div>
+        </div>
       </div>
     </div>
   );
-});
-
-MemoryMonitor.displayName = 'MemoryMonitor';
+};

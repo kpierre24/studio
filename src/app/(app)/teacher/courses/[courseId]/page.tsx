@@ -241,7 +241,7 @@ export default function TeacherCourseDetailPage() {
         dueDate: assignment.dueDate ? format(new Date(assignment.dueDate), "yyyy-MM-dd'T'HH:mm") : '', 
         type: assignment.type, questions: assignment.questions || [],
         manualTotalPoints: assignment.type === AssignmentType.STANDARD ? assignment.totalPoints : undefined, 
-        assignmentFileUrl: assignment.assignmentFileUrl, assignmentFileName: assignment.assignmentFileName,
+        assignmentFileUrl: assignment.assignmentFileUrl || undefined, assignmentFileName: assignment.assignmentFileName || undefined,
         externalLink: assignment.externalLink || '',
         assignmentFile: null,
       });
@@ -297,7 +297,7 @@ export default function TeacherCourseDetailPage() {
       payloadBase.questions = assignmentFormData.questions || [];
     } else {
       payloadBase.manualTotalPoints = assignmentFormData.manualTotalPoints;
-      payloadBase.rubric = assignmentFormData.rubric || [];
+      // payloadBase.rubric = assignmentFormData.rubric || []; // Removed as rubric doesn't exist in AssignmentFormData
     }
     
 

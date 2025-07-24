@@ -31,7 +31,6 @@ export {
   AnimatedCard,
   LoadingDots,
   CheckmarkIcon,
-  PageTransition,
   AnimatedInput,
   Notification,
   AnimatedIcon,
@@ -41,13 +40,10 @@ export {
 } from "./micro-animations"
 
 export {
-  PageTransitionProvider,
-  LoadingTransition,
-  StaggeredList,
-  Reveal,
-  HoverReveal,
-  ProgressAnimation,
-  CountUp
+  PageTransition,
+  PageTransitionLoader,
+  usePageTransition,
+  RouteTransition
 } from "./page-transitions"
 
 // Utility component for combining multiple visual enhancements
@@ -106,11 +102,10 @@ export function EnhancedLoading({
   return (
     <div className={className}>
       {isLoading ? (
-        <SkeletonLoader
-          variant={skeletonVariant}
-          count={skeletonCount}
-          animate={true}
-        />
+        <div
+          className="animate-pulse bg-gray-200 rounded"
+          style={{ width: '100%', height: '20px' }}
+        ></div>
       ) : (
         <VisualContainer animate={true} stagger={true}>
           {children}

@@ -161,6 +161,6 @@ export function withAccessibility<P extends object>(
       },
     }
 
-    return <Component {...enhancedProps} />
+    return <Component {...(enhancedProps as any)} />
   })
 }

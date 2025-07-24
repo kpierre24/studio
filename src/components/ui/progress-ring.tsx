@@ -177,7 +177,7 @@ export function MultiProgressRing({ data, size = 'lg', className }: MultiProgres
           const circumference = radius * 2 * Math.PI
           const strokeDasharray = circumference
           const strokeDashoffset = circumference - (item.progress / 100) * circumference
-          const colors = colorConfig[item.color]
+          const colors = colorConfig[item.color || 'blue']
           
           return (
             <g key={index}>
@@ -222,10 +222,10 @@ export function MultiProgressRing({ data, size = 'lg', className }: MultiProgres
             <div key={index} className="flex items-center gap-2 text-xs">
               <div 
                 className="w-2 h-2 rounded-full"
-                style={{ backgroundColor: colorConfig[item.color].stroke }}
+                style={{ backgroundColor: colorConfig[item.color || 'blue' as keyof typeof colorConfig].stroke }}
               />
               <span className="text-gray-600 dark:text-gray-400">{item.label}</span>
-              <span className={cn("font-medium", colorConfig[item.color].text)}>
+              <span className={cn("font-medium", colorConfig[item.color || 'blue' as keyof typeof colorConfig].text)}>
                 {Math.round(item.progress)}%
               </span>
             </div>

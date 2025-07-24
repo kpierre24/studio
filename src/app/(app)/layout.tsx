@@ -13,6 +13,8 @@ import { RecentItemsTracker } from '@/components/ui/recent-items-tracker';
 import { PageTransition } from '@/components/ui/page-transitions';
 import { NavigationLoader } from '@/components/ui/navigation-loader';
 import { useFocusManagement, useAccessibilityShortcuts } from '@/hooks/useFocusManagement';
+import { MobileLayout } from '@/components/layout/MobileLayout';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { APP_NAME } from '@/lib/constants';
 
 export default function ProtectedLayout({
@@ -24,6 +26,7 @@ export default function ProtectedLayout({
   const router = useRouter();
   const pathname = usePathname();
   const breadcrumbs = useBreadcrumbData();
+  const isMobile = useIsMobile();
   
   // Enable focus management and accessibility shortcuts
   useFocusManagement();
@@ -75,6 +78,37 @@ export default function ProtectedLayout({
   }
   
   // If currentUser exists, render the layout with children.
+  if (isMobile) {
+    // Mobile layout with bottom navigation
+    return (
+      <>
+        <NavigationLoader showProgressBar={true} />
+        <MobileLayout
+          showBottomNavigation={true}
+          navigationVariant="bottom-tabs"
+          enablePullToRefresh={false}
+          fullHeight={true}
+          safeArea={true}
+        >
+          <div className="p-4">
+            <div className="mb-4">
+              <BreadcrumbNavigation items={breadcrumbs} />
+            </div>
+            <RecentItemsTracker>
+              <PageTransition>
+                {children}
+              </PageTransition>
+            </RecentItemsTracker>
+          </div>
+          <footer className="py-4 text-center text-xs text-muted-foreground border-t bg-background/95 backdrop-blur-sm">
+            © {new Date().getFullYear()} {APP_NAME}. All rights reserved.
+          </footer>
+        </MobileLayout>
+      </>
+    );
+  }
+
+  // Desktop layout with sidebar
   return (
     <SidebarProvider>
         <NavigationLoader showProgressBar={true} />

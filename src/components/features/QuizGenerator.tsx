@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { generateQuizQuestions } from '@/ai/flows/generate-quiz-questions';
 import type { GenerateQuizQuestionsInput, GenerateQuizQuestionsOutput, QuizQuestion } from '@/types';
+import { QuestionType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -57,7 +58,7 @@ export function QuizGenerator({ assignmentId, onQuestionsGenerated, existingLess
         questionText: q.questionText,
         // Assuming AI provides questionType implicitly or needs to be inferred.
         // For now, default to multiple-choice if options exist. This needs refinement.
-        questionType: q.options && q.options.length > 0 ? 'multiple-choice' : 'short-answer', 
+        questionType: q.options && q.options.length > 0 ? QuestionType.MULTIPLE_CHOICE : QuestionType.SHORT_ANSWER, 
         options: q.options,
         correctAnswer: q.correctAnswer,
         points: 10, // Default points, teacher can adjust

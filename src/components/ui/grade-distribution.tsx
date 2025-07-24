@@ -68,7 +68,7 @@ export function GradeDistribution({
       )}
       
       <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={data} onClick={onBarClick}>
+        <BarChart data={data} onClick={onBarClick as any}>
           <CartesianGrid 
             strokeDasharray="3 3" 
             stroke="hsl(var(--border))"

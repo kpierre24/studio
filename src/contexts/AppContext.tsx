@@ -474,7 +474,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
           {
             id: `notif-enroll-${enrollment.id}`,
             userId: enrollment.studentId,
-            type: 'enrollment_update',
+            type: 'enrollment_update' as const,
             message: `You have been enrolled in the course: ${courseName}.`,
             link: `/student/courses/${course.id}`,
             read: false,
@@ -500,7 +500,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
           {
             id: `notif-unenroll-${enrollmentId}`,
             userId: studentId,
-            type: 'enrollment_update',
+            type: 'enrollment_update' as const,
             message: `You have been unenrolled from the course: ${courseName}.`,
             read: false,
             timestamp: Date.now(),
@@ -592,7 +592,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
           {
             id: `notif-sub-${newSubmission.id}`,
             userId: teacher.id,
-            type: 'submission_received',
+            type: 'submission_received' as const,
             message: `New submission for '${assignment.title}' in course '${course.name}' from student ${state.users.find(u => u.id === newSubmission.studentId)?.name || newSubmission.studentId}.`,
             link: `/teacher/courses/${assignment.courseId}?assignment=${assignment.id}`,
             read: false,
@@ -622,7 +622,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
           {
             id: `notif-grade-${submissionId}`,
             userId: submissionToGrade.studentId,
-            type: 'submission_graded',
+            type: 'submission_graded' as const,
             message: `Your submission for '${assignment?.title}' has been graded. Grade: ${grade}`,
             link: `/student/courses/${assignment?.courseId}?assignment=${assignment?.id}`,
             read: false,
@@ -666,7 +666,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
           {
             id: `notif-admin-grade-${updatedSubmission.id}`,
             userId: updatedSubmission.studentId,
-            type: 'grade_update',
+            type: 'grade_update' as const,
             message: `Your submission for '${assignment?.title}' has been updated by an administrator. Grade: ${updatedSubmission.grade}`,
             link: `/student/courses/${assignment?.courseId}?assignment=${assignment?.id}`,
             read: false,
@@ -1365,9 +1365,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // onAuthStateChanged will handle setting current user and fetching data.
       dispatch({ type: ActionType.FETCH_USERS_SUCCESS, payload: [...state.users, newUserForFirestore] }); // Optimistically update local users
        dispatch({ type: ActionType.ADD_NOTIFICATION, payload: {
-        userId: firebaseUser.uid, type: 'success',
+        userId: firebaseUser.uid, 
+        type: 'success',
         message: `Welcome to ${APP_NAME}, ${newUserForFirestore.name}! Account created.`
-      }});
+      } as any});
     } catch (error: any) {
       dispatch({ type: ActionType.REGISTER_STUDENT_FAILURE, payload: error.message || "Failed to register." });
     }

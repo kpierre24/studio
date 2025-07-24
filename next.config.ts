@@ -33,6 +33,9 @@ const nextConfigTs: NextConfig = {
       'framer-motion',
       'recharts',
       'lucide-react',
+      'fuse.js',
+      'react-hook-form',
+      'react-hot-toast',
       '@radix-ui/react-accordion',
       '@radix-ui/react-alert-dialog',
       '@radix-ui/react-avatar',
@@ -54,13 +57,33 @@ const nextConfigTs: NextConfig = {
       '@radix-ui/react-toast',
       '@radix-ui/react-tooltip',
     ],
+    // Enable modern bundling optimizations
+    turbo: {
+      rules: {
+        '*.svg': {
+          loaders: ['@svgr/webpack'],
+          as: '*.js',
+        },
+      },
+    },
+    // Optimize CSS
+    optimizeCss: true,
+    // Enable SWC minification (deprecated in Next.js 14+)
+    // swcMinify: true,
   },
   // Bundle analyzer and optimization
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+    // Enable tree shaking
+    config.optimization.usedExports = true;
+    config.optimization.sideEffects = false;
+    
     // Optimize bundle splitting
     if (!dev && !isServer) {
       config.optimization.splitChunks = {
         ...config.optimization.splitChunks,
+        chunks: 'all',
+        minSize: 20000,
+        maxSize: 244000,
         cacheGroups: {
           ...config.optimization.splitChunks.cacheGroups,
           // Separate vendor chunks for better caching
@@ -69,6 +92,7 @@ const nextConfigTs: NextConfig = {
             name: 'vendors',
             chunks: 'all',
             priority: 10,
+            enforce: true,
           },
           // Separate UI components chunk
           ui: {
@@ -76,6 +100,7 @@ const nextConfigTs: NextConfig = {
             name: 'ui-components',
             chunks: 'all',
             priority: 20,
+            minSize: 0,
           },
           // Separate animation libraries
           animations: {
@@ -83,6 +108,7 @@ const nextConfigTs: NextConfig = {
             name: 'animations',
             chunks: 'all',
             priority: 30,
+            enforce: true,
           },
           // Separate chart libraries
           charts: {
@@ -90,13 +116,34 @@ const nextConfigTs: NextConfig = {
             name: 'charts',
             chunks: 'all',
             priority: 30,
+            enforce: true,
+          },
+          // Separate large libraries
+          firebase: {
+            test: /[\\/]node_modules[\\/](firebase)[\\/]/,
+            name: 'firebase',
+            chunks: 'all',
+            priority: 25,
+            enforce: true,
+          },
+          // Common chunks
+          common: {
+            name: 'common',
+            minChunks: 2,
+            chunks: 'all',
+            priority: 5,
+            reuseExistingChunk: true,
           },
         },
       };
+
+      // Additional optimizations
+      config.optimization.minimize = true;
+      config.optimization.concatenateModules = true;
     }
 
     // Add bundle analyzer in development
-    if (dev && process.env.ANALYZE === 'true') {
+    if (process.env.ANALYZE === 'true') {
       const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
       config.plugins.push(
         new BundleAnalyzerPlugin({

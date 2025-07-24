@@ -128,7 +128,7 @@ class ErrorReportingService {
         userAgent: navigator.userAgent,
         userId: this.getCurrentUserId(),
         sessionId: this.getSessionId(),
-        componentStack: errorInfo?.componentStack,
+        componentStack: errorInfo?.componentStack || '',
       },
       severity: this.determineSeverity(error),
       tags: this.getTags(error),

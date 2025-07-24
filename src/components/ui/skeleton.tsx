@@ -19,7 +19,7 @@ function Skeleton({
       className={cn("rounded-md bg-muted", className)}
       variants={animate ? pulseVariants : undefined}
       animate={animate ? "animate" : undefined}
-      {...props}
+      {...(props as any)}
     />
   )
 }

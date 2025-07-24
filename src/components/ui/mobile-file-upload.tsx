@@ -105,7 +105,7 @@ export function MobileFileUpload({
         return;
       }
 
-      const img = new Image();
+      const img = new (window as any).Image();
       img.onload = () => {
         // Calculate new dimensions (max 1920x1080 for mobile)
         const maxWidth = 1920;
@@ -132,7 +132,7 @@ export function MobileFileUpload({
         canvas.toBlob(
           (blob) => {
             if (blob) {
-              const compressedFile = new File([blob], file.name, {
+              const compressedFile = new (window as any).File([blob], file.name, {
                 type: file.type,
                 lastModified: Date.now(),
               });

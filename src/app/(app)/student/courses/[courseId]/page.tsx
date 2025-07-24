@@ -25,7 +25,8 @@ export default function StudentCourseDetailPage() {
   const { courseId } = useParams() as { courseId: string };
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { state, handleStudentSubmissionUpload, handleStudentSubmitAssignment, isLoading: isAppContextLoading } = useAppContext();
+  const { state, handleStudentSubmissionUpload, handleStudentSubmitAssignment } = useAppContext();
+  const isAppContextLoading = false; // Placeholder for removed isLoading from context
   const { currentUser, courses, lessons, assignments, submissions, users, enrollments } = state; 
   const { toast } = useToast();
   const pathname = usePathname();

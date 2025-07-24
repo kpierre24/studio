@@ -1,130 +1,187 @@
-'use client';
+/**
+ * Optimized Image Component with WebP support, lazy loading, and performance monitoring
+ */
 
-import React, { useState, useRef, useEffect, memo } from 'react';
-import { OptimizedImageProps, getOptimizedImageSrc, createIntersectionObserver } from '@/lib/performance';
+import React, { useState, useRef } from 'react';
+import Image from 'next/image';
+import { useIntersectionObserver, PerformanceTracker } from '@/lib/performance';
 import { cn } from '@/lib/utils';
 
-interface OptimizedImageComponentProps extends OptimizedImageProps {
-  lazy?: boolean;
-  placeholder?: string;
+interface OptimizedImageProps {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  className?: string;
+  priority?: boolean;
+  quality?: number;
+  placeholder?: 'blur' | 'empty';
   blurDataURL?: string;
+  sizes?: string;
+  fill?: boolean;
+  objectFit?: 'contain' | 'cover' | 'fill' | 'none' | 'scale-down';
+  onLoad?: () => void;
+  onError?: () => void;
+  lazy?: boolean;
 }
 
-const OptimizedImageComponent: React.FC<OptimizedImageComponentProps> = memo(({
+export const OptimizedImage = React.memo<OptimizedImageProps>(({
   src,
   alt,
   width,
   height,
-  priority = false,
   className,
-  lazy = true,
-  placeholder,
+  priority = false,
+  quality = 75,
+  placeholder = 'blur',
   blurDataURL,
+  sizes,
+  fill = false,
+  objectFit = 'cover',
   onLoad,
   onError,
+  lazy = true,
+  ...props
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isInView, setIsInView] = useState(!lazy || priority);
-  const [imageSrc, setImageSrc] = useState<string>(placeholder || '');
   const [hasError, setHasError] = useState(false);
-  const imgRef = useRef<HTMLImageElement>(null);
-  const observerRef = useRef<IntersectionObserver | null>(null);
+  const imageRef = useRef<HTMLDivElement>(null);
+  const isInView = useIntersectionObserver(imageRef, {
+    threshold: 0.1,
+    rootMargin: '50px',
+  });
 
-  useEffect(() => {
-    if (!lazy || priority || isInView) {
-      // Load the optimized image
-      const optimizedSrc = getOptimizedImageSrc(src);
-      setImageSrc(optimizedSrc);
-      return;
-    }
-
-    // Set up intersection observer for lazy loading
-    observerRef.current = createIntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setIsInView(true);
-            observerRef.current?.disconnect();
-          }
-        });
-      },
-      { rootMargin: '50px' }
-    );
-
-    if (imgRef.current && observerRef.current) {
-      observerRef.current.observe(imgRef.current);
-    }
-
-    return () => {
-      observerRef.current?.disconnect();
-    };
-  }, [src, lazy, priority, isInView]);
+  // Generate blur placeholder if not provided
+  const defaultBlurDataURL = blurDataURL || `data:image/svg+xml;base64,${Buffer.from(
+    `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="#f3f4f6"/>
+      <text x="50%" y="50%" text-anchor="middle" dy=".3em" fill="#9ca3af" font-family="system-ui" font-size="14">
+        Loading...
+      </text>
+    </svg>`
+  ).toString('base64')}`;
 
   const handleLoad = () => {
+    PerformanceTracker.end(`image-load-${src}`);
     setIsLoaded(true);
     onLoad?.();
   };
 
   const handleError = () => {
     setHasError(true);
-    // Fallback to original image if WebP fails
-    if (imageSrc.includes('.webp')) {
-      setImageSrc(src);
-      setHasError(false);
-    } else {
-      onError?.();
+    onError?.();
+  };
+
+  // Start performance tracking when component mounts
+  React.useEffect(() => {
+    if (!lazy || isInView) {
+      PerformanceTracker.start(`image-load-${src}`);
     }
-  };
+  }, [src, lazy, isInView]);
 
-  const imageStyle: React.CSSProperties = {
-    width: width ? `${width}px` : undefined,
-    height: height ? `${height}px` : undefined,
-    opacity: isLoaded ? 1 : 0,
-    transition: 'opacity 0.3s ease-in-out',
-  };
+  // Don't render image until it's in view (if lazy loading is enabled)
+  const shouldRender = !lazy || isInView || priority;
 
-  if (blurDataURL && !isLoaded) {
-    imageStyle.backgroundImage = `url(${blurDataURL})`;
-    imageStyle.backgroundSize = 'cover';
-    imageStyle.backgroundPosition = 'center';
+  if (hasError) {
+    return (
+      <div
+        ref={imageRef}
+        className={cn(
+          'flex items-center justify-center bg-gray-100 text-gray-400',
+          className
+        )}
+        style={{ width: fill ? '100%' : width, height: fill ? '100%' : height }}
+      >
+        <svg
+          className="w-8 h-8"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+          />
+        </svg>
+      </div>
+    );
   }
 
   return (
-    <div className={cn('relative overflow-hidden', className)}>
-      {/* Placeholder while loading */}
-      {!isLoaded && !hasError && (
-        <div 
-          className="absolute inset-0 bg-gray-200 dark:bg-gray-800 animate-pulse"
-          style={{ width: width ? `${width}px` : '100%', height: height ? `${height}px` : '100%' }}
+    <div
+      ref={imageRef}
+      className={cn(
+        'relative overflow-hidden',
+        !isLoaded && 'animate-pulse bg-gray-200',
+        className
+      )}
+      style={{ width: fill ? '100%' : width, height: fill ? '100%' : height }}
+    >
+      {shouldRender && (
+        <Image
+          src={src}
+          alt={alt}
+          width={fill ? undefined : width}
+          height={fill ? undefined : height}
+          fill={fill}
+          priority={priority}
+          quality={quality}
+          placeholder={placeholder}
+          blurDataURL={defaultBlurDataURL}
+          sizes={sizes || `(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw`}
+          className={cn(
+            'transition-opacity duration-300',
+            isLoaded ? 'opacity-100' : 'opacity-0',
+            fill && `object-${objectFit}`
+          )}
+          style={!fill ? { objectFit } : undefined}
+          onLoad={handleLoad}
+          onError={handleError}
+          {...props}
         />
       )}
       
-      {/* Main image */}
-      <img
-        ref={imgRef}
-        src={isInView ? imageSrc : placeholder}
-        alt={alt}
-        style={imageStyle}
-        onLoad={handleLoad}
-        onError={handleError}
-        loading={priority ? 'eager' : 'lazy'}
-        decoding="async"
-        className={cn(
-          'transition-opacity duration-300',
-          isLoaded ? 'opacity-100' : 'opacity-0'
-        )}
-      />
-      
-      {/* Error state */}
-      {hasError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-          <span className="text-sm text-gray-500">Failed to load image</span>
-        </div>
+      {/* Loading skeleton */}
+      {!isLoaded && shouldRender && (
+        <div className="absolute inset-0 bg-gradient-to-r from-gray-200 via-gray-300 to-gray-200 animate-pulse" />
       )}
     </div>
   );
 });
 
-OptimizedImageComponent.displayName = 'OptimizedImage';
+OptimizedImage.displayName = 'OptimizedImage';
 
-export { OptimizedImageComponent as OptimizedImage };
+// Preset configurations for common use cases
+export const AvatarImage = React.memo<Omit<OptimizedImageProps, 'width' | 'height' | 'objectFit'> & { size?: number }>(
+  ({ size = 40, ...props }) => (
+    <OptimizedImage
+      width={size}
+      height={size}
+      objectFit="cover"
+      className="rounded-full"
+      {...props}
+    />
+  )
+);
+
+export const CardImage = React.memo<Omit<OptimizedImageProps, 'objectFit'>>(
+  (props) => (
+    <OptimizedImage
+      objectFit="cover"
+      className="rounded-lg"
+      {...props}
+    />
+  )
+);
+
+export const HeroImage = React.memo<Omit<OptimizedImageProps, 'priority' | 'quality'>>(
+  (props) => (
+    <OptimizedImage
+      priority={true}
+      quality={85}
+      {...props}
+    />
+  )
+);

@@ -144,7 +144,7 @@ export default function StudentLessonPage() {
           )}
           
           <div className="prose prose-lg max-w-none dark:prose-invert"
-            dangerouslySetInnerHTML={renderMarkdown(lesson.contentMarkdown)}
+            dangerouslySetInnerHTML={renderMarkdown(lesson.contentMarkdown) || undefined}
           />
 
           {lesson.fileUrl && (

@@ -231,7 +231,7 @@ const MobileTextarea = React.forwardRef<HTMLTextAreaElement, MobileTextareaProps
                 )}
                 aria-invalid={hasError || isOverLimit}
                 whileFocus={{ scale: touchOptimized ? 1.01 : 1 }}
-                {...props}
+                {...(props as any)}
               />
 
               {/* Action buttons */}

@@ -127,7 +127,7 @@ const EnhancedButton = React.forwardRef<HTMLButtonElement, EnhancedButtonProps>(
         )}
         ref={ref}
         disabled={isDisabled}
-        {...getAnimationProps()}
+        {...(getAnimationProps() as any)}
         {...motionProps}
         {...props}
       >

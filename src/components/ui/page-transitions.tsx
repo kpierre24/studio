@@ -94,13 +94,13 @@ export function PageTransition({ children, className = "" }: PageTransitionProps
     if (theme.reducedMotion) {
       return {
         duration: 0.15,
-        ease: "easeInOut"
+        ease: [0.4, 0.0, 0.6, 1] as any
       }
     }
     
     return {
       duration: 0.3,
-      ease: [0.4, 0.0, 0.2, 1]
+      ease: [0.4, 0.0, 0.2, 1] as any
     }
   }
 
@@ -182,6 +182,12 @@ interface RouteTransitionProps {
 export function RouteTransition({ children, direction = 'none' }: RouteTransitionProps) {
   const { theme } = useEnhancedTheme()
   
+  const getTransition = () => ({
+    type: "tween" as const,
+    ease: "easeInOut" as const,
+    duration: 0.3
+  });
+
   const getDirectionalVariants = (): Variants => {
     if (theme.reducedMotion) {
       return reducedMotionVariants

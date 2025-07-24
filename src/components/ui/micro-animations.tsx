@@ -56,8 +56,8 @@ export function AnimatedButton({
       variants={formSubmitting}
       animate={isLoading ? "submitting" : isSuccess ? "success" : "initial"}
       disabled={isLoading || props.disabled}
-      {...getAnimationProps()}
-      {...props}
+      {...(getAnimationProps() as any)}
+      {...(props as any)}
     >
       <AnimatePresence mode="wait">
         {isLoading ? (
@@ -223,7 +223,7 @@ export function AnimatedInput({
       variants={formSubmitting}
       animate={error ? "error" : "initial"}
       {...inputFocus}
-      {...props}
+      {...(props as any)}
     />
   )
 }

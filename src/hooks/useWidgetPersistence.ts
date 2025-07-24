@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect, useCallback } from 'react'
-import { WidgetConfig, DashboardLayout } from '@/components/ui/widget-system'
+import { DashboardLayout } from '@/components/ui/widget-system'
+import { WidgetConfig } from '@/components/ui/dashboard-widget'
 
 interface UseWidgetPersistenceOptions {
   userId: string

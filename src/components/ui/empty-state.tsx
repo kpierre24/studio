@@ -20,6 +20,7 @@ interface EmptyStateProps {
   size?: 'sm' | 'md' | 'lg'
   className?: string
   animate?: boolean
+  children?: React.ReactNode
 }
 
 // Default illustrations as SVG components
@@ -316,7 +317,7 @@ export function RoleSpecificEmptyState({
       }
     }
 
-    return configs[role]?.[context] || {
+    return (configs as any)[role]?.[context] || {
       title: "No Data Available",
       description: "There's nothing to show here right now.",
       illustration: DefaultIllustrations.generic

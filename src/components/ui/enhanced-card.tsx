@@ -75,9 +75,9 @@ const EnhancedCard = React.forwardRef<HTMLDivElement, EnhancedCardProps>(
           className
         )}
         ref={ref}
-        {...getAnimationProps()}
-        {...motionProps}
-        {...props}
+        {...(getAnimationProps() as any)}
+        {...(motionProps as any)}
+        {...(props as any)}
       />
     )
   }

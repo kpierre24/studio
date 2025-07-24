@@ -1,5 +1,5 @@
 
-
+/*
 1.  **`users`**
     *   Path: `/users/{userId}`
     *   Description: Stores user profiles (SuperAdmins, Teachers, Students).
@@ -87,7 +87,9 @@
         *   `link` (string, optional)
 
 ## Subcollections
+*/
 
+/*
 1.  **`lessons` (under `courses`)**
     *   Path: `/courses/{courseId}/lessons/{lessonId}`
     *   Description: Stores lessons for a specific course.
@@ -133,3 +135,4 @@
         *   *(Implicit `courseId` and `assignmentId` from parent documents)*
 
 This structure is designed to work well with Firestore's querying capabilities and the security rules defined for the application.
+*/

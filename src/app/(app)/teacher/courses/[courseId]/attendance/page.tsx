@@ -27,7 +27,7 @@ type StudentAttendanceState = {
 export default function CourseAttendancePage() {
   const { courseId } = useParams() as { courseId: string };
   const router = useRouter();
-  const { state, fetchCourseSchedule, handleUpdateCourseDaySchedule, handleClearCourseDaySchedule, handleSaveAttendanceRecords, isLoading: isContextLoading } = useAppContext();
+  const { state, fetchCourseSchedule, handleUpdateCourseDaySchedule, handleClearCourseDaySchedule, handleSaveAttendanceRecords } = useAppContext();
   const { currentUser, courses, users, attendanceRecords, courseSchedules } = state;
   const { toast } = useToast();
 
@@ -89,7 +89,9 @@ export default function CourseAttendancePage() {
   }, [selectedDate, course, enrolledStudents, attendanceRecords, courseSchedules, courseId]);
 
 
-  if (isContextLoading && !currentUser) {
+  const isContextLoading = false; // Remove this since isLoading was removed from context
+  
+  if (!currentUser) {
     return <p className="text-center text-muted-foreground py-10">Loading session data...</p>;
   }
   if (!currentUser || (currentUser.role !== UserRole.TEACHER && currentUser.role !== UserRole.SUPER_ADMIN)) {
@@ -101,7 +103,7 @@ export default function CourseAttendancePage() {
   if (!course && isContextLoading) {
      return <p className="text-center text-muted-foreground py-10">Loading course details...</p>;
   }
-  if (currentUser.role === UserRole.TEACHER && course.teacherId !== currentUser.id) {
+  if (currentUser.role === UserRole.TEACHER && course && course.teacherId !== currentUser.id) {
     return <p className="text-center text-muted-foreground">Access Denied. You are not the teacher for this course.</p>;
   }
 
@@ -183,7 +185,7 @@ export default function CourseAttendancePage() {
 
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="text-3xl font-headline">Attendance for {course.name}</CardTitle>
+          <CardTitle className="text-3xl font-headline">Attendance for {course?.name}</CardTitle>
           <CardDescription className="flex items-center gap-2">
             <Users className="h-4 w-4" /> {enrolledStudents.length} enrolled students.
           </CardDescription>

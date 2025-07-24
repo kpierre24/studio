@@ -62,8 +62,8 @@ export const EnhancedButton = forwardRef<HTMLButtonElement, EnhancedButtonProps>
         ref={ref}
         className={baseClasses}
         disabled={disabled || loading}
-        {...motionProps}
-        {...props}
+        {...(motionProps as any)}
+        {...(props as any)}
       >
         {loading && (
           <motion.div

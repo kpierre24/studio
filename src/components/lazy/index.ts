@@ -1,99 +1,64 @@
 /**
- * Lazy-loaded components for code splitting and performance optimization
+ * Lazy-loaded components for performance optimization
+ * This file provides code-split versions of heavy UI components
  */
 
-import { createLazyComponent } from '@/lib/performance';
+import { lazy } from 'react';
 
-// Lazy load heavy dashboard components
-export const LazyDashboardWidget = createLazyComponent(
-  () => import('@/components/ui/dashboard-widget')
+// Dashboard Components - Heavy with animations and data processing
+export const LazyActivityTimeline = lazy(() => 
+  import('../ui/activity-timeline').then(module => ({ default: module.ActivityTimeline }))
 );
 
-export const LazyActivityTimeline = createLazyComponent(
-  () => import('@/components/ui/activity-timeline')
+export const LazyDataVisualization = lazy(() => 
+  import('../ui/data-visualization').then(module => ({ default: module.default }))
 );
 
-export const LazyDataVisualization = createLazyComponent(
-  () => import('@/components/ui/data-visualization')
+export const LazyTrendChart = lazy(() => 
+  import('../ui/trend-chart').then(module => ({ default: module.TrendChart }))
 );
 
-export const LazyTrendChart = createLazyComponent(
-  () => import('@/components/ui/trend-chart')
+export const LazyGradeDistribution = lazy(() => 
+  import('../ui/grade-distribution').then(module => ({ default: module.GradeDistribution }))
 );
 
-export const LazyGradeDistribution = createLazyComponent(
-  () => import('@/components/ui/grade-distribution')
+export const LazyAttendanceHeatmap = lazy(() => 
+  import('../ui/attendance-heatmap').then(module => ({ default: module.AttendanceHeatmap }))
 );
 
-export const LazyAttendanceHeatmap = createLazyComponent(
-  () => import('@/components/ui/attendance-heatmap')
+// Content Management Components - Heavy with rich text editing
+export const LazyContentOrganizer = lazy(() => 
+  import('../ui/content-organizer').then(module => ({ default: module.ContentOrganizer }))
 );
 
-// Lazy load content management components
-export const LazyContentOrganizer = createLazyComponent(
-  () => import('@/components/ui/content-organizer')
+export const LazyFileManager = lazy(() => 
+  import('../ui/file-manager').then(module => ({ default: module.FileManager }))
 );
 
-export const LazyDragDropUpload = createLazyComponent(
-  () => import('@/components/ui/drag-drop-upload')
+export const LazyDragDropUpload = lazy(() => 
+  import('../ui/drag-drop-upload').then(module => ({ default: module.DragDropUpload }))
 );
 
-export const LazyFileManager = createLazyComponent(
-  () => import('@/components/ui/file-manager')
+// Widget System - Heavy with drag and drop functionality
+export const LazyWidgetSystem = lazy(() => 
+  import('../ui/widget-system').then(module => ({ default: module.WidgetSystem }))
 );
 
-export const LazyContentCreationWizard = createLazyComponent(
-  () => import('@/components/ui/content-creation-wizard')
+// Performance Monitor - Development only
+export const LazyPerformanceMonitor = lazy(() => 
+  import('../ui/performance-monitor').then(module => ({ default: module.PerformanceMonitor }))
 );
 
-export const LazyAssignmentCreationWizard = createLazyComponent(
-  () => import('@/components/ui/assignment-creation-wizard')
+// Virtualized Components - For large data sets
+export const LazyVirtualizedList = lazy(() => 
+  import('../ui/virtualized-list').then(module => ({ default: module.VirtualizedList }))
 );
 
-// Lazy load accessibility components
-export const LazyAccessibilityControls = createLazyComponent(
-  () => import('@/components/ui/accessibility-controls')
+// Mobile-specific heavy components
+export const LazyMobileChart = lazy(() => 
+  import('../ui/mobile-chart').then(module => ({ default: module.MobileChart }))
 );
 
-export const LazyColorContrastChecker = createLazyComponent(
-  () => import('@/components/ui/color-contrast-checker')
-);
-
-// Lazy load mobile components
-export const LazyMobileForm = createLazyComponent(
-  () => import('@/components/ui/mobile-form')
-);
-
-export const LazyMobileTable = createLazyComponent(
-  () => import('@/components/ui/mobile-table')
-);
-
-export const LazyMobileChart = createLazyComponent(
-  () => import('@/components/ui/mobile-chart')
-);
-
-// Lazy load example components (for development/demo)
-export const LazyDashboardExample = createLazyComponent(
-  () => import('@/components/examples/dashboard-example')
-);
-
-export const LazyAccessibilityDemo = createLazyComponent(
-  () => import('@/components/examples/accessibility-demo')
-);
-
-export const LazyResponsiveDataExample = createLazyComponent(
-  () => import('@/components/examples/responsive-data-example')
-);
-
-// Lazy load performance monitoring components
-export const LazyPerformanceMetrics = createLazyComponent(
-  () => import('@/components/ui/performance-monitor').then(module => ({ 
-    default: module.PerformanceMetrics 
-  }))
-);
-
-export const LazyMemoryMonitor = createLazyComponent(
-  () => import('@/components/ui/performance-monitor').then(module => ({ 
-    default: module.MemoryMonitor 
-  }))
+export const LazyMobileTable = lazy(() => 
+  import('../ui/mobile-table').then(module => ({ default: module.MobileTable }))
 );

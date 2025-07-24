@@ -28,7 +28,7 @@ import { ContentValidationChecker } from '@/components/ui/content-validation-che
 import { validateAssignmentContent } from '@/lib/content-validation';
 
 // Types for the wizard
-export interface ContentTemplate {
+export interface ContentCreationTemplate {
   id: string;
   name: string;
   description: string;
@@ -54,7 +54,7 @@ export interface WizardStep {
 }
 
 export interface ContentCreationData {
-  template: ContentTemplate | null;
+  template: ContentCreationTemplate | null;
   basicInfo: {
     title: string;
     description: string;
@@ -86,7 +86,7 @@ interface ContentCreationWizardProps {
 }
 
 // Predefined templates
-const CONTENT_TEMPLATES: ContentTemplate[] = [
+const CONTENT_TEMPLATES: ContentCreationTemplate[] = [
   {
     id: 'essay',
     name: 'Essay Assignment',
@@ -479,9 +479,9 @@ export function ContentCreationWizard({
 
 // Template Selection Component
 interface TemplateSelectionProps {
-  templates: ContentTemplate[];
-  selectedTemplate: ContentTemplate | null;
-  onSelect: (template: ContentTemplate) => void;
+  templates: ContentCreationTemplate[];
+  selectedTemplate: ContentCreationTemplate | null;
+  onSelect: (template: ContentCreationTemplate) => void;
 }
 
 function TemplateSelection({ templates, selectedTemplate, onSelect }: TemplateSelectionProps) {
@@ -624,7 +624,7 @@ function BasicInfoStep({ data, onChange, validationErrors }: BasicInfoStepProps)
 interface SettingsStepProps {
   data: ContentCreationData['settings'];
   assignmentType: AssignmentType;
-  template: ContentTemplate | null;
+  template: ContentCreationTemplate | null;
   onChange: (data: ContentCreationData['settings']) => void;
   validationErrors: string[];
 }

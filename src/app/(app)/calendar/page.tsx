@@ -118,8 +118,8 @@ export default function CalendarPage() {
 
 
   const calendarModifiers = {
-    classDay: calendarDayInfo.classDays,
-    noClassDay: calendarDayInfo.noClassDays,
+    classDay: calendarDayInfo.classDay,
+    noClassDay: calendarDayInfo.noClassDay,
   };
 
   const calendarModifiersClassNames = {

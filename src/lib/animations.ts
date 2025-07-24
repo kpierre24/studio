@@ -457,7 +457,7 @@ export const celebrationBounce: Variants = {
     rotate: [0, 10, -10, 0],
     transition: {
       duration: 0.6,
-      ease: EASINGS.bounce,
+      ease: "easeInOut",
     },
   },
 }
