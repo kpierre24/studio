@@ -23,6 +23,10 @@ import {
   Home,
   Menu,
   X,
+  Search,
+  MessageCircle,
+  ListChecks,
+  Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -220,6 +224,31 @@ export function MobileNavigation({
         href: '/student/payments',
         icon: DollarSign,
         roles: [UserRole.STUDENT],
+      },
+      // Quick Wins Features
+      {
+        name: 'Discussion Forums',
+        href: '/discussion-forums',
+        icon: MessageCircle,
+        roles: [UserRole.SUPER_ADMIN, UserRole.TEACHER, UserRole.STUDENT],
+      },
+      {
+        name: 'Advanced Search',
+        href: '/search',
+        icon: Search,
+        roles: [UserRole.SUPER_ADMIN, UserRole.TEACHER, UserRole.STUDENT],
+      },
+      {
+        name: 'Bulk Operations',
+        href: '/bulk-operations',
+        icon: ListChecks,
+        roles: [UserRole.SUPER_ADMIN, UserRole.TEACHER],
+      },
+      {
+        name: 'Export/Import',
+        href: '/export-import',
+        icon: Download,
+        roles: [UserRole.SUPER_ADMIN, UserRole.TEACHER],
       },
     ];
 

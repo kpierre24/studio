@@ -175,6 +175,52 @@ service cloud.firestore {
       allow write: if request.auth != null && hasRole(request.auth.uid, 'SuperAdmin');
     }
 
+    // Discussion posts collection
+    match /discussionPosts/{postId} {
+      allow read: if request.auth != null &&
+                     (hasRole(request.auth.uid, 'SuperAdmin') ||
+                      isTeacherOfCourse(resource.data.courseId, request.auth.uid) ||
+                      isStudentEnrolled(resource.data.courseId, request.auth.uid));
+      allow create: if request.auth != null &&
+                       (hasRole(request.auth.uid, 'SuperAdmin') ||
+                        isTeacherOfCourse(request.resource.data.courseId, request.auth.uid) ||
+                        isStudentEnrolled(request.resource.data.courseId, request.auth.uid)) &&
+                       request.resource.data.authorId == request.auth.uid;
+      allow update: if request.auth != null &&
+                       (hasRole(request.auth.uid, 'SuperAdmin') ||
+                        resource.data.authorId == request.auth.uid) &&
+                       !('courseId' in request.resource.data) && // Prevent changing course
+                       !('authorId' in request.resource.data) && // Prevent changing author
+                       !('createdAt' in request.resource.data); // Prevent changing creation time
+      allow delete: if request.auth != null &&
+                       (hasRole(request.auth.uid, 'SuperAdmin') ||
+                        resource.data.authorId == request.auth.uid);
+    }
+
+    // Discussion replies collection (subcollection of posts)
+    match /discussionPosts/{postId}/replies/{replyId} {
+      allow read: if request.auth != null &&
+                     get(/databases/$(database)/documents/discussionPosts/$(postId)).data.courseId != null && // Ensure parent post exists
+                     (hasRole(request.auth.uid, 'SuperAdmin') ||
+                      isTeacherOfCourse(get(/databases/$(database)/documents/discussionPosts/$(postId)).data.courseId, request.auth.uid) ||
+                      isStudentEnrolled(get(/databases/$(database)/documents/discussionPosts/$(postId)).data.courseId, request.auth.uid));
+      allow create: if request.auth != null &&
+                       get(/databases/$(database)/documents/discussionPosts/$(postId)).data.courseId != null &&
+                       (hasRole(request.auth.uid, 'SuperAdmin') ||
+                        isTeacherOfCourse(get(/databases/$(database)/documents/discussionPosts/$(postId)).data.courseId, request.auth.uid) ||
+                        isStudentEnrolled(get(/databases/$(database)/documents/discussionPosts/$(postId)).data.courseId, request.auth.uid)) &&
+                       request.resource.data.authorId == request.auth.uid;
+      allow update: if request.auth != null &&
+                       (hasRole(request.auth.uid, 'SuperAdmin') ||
+                        resource.data.authorId == request.auth.uid) &&
+                       !('postId' in request.resource.data) && // Prevent changing post
+                       !('authorId' in request.resource.data) && // Prevent changing author
+                       !('createdAt' in request.resource.data); // Prevent changing creation time
+      allow delete: if request.auth != null &&
+                       (hasRole(request.auth.uid, 'SuperAdmin') ||
+                        resource.data.authorId == request.auth.uid);
+    }
+
     // DirectMessages collection
     match /directMessages/{messageId} {
         allow read: if request.auth != null &&

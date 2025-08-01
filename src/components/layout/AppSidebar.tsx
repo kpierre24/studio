@@ -28,6 +28,12 @@ import {
   Megaphone,
   CalendarDays,
   UserPlus,
+  Search,
+  MessageCircle,
+  Settings2,
+  Download,
+  Upload,
+  ListChecks,
 } from 'lucide-react';
 import { useAppContext } from '@/contexts/AppContext';
 import { UserRole } from '@/types';
@@ -158,6 +164,31 @@ export function AppSidebar() {
         href: '/student/payments',
         icon: DollarSign,
         roles: [UserRole.STUDENT],
+      },
+      // Quick Wins Features
+      {
+        name: 'Discussion Forums',
+        href: '/discussion-forums',
+        icon: MessageCircle,
+        roles: [UserRole.SUPER_ADMIN, UserRole.TEACHER, UserRole.STUDENT],
+      },
+      {
+        name: 'Advanced Search',
+        href: '/search',
+        icon: Search,
+        roles: [UserRole.SUPER_ADMIN, UserRole.TEACHER, UserRole.STUDENT],
+      },
+      {
+        name: 'Bulk Operations',
+        href: '/bulk-operations',
+        icon: ListChecks,
+        roles: [UserRole.SUPER_ADMIN, UserRole.TEACHER],
+      },
+      {
+        name: 'Export/Import',
+        href: '/export-import',
+        icon: Download,
+        roles: [UserRole.SUPER_ADMIN, UserRole.TEACHER],
       },
     ];
 
